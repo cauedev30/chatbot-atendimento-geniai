@@ -1,10 +1,11 @@
 """What the routes read from the running app: configuration, use-case deps, scheduler and queue."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, Request
 
+from geniai.api.login_limit import LoginLimiter
 from geniai.app.keyed_queue import KeyedQueue
 from geniai.app.ports import Deps
 from geniai.app.turn_scheduler import TurnScheduler
@@ -22,6 +23,7 @@ class AppState:
     deps: Deps | None = None
     """Set at startup by the lifespan, or injected by tests."""
     scheduler: TurnScheduler | None = None
+    login_limiter: LoginLimiter = field(default_factory=LoginLimiter)
 
 
 def app_state(request: Request) -> AppState:

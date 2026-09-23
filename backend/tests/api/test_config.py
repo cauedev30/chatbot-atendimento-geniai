@@ -1,3 +1,5 @@
+from ipaddress import ip_network
+
 import pytest
 
 from geniai.config import ConfigError, load_config
@@ -26,6 +28,7 @@ def test_loads_a_valid_environment_with_defaults() -> None:
     assert config.rules == DEFAULT_RULES
     assert config.llm.extra_body is None
     assert config.enable_api_docs is False
+    assert config.trusted_proxies == (ip_network("127.0.0.1/32"), ip_network("::1/128"))
 
 
 def test_applies_overrides() -> None:
@@ -38,6 +41,7 @@ def test_applies_overrides() -> None:
             "SILENCE_TIMEOUT_HOURS": "12",
             "LLM_EXTRA_BODY_JSON": '{"thinking":{"type":"disabled"}}',
             "ENABLE_API_DOCS": "true",
+            "TRUSTED_PROXY_IPS": "10.0.0.5, 172.17.0.0/16",
         }
     )
     assert config.port == 8080
@@ -46,6 +50,7 @@ def test_applies_overrides() -> None:
     assert config.rules.silence_timeout_ms == 12 * 3_600_000
     assert config.llm.extra_body == {"thinking": {"type": "disabled"}}
     assert config.enable_api_docs is True
+    assert config.trusted_proxies == (ip_network("10.0.0.5/32"), ip_network("172.17.0.0/16"))
 
 
 def test_treats_empty_strings_as_missing_and_names_missing_variables_without_their_values() -> None:
@@ -77,6 +82,8 @@ def test_rejects_a_short_cookie_secret() -> None:
         ("LLM_EXTRA_BODY_JSON", '{"temperature": NaN}'),
         ("LLM_EXTRA_BODY_JSON", '{"max_tokens": Infinity}'),
         ("LLM_EXTRA_BODY_JSON", '{"x": {"y": -Infinity}}'),
+        ("TRUSTED_PROXY_IPS", "10.0.0.300"),
+        ("TRUSTED_PROXY_IPS", "proxy.local"),
     ],
 )
 def test_names_an_invalid_variable_and_never_its_value(name: str, value: str) -> None:

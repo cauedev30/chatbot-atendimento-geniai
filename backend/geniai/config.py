@@ -2,12 +2,14 @@ import json
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from ipaddress import ip_network
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
 from geniai.api.auth import AuthConfig
+from geniai.api.login_limit import Network
 from geniai.chatwoot.http import ChatwootHttpConfig
 from geniai.domain.rules import DEFAULT_RULES, TriageRules
 from geniai.llm.openai_compatible import OpenAiCompatibleConfig
@@ -47,6 +49,7 @@ class _Env(BaseModel):
     BURST_WINDOW_MS: Annotated[int, Field(gt=0)] | None = None
     SILENCE_TIMEOUT_HOURS: Annotated[float, Field(gt=0)] | None = None
     ENABLE_API_DOCS: Literal["true", "false"] = "false"
+    TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,8 @@ class AppConfig:
     rules: TriageRules
     enable_api_docs: bool = False
     """Serve /docs, /redoc and /openapi.json. Off by default: the schema is exported at build time."""
+    trusted_proxies: tuple[Network, ...] = (ip_network("127.0.0.1/32"), ip_network("::1/128"))
+    """Peers whose X-Forwarded-For is believed: the frontend that proxies /api (see api/login_limit.py)."""
 
 
 def _reject_non_finite(constant: str) -> object:
@@ -90,6 +95,10 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
         if not isinstance(parsed, dict):
             raise _invalid(["LLM_EXTRA_BODY_JSON"])
         extra_body = parsed
+    try:
+        trusted_proxies = tuple(ip_network(entry.strip()) for entry in e.TRUSTED_PROXY_IPS.split(",") if entry.strip())
+    except ValueError:
+        raise _invalid(["TRUSTED_PROXY_IPS"]) from None
     rules = DEFAULT_RULES
     if e.BURST_WINDOW_MS is not None:
         rules = replace(rules, burst_window_ms=e.BURST_WINDOW_MS)
@@ -114,4 +123,5 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
         ),
         rules=rules,
         enable_api_docs=e.ENABLE_API_DOCS == "true",
+        trusted_proxies=trusted_proxies,
     )

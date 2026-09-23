@@ -163,7 +163,7 @@ schema is `backend/openapi.json`.
 | Method and path | Body | Answer |
 |---|---|---|
 | `GET /api/health` | — | `200 {"ok": true}` |
-| `POST /api/auth/login` | `{"user", "password"}` | `204` and the session cookie, or `401` |
+| `POST /api/auth/login` | `{"user", "password"}` | `204` and the session cookie, `401`, or `429` after too many failures |
 | `POST /api/auth/logout` | — | `204`, cookie cleared (with or without a valid session) |
 | `GET /api/auth/me` | — | `200 {"user"}` |
 | `GET /api/board` | — | `200` the board: `generatedAt`, `triageCount`, `columns` (all five, in order), `teamMembers`, `categories`, `requireResponsible` |
@@ -200,6 +200,10 @@ by default.
   constant time. The session is an `itsdangerous`-signed cookie, httpOnly, `SameSite=Lax`, `Secure`
   in production, valid for 12 h. The signed value carries a digest of the password, so changing
   `BOARD_PASSWORD` ends every open session.
+- **Login attempts:** 10 failures from one client address in 15 minutes answer `429` until the
+  window passes (`api/login_limit.py`, in memory). The client address is the rightmost
+  `X-Forwarded-For` entry that is not a trusted proxy, read only when the peer is in
+  `TRUSTED_PROXY_IPS`; entries a client adds on the left are never believed.
 - **Same origin:** the browser reaches the API only through the frontend's `/api` proxy, so the cookie
   is first-party and never needs CORS.
 - **Mutations** accept `application/json` only; with the `SameSite=Lax` cookie a cross-site form

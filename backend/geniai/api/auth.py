@@ -8,7 +8,8 @@ from typing import Annotated, Final
 import itsdangerous
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from geniai.api.deps import app_config, require_json
+from geniai.api.deps import app_config, app_state, require_json
+from geniai.api.login_limit import TOO_MANY_ATTEMPTS, client_ip
 from geniai.api.schemas import ErrorOut, LoginIn, MeOut
 
 SESSION_COOKIE: Final = "geniai_board"
@@ -75,15 +76,26 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 @router.post(
     "/login",
     status_code=204,
-    responses={401: {"model": ErrorOut}},
+    responses={401: {"model": ErrorOut}, 429: {"model": ErrorOut}},
     dependencies=[Depends(require_json)],
 )
 async def login(body: LoginIn, request: Request, response: Response) -> None:
-    cfg = app_config(request).auth
+    config = app_config(request)
+    cfg = config.auth
+    limiter = app_state(request).login_limiter
+    who = client_ip(
+        request.client.host if request.client else None,
+        request.headers.get("x-forwarded-for"),
+        config.trusted_proxies,
+    )
+    if limiter.blocked(who):
+        raise HTTPException(429, TOO_MANY_ATTEMPTS)
     user_ok = safe_equal(body.user, cfg.user)
     password_ok = safe_equal(body.password, cfg.password)
     if not (user_ok and password_ok):
+        limiter.fail(who)
         raise HTTPException(401, "Usuário ou senha incorretos.")
+    limiter.succeed(who)
     issue_session(response, cfg)
 
 

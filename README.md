@@ -177,6 +177,7 @@ A test also checks that the committed `backend/openapi.json` matches the API.
 | `COOKIE_SECRET` | Signs the session cookie; at least 32 characters |
 | `SECURE_COOKIE` | `true` behind HTTPS (default); `false` only for local http |
 | `ENABLE_API_DOCS` | `true` serves `/docs`, `/redoc` and `/openapi.json`; off by default |
+| `TRUSTED_PROXY_IPS` | Addresses or networks (comma-separated) of the frontend that proxies `/api`, whose `X-Forwarded-For` is believed; default `127.0.0.1,::1` |
 | `BURST_WINDOW_MS` | Optional: silence that closes a burst of messages into one turn |
 | `SILENCE_TIMEOUT_HOURS` | Optional: silence that moves a triage ticket to "No response" |
 | `EVAL_CANDIDATES` | JSON list of `{label, baseUrl, model, apiKeyEnv, extraBody?}` for the evaluation |
@@ -186,6 +187,17 @@ A test also checks that the committed `backend/openapi.json` matches the API.
 | Variable | Meaning |
 |---|---|
 | `BACKEND_URL` | The backend's base URL, used by server rendering and by the `/api` proxy |
+
+## Login attempts
+
+After 10 failed logins from one client address within 15 minutes, the login answers `429` until the
+window passes; other addresses are not affected. The browser reaches the backend through the
+frontend, so the backend takes the client address from `X-Forwarded-For`, and only when the request
+comes from an address in `TRUSTED_PROXY_IPS`. The frontend forwards that header as it receives it and
+does not add one, so in production put a reverse proxy in front of the frontend that sets or appends
+`X-Forwarded-For` (nginx, Caddy and Traefik do by default), and set `TRUSTED_PROXY_IPS` to the
+frontend's address as the backend sees it. Without that header, every login shares the frontend's
+address.
 
 ## Connecting Chatwoot
 

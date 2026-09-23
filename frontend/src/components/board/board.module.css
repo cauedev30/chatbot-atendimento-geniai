@@ -1,0 +1,430 @@
+/* The board as a service-counter terminal: 1px rules, square panels, the waiting queue widest,
+   the longest wait in inverse video. Narrow windows (beside Chatwoot) show one column at a time. */
+
+.board {
+  container-type: inline-size;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.counter {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.counterFigure {
+  font-size: var(--size-figure);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--teal);
+}
+
+.counterText {
+  color: var(--text-2);
+}
+
+.hint {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  color: var(--text-3);
+}
+
+.alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--danger);
+  background: var(--danger-ground);
+  color: var(--danger);
+}
+
+.dismiss {
+  flex: none;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid currentColor;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+/* Column switcher: only in narrow windows. */
+.switcher {
+  display: none;
+  flex-wrap: wrap;
+  gap: 1px;
+  border: 1px solid var(--rule);
+  background: var(--rule);
+}
+
+.switch {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 0;
+  background: var(--ink-1);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.switch[aria-pressed="true"] {
+  background: var(--teal);
+  color: var(--on-teal);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  /* Every column runs as tall as the longest, so a card can be dropped anywhere along it. */
+  align-items: stretch;
+}
+
+.column {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 280px;
+  border: 1px solid var(--rule);
+  background: var(--ink-1);
+  transition: border-color 120ms var(--ease-settle);
+}
+
+.lead {
+  border-color: var(--rule-strong);
+}
+
+.over {
+  border-color: var(--teal);
+}
+
+.columnHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.lead .columnHead {
+  background: var(--ink-2);
+  color: var(--text);
+}
+
+.columnCount {
+  font-size: 0.875rem;
+  color: var(--teal);
+}
+
+.cards {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-3) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  color: var(--text-3);
+}
+
+/* Card */
+
+.card {
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  background: var(--ink-0);
+}
+
+.card p {
+  margin: 0;
+}
+
+.cardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.wait {
+  display: grid;
+  gap: 2px;
+}
+
+.waitFigure {
+  font-size: var(--size-figure);
+  font-weight: 600;
+  line-height: 1.05;
+  color: var(--teal);
+}
+
+.since {
+  padding-top: 6px;
+}
+
+.handle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: -4px -6px 0 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-3);
+  cursor: grab;
+  touch-action: none;
+}
+
+.handle:hover {
+  border-color: var(--rule-strong);
+  color: var(--teal-hi);
+}
+
+.where {
+  display: grid;
+  gap: 2px;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+}
+
+.category {
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  letter-spacing: 0.02em;
+  color: var(--text-3);
+}
+
+.summary {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.responsible {
+  font-size: 0.8125rem;
+  color: var(--text-3);
+}
+
+.cardFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+}
+
+.chatwoot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.chatwoot:hover {
+  text-decoration: underline;
+}
+
+.actions {
+  flex: 1 0 100%;
+}
+
+.actionsToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-2);
+  list-style: none;
+  cursor: pointer;
+}
+
+.actionsToggle::-webkit-details-marker {
+  display: none;
+}
+
+.actionsToggle::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 120ms var(--ease-settle);
+}
+
+.actions[open] > .actionsToggle::before {
+  transform: rotate(45deg);
+}
+
+.actionsToggle:hover {
+  color: var(--teal-hi);
+}
+
+.actionsPanel {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  background: var(--ink-1);
+  color: var(--text);
+}
+
+.actionRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.close {
+  justify-self: start;
+}
+
+/* The longest wait: the one inverse card on the board. */
+.longest {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: var(--on-teal);
+}
+
+.longest .waitFigure,
+.longest .summary,
+.longest .where,
+.longest .category,
+.longest .responsible,
+.longest .chatwoot,
+.longest .actionsToggle,
+.longest .handle,
+.longest :global(.label) {
+  color: var(--on-teal);
+}
+
+.longest .cardFoot {
+  border-top-color: rgb(2 26 24 / 0.35);
+}
+
+.longest .handle:hover {
+  border-color: var(--on-teal);
+}
+
+.longest :focus-visible {
+  outline-color: var(--on-teal);
+}
+
+.longest .actionsPanel :global(.label) {
+  color: var(--text-3);
+}
+
+.dragging {
+  z-index: 20;
+  cursor: grabbing;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.55);
+}
+
+/* One authored motion: a card that lands in a new column settles in one short step. */
+.landed {
+  animation: settle 240ms var(--ease-settle);
+}
+
+@keyframes settle {
+  from {
+    transform: translateY(-6px);
+    border-color: var(--teal-hi);
+  }
+}
+
+/* Narrow windows (beside Chatwoot, phones): one column at a time, type never shrinks. */
+@container (max-width: 1040px) {
+  .switcher {
+    display: flex;
+  }
+
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .column[data-shown="false"] {
+    display: none;
+  }
+
+  .column {
+    min-height: 0;
+  }
+}
+
+@media (pointer: coarse) {
+  .handle {
+    width: 44px;
+    height: 44px;
+  }
+
+  .chatwoot {
+    min-height: 44px;
+  }
+}
+
+/* Reduced motion keeps the state change (the teal edge) and drops the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .landed {
+    animation: none;
+    border-color: var(--teal-hi);
+  }
+
+  .column,
+  .actionsToggle::before {
+    transition: none;
+  }
+}

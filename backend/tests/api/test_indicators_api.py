@@ -74,6 +74,14 @@ async def test_an_absurd_date_is_a_400_not_a_500(logged_in: Api) -> None:
     assert (res.status_code, res.json()) == (400, {"detail": "Período inválido."})
 
 
+def test_uses_the_real_sao_paulo_time_zone_including_past_daylight_saving() -> None:
+    # On 2018-11-05 São Paulo was on daylight saving time (UTC-2): midnight there is 02:00 UTC.
+    q = parse_indicators_query({"from": "2018-11-05", "to": "2018-11-05"}, NOW)
+    assert q is not None
+    assert q.filter.from_ == datetime(2018, 11, 5, 2, 0, tzinfo=UTC)
+    assert q.filter.to == datetime(2018, 11, 6, 2, 0, tzinfo=UTC)
+
+
 async def two_tickets(api: Api) -> None:
     h = api.h
     ana = h.seed.attendants["ana"]

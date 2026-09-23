@@ -1,8 +1,9 @@
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Final
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -11,8 +12,8 @@ from geniai.api.deps import app_deps
 from geniai.api.schemas import ErrorOut, IndicatorsQueryOut, IndicatorsResponse
 from geniai.app.indicators import IndicatorFilter, compute_indicators, list_units
 
-SAO_PAULO: Final = timezone(timedelta(hours=-3))
-"""São Paulo time. Brazil has no daylight saving time since 2019."""
+SAO_PAULO: Final = ZoneInfo("America/Sao_Paulo")
+"""São Paulo time from the IANA database (the tzdata package), past daylight saving included."""
 
 _DATE: Final = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 _POSITIVE_INT: Final = re.compile(r"^[0-9]+$")

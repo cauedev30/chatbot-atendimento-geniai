@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import controls from "@/components/ui/controls.module.css";
+import { FocusedAlert } from "@/components/ui/focused-alert";
 import { ApiError, apiPost } from "@/lib/api";
 import styles from "./login.module.css";
 
@@ -28,11 +29,7 @@ export function LoginForm() {
 
   return (
     <form className={styles.form} onSubmit={onSubmit} noValidate={false}>
-      {error ? (
-        <p role="alert" className={controls.error}>
-          {error}
-        </p>
-      ) : null}
+      {error ? <FocusedAlert>{error}</FocusedAlert> : null}
       <label className={controls.field}>
         <span className="label">Usuário</span>
         <input className={controls.input} name="user" autoComplete="username" required autoFocus />

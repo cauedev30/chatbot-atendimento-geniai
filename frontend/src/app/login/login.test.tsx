@@ -37,6 +37,15 @@ describe("LoginForm", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("moves the focus to the error message", async () => {
+    mockFetch(Response.json({ detail: "Muitas tentativas de login. Aguarde alguns minutos e tente de novo." }, { status: 429 }));
+    render(<LoginForm />);
+    await submit("suporte", "errada");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Muitas tentativas de login.");
+    expect(alert).toHaveFocus();
+  });
+
   it("posts the credentials and goes to the board on success", async () => {
     const fetchFn = mockFetch(new Response(null, { status: 204 }));
     render(<LoginForm />);

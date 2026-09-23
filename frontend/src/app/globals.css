@@ -52,6 +52,8 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Anchors and focused elements stop below the sticky 48px top bar. */
+  scroll-padding-top: calc(48px + var(--space-4));
   scrollbar-color: var(--rule-strong) var(--ink-0);
 }
 

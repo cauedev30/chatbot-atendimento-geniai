@@ -40,8 +40,8 @@ suffer most from a given problem.
 | # | Decision | Alternatives rejected | Why |
 |---|---|---|---|
 | 1 | **One LLM agent** conducts the conversation. There is no numbered menu and no external form. | Hybrid (agent plus a form for structured requests) | The agent collects and summarizes the problem itself; the ticket is the deliverable. |
-| 2 | **Code on rails, LLM as interpreter.** Code owns the flow; the LLM is called once per customer turn and returns JSON validated by a schema. | Free agent with tools; LLM in a separate Python service | Business rules become testable `if`s instead of prompt requests. One call per turn keeps cost and latency down. A separate service adds a deployable for no gain. |
-| 3 | The **kanban lives inside this project** — same service, same database. | Reusing an external dashboard; using Chatwoot as the board | One source of truth; indicators come straight from the same tables. |
+| 2 | **Code on rails, LLM as interpreter.** Code owns the flow; the LLM is called once per customer turn and returns JSON validated by a schema. | Free agent with tools; the LLM in a service of its own | Business rules become testable `if`s instead of prompt requests. One call per turn keeps cost and latency down. The LLM call lives in the backend next to the rules that consume it; a service just for it adds a deployable for no gain. |
+| 3 | The **kanban lives inside this project** — same repository, same database: the backend serves it as a JSON API and the frontend renders it. | Reusing an external dashboard; using Chatwoot as the board | One source of truth; indicators come straight from the same tables. |
 | 4 | **Five columns, in this order:** Resolved by bot → Awaiting human → In progress → Resolved by human → No response. | Two columns (resolved / open) | Keeps "nobody took it yet" apart from "someone is on it", which the waiting-time indicator needs. Keeps customers who vanished from inflating the bot's success rate. |
 | 5 | **Closed category list** (system + problem), with "Other". The agent can only choose from it; humans can correct it on the card. | Free categories written by the agent; closed list plus a free tag | Charts stay comparable over time. |
 | 6 | **One FAQ attempt, FAQ-only.** No FAQ match means summarize and hand over. | Two attempts; letting the agent suggest solutions outside the FAQ | Every instruction the customer receives was written by the team; "resolved by bot" means "resolved by the FAQ". |
@@ -50,25 +50,31 @@ suffer most from a given problem.
 | 9 | The bot is a **Chatwoot Agent Bot**. The WhatsApp number is connected to Chatwoot through a non-official connector. | Receiving WhatsApp webhooks directly | Our number does not use the official API, and humans answer customers inside Chatwoot. |
 | 10 | **Registration confirmation is kept.** If the customer says they are not the registered person, or that they are from a different unit, the bot stops and hands over. | Continuing and flagging the mismatch | A conservative cut: a wrong identity must not flow into an automated answer. |
 | 11 | **No personal-data filtering in the prompt.** The LLM may receive the customer's name, unit and messages. | Keeping name, unit and phone out of the prompt | Owner's decision. |
-| 12 | Carried-over principles: **identify by phone only**; **unknown number goes to a human, never to the FAQ**; **the bot never executes** (see §2). | — | Reconfirmed during this brainstorming. |
+| 12 | Core principles: **identify by phone only**; **unknown number goes to a human, never to the FAQ**; **the bot never executes** (see §2). | — | Reconfirmed during this brainstorming. |
+| 13 | **Stack:** backend in Python (FastAPI), frontend in React + Next.js, one PostgreSQL database, tests against a real PostgreSQL. | — | Owner's decision. |
 
 ## 4. Architecture
 
 ```mermaid
 flowchart LR
     WA["WhatsApp<br/>(non-official connector)"] --> CW["Chatwoot inbox"]
-    CW -- "Agent Bot webhook" --> IN
+    CW -- "Agent Bot webhook<br/>/webhooks/chatwoot/&lt;token&gt;" --> IN
 
-    subgraph SVC["Support service (one deployable)"]
+    subgraph BE["Backend (FastAPI)"]
         IN["Inbound adapter<br/>schema-validated"] --> APP["Application<br/>use cases"]
         APP --> DOM["Domain<br/>ticket state machine + guardrails<br/>(pure, no I/O)"]
         APP --> LLMP["LLM port"]
         APP --> CWP["Chatwoot port"]
         APP --> DB[("PostgreSQL")]
-        UI["Kanban + Indicators<br/>server-rendered pages"] --> DB
-        UI --> CWP
+        API["JSON API /api<br/>board · indicators · login"] --> APP
     end
 
+    subgraph FE["Frontend (Next.js)"]
+        UI["Login · Kanban · Indicators"]
+    end
+
+    Browser["Support team<br/>browser"] --> UI
+    UI -- "proxies /api/*<br/>(one origin, session cookie)" --> API
     LLMP --> LLM["LLM provider<br/>(swappable)"]
     CWP --> CW
 ```
@@ -77,9 +83,10 @@ flowchart LR
   questions) and the precedence rules of §5.3. It has no I/O and is unit-tested.
 - **LLM port** hides the provider. Swapping models means writing one adapter.
 - **Chatwoot port** sends messages, toggles conversation status and builds conversation links.
-- **Baseline stack:** TypeScript on Node, Fastify (webhook and pages), Zod (every inbound payload
-  and every LLM output), PostgreSQL. The ORM, test runner and UI helpers are chosen in the
-  implementation plan.
+- **Baseline stack:** backend in Python 3.12 with FastAPI, Pydantic (every inbound payload and every
+  LLM output), SQLAlchemy Core on asyncpg and PostgreSQL; frontend in Next.js (App Router), React and
+  TypeScript, with API types generated from the backend's OpenAPI schema. The Chatwoot webhook goes
+  to the backend directly; the browser only talks to the frontend, which proxies `/api/*`.
 - The customer-facing language is **Brazilian Portuguese**. Code and docs are in English.
 
 ## 5. Conversation flow
@@ -158,21 +165,28 @@ For each customer turn, the first rule that applies wins:
 entries (id, category, title and "when it applies" description — the verbatim answer text stays in
 code), the customer's registered name and unit, the triage messages so far and the counters' state.
 
-**Output** (validated with Zod; categories and FAQ ids are enums built from the database):
+**Output** (validated with Pydantic; categories and FAQ ids must come from the lists sent in the
+input):
 
-```ts
+```json
 {
-  human_requested: boolean,
-  registration_mismatch: boolean,
-  off_topic: boolean,
-  category_id: CategoryId,          // must be in the active list
-  faq_item_id: FaqItemId | null,    // unknown id is treated as null
-  faq_feedback: "resolved" | "not_resolved" | "unclear" | null,
-  needs_clarification: boolean,
-  summary: string,                  // what the kanban card shows
-  reply: string                     // framing text only; never an FAQ procedure
+  "human_requested": false,
+  "registration_mismatch": false,
+  "off_topic": false,
+  "category_id": 3,
+  "faq_item_id": 12,
+  "faq_feedback": null,
+  "needs_clarification": false,
+  "summary": "Não consegue entrar no painel; diz que a senha está errada.",
+  "reply": "Veja se isto resolve:"
 }
 ```
+
+- `category_id` must be in the active list; anything else rejects the output.
+- `faq_item_id` is an FAQ id or `null`; an unknown id is treated as `null`.
+- `faq_feedback` is `"resolved"`, `"not_resolved"`, `"unclear"` or `null`.
+- `summary` (1–1000 characters) is what the kanban card shows; `reply` (0–1000) is framing text only,
+  never an FAQ procedure. Booleans are strict: `"true"` is not a boolean.
 
 There is **no action field**: the LLM has no way to ask for anything to be executed. The model runs
 without its reasoning mode, to keep latency within the target.
@@ -209,7 +223,9 @@ chatwoot_conversation_id, opened_at, handed_off_at, taken_at, closed_at.
 - **Chatwoot sync, both ways:** closing a card resolves the Chatwoot conversation, and resolving the
   conversation in Chatwoot moves the card to Resolved by human. Nobody has to close the same thing
   twice.
-- **Login:** one shared credential from environment variables, cookie session.
+- **Login:** one shared credential from the backend's environment variables; the backend signs an
+  httpOnly, `SameSite=Lax` session cookie (12 h), and the frontend reaches it through its `/api` proxy,
+  so the cookie is first-party.
 
 ## 9. Indicators
 
@@ -277,7 +293,7 @@ Source: official API pricing page (api-docs.deepseek.com, model `deepseek-flash`
 
 ## 13. Open items
 
-These are not decided yet. None of them blocks the implementation plan.
+These are not decided yet. None of them blocks the implementation.
 
 - **FAQ content and the initial category list** — written by the support team.
 - **Model choice** — decided by the evaluation set (§11).

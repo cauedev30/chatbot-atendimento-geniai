@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import { Filters, IndicatorsView } from "@/components/indicators/indicators-view";
-import styles from "@/components/indicators/indicators.module.css";
-import controls from "@/components/ui/controls.module.css";
+import { IndicatorsView, InvalidPeriod, unitIdOf } from "@/components/indicators/indicators-view";
 import { AppShell } from "@/components/ui/app-shell";
 import { BackendError, backendGet } from "@/lib/backend";
 import type { IndicatorsResponse } from "@/lib/types";
@@ -41,21 +39,17 @@ export default async function IndicatorsPage({ searchParams }: { searchParams: S
       {loaded.ok ? (
         <IndicatorsView response={loaded.response} />
       ) : (
-        // Invalid period: keep what was typed in the form and show the backend's message.
-        <div className={styles.page}>
-          <Filters
-            units={loaded.fallback.units}
-            query={{
-              fromDate: first(raw.from) ?? loaded.fallback.query.fromDate,
-              toDate: first(raw.to) ?? loaded.fallback.query.toDate,
-              unitId: null,
-              normalize: first(raw.norm) === "1",
-            }}
-          />
-          <p role="alert" className={controls.error}>
-            {loaded.detail}
-          </p>
-        </div>
+        // Invalid period: keep what was chosen in the form and show the backend's message.
+        <InvalidPeriod
+          units={loaded.fallback.units}
+          query={{
+            fromDate: first(raw.from) ?? loaded.fallback.query.fromDate,
+            toDate: first(raw.to) ?? loaded.fallback.query.toDate,
+            unitId: unitIdOf(first(raw.unit)),
+            normalize: first(raw.norm) === "1",
+          }}
+          detail={loaded.detail}
+        />
       )}
     </AppShell>
   );

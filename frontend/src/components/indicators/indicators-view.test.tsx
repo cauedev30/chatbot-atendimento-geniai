@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { IndicatorsResponse } from "@/lib/types";
-import { IndicatorsView, heatFill } from "./indicators-view";
+import { IndicatorsView, InvalidPeriod, heatFill, unitIdOf } from "./indicators-view";
 
 function response(overrides: Partial<IndicatorsResponse["query"]> = {}): IndicatorsResponse {
   return {
@@ -156,6 +156,32 @@ describe("IndicatorsView context lines", () => {
   it("states which tickets the time figures cover", () => {
     render(<IndicatorsView response={response()} />);
     expect(screen.getByRole("region", { name: "4. Tempo" })).toHaveTextContent("só os tickets que alguém já assumiu");
+  });
+});
+
+describe("InvalidPeriod", () => {
+  it("keeps the chosen unit and dates, and announces and focuses the error", () => {
+    render(
+      <InvalidPeriod
+        units={response().units}
+        query={{ fromDate: "2026-09-30", toDate: "2026-09-01", unitId: 2, normalize: false }}
+        detail="Período inválido."
+      />,
+    );
+    const form = screen.getByRole("search", { name: "Filtros" });
+    expect(within(form).getByLabelText("Unidade")).toHaveValue("2");
+    expect(within(form).getByLabelText("De")).toHaveValue("2026-09-30");
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Período inválido.");
+    expect(alert).toHaveFocus();
+  });
+
+  it("reads the unit from the address only when it is a unit id", () => {
+    expect(unitIdOf("2")).toBe(2);
+    expect(unitIdOf("")).toBeNull();
+    expect(unitIdOf(undefined)).toBeNull();
+    expect(unitIdOf("abc")).toBeNull();
+    expect(unitIdOf("0")).toBeNull();
   });
 });
 

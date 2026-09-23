@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import controls from "@/components/ui/controls.module.css";
+import { FocusedAlert } from "@/components/ui/focused-alert";
 import { BOARD_COLUMNS, COLUMN_LABELS, HANDOFF_REASON_LABELS, decimal, minutesLabel, percent } from "@/lib/format";
 import type { IdName, Indicators, IndicatorsQuery, IndicatorsResponse } from "@/lib/types";
 import styles from "./indicators.module.css";
@@ -30,7 +31,24 @@ export function IndicatorsView({ response }: { response: IndicatorsResponse }) {
   );
 }
 
-export function Filters({ query, units }: { query: Pick<IndicatorsQuery, "fromDate" | "toDate" | "unitId" | "normalize">; units: IdName[] }) {
+/** The unit id in the address, when it is one. */
+export function unitIdOf(value: string | undefined): number | null {
+  return value !== undefined && /^[1-9]\d*$/.test(value) ? Number(value) : null;
+}
+
+type FilterQuery = Pick<IndicatorsQuery, "fromDate" | "toDate" | "unitId" | "normalize">;
+
+/** A period the backend refused: the filters keep what was chosen, and the error takes the focus. */
+export function InvalidPeriod({ query, units, detail }: { query: FilterQuery; units: IdName[]; detail: string }) {
+  return (
+    <div className={styles.page}>
+      <Filters query={query} units={units} />
+      <FocusedAlert>{detail}</FocusedAlert>
+    </div>
+  );
+}
+
+export function Filters({ query, units }: { query: FilterQuery; units: IdName[] }) {
   return (
     <form role="search" aria-label="Filtros" method="get" action="/indicators" className={styles.filters}>
       <label className={controls.field}>

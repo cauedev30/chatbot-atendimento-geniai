@@ -171,6 +171,7 @@ A test also checks that the committed `backend/openapi.json` matches the API.
 | `BOARD_USER`, `BOARD_PASSWORD` | The team's shared login; the password needs at least 8 characters |
 | `COOKIE_SECRET` | Signs the session cookie; at least 32 characters |
 | `SECURE_COOKIE` | `true` behind HTTPS (default); `false` only for local http |
+| `ENABLE_API_DOCS` | `true` serves `/docs`, `/redoc` and `/openapi.json`; off by default |
 | `BURST_WINDOW_MS` | Optional: silence that closes a burst of messages into one turn |
 | `SILENCE_TIMEOUT_HOURS` | Optional: silence that moves a triage ticket to "No response" |
 | `EVAL_CANDIDATES` | JSON list of `{label, baseUrl, model, apiKeyEnv, extraBody?}` for the evaluation |

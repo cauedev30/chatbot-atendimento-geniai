@@ -85,10 +85,14 @@ def create_app(
 ) -> FastAPI:
     """Tests inject deps, a RecordingScheduler and a KeyedQueue; without deps, the lifespan builds the real ones."""
     state = AppState(config=config or load_config(), queue=queue or KeyedQueue(), deps=deps, scheduler=scheduler)
+    docs = state.config.enable_api_docs
     app = FastAPI(
         title="GeniAI support bot",
         version="0.2.0",
         lifespan=None if deps is not None else _lifespan(state),
+        docs_url="/docs" if docs else None,
+        redoc_url="/redoc" if docs else None,
+        openapi_url="/openapi.json" if docs else None,
     )
     app.state.geniai = state
 

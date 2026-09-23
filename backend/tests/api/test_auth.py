@@ -1,9 +1,14 @@
 import time
+from dataclasses import replace
 
+import httpx
 import itsdangerous
 
 from geniai.api.auth import SESSION_COOKIE, safe_equal
+from geniai.app.turn_scheduler import RecordingScheduler
+from geniai.main import create_app
 from tests.api.conftest import TEST_CONFIG, Api
+from tests.conftest import Harness
 
 
 async def test_answers_401_without_a_session(api: Api) -> None:
@@ -89,3 +94,15 @@ def test_safe_equal_compares_by_content() -> None:
     assert safe_equal("abc", "abc") is True
     assert safe_equal("abc", "abd") is False
     assert safe_equal("abc", "abcd") is False
+
+
+async def test_api_docs_are_off_by_default(api: Api) -> None:
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        assert (await api.client.get(path)).status_code == 404, path
+
+
+async def test_api_docs_can_be_turned_on(h: Harness) -> None:
+    app = create_app(replace(TEST_CONFIG, enable_api_docs=True), deps=h.deps, scheduler=RecordingScheduler())
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        for path in ("/docs", "/redoc", "/openapi.json"):
+            assert (await client.get(path)).status_code == 200, path

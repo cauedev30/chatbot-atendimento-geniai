@@ -25,6 +25,7 @@ def test_loads_a_valid_environment_with_defaults() -> None:
     assert config.auth.secure_cookie is True
     assert config.rules == DEFAULT_RULES
     assert config.llm.extra_body is None
+    assert config.enable_api_docs is False
 
 
 def test_applies_overrides() -> None:
@@ -36,6 +37,7 @@ def test_applies_overrides() -> None:
             "BURST_WINDOW_MS": "3000",
             "SILENCE_TIMEOUT_HOURS": "12",
             "LLM_EXTRA_BODY_JSON": '{"thinking":{"type":"disabled"}}',
+            "ENABLE_API_DOCS": "true",
         }
     )
     assert config.port == 8080
@@ -43,6 +45,7 @@ def test_applies_overrides() -> None:
     assert config.rules.burst_window_ms == 3000
     assert config.rules.silence_timeout_ms == 12 * 3_600_000
     assert config.llm.extra_body == {"thinking": {"type": "disabled"}}
+    assert config.enable_api_docs is True
 
 
 def test_treats_empty_strings_as_missing_and_names_missing_variables_without_their_values() -> None:

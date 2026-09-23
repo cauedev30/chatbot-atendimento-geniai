@@ -46,6 +46,7 @@ class _Env(BaseModel):
     SECURE_COOKIE: Literal["true", "false"] = "true"
     BURST_WINDOW_MS: Annotated[int, Field(gt=0)] | None = None
     SILENCE_TIMEOUT_HOURS: Annotated[float, Field(gt=0)] | None = None
+    ENABLE_API_DOCS: Literal["true", "false"] = "false"
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,8 @@ class AppConfig:
     llm: OpenAiCompatibleConfig
     auth: AuthConfig
     rules: TriageRules
+    enable_api_docs: bool = False
+    """Serve /docs, /redoc and /openapi.json. Off by default: the schema is exported at build time."""
 
 
 def _invalid(names: list[str]) -> ConfigError:
@@ -105,4 +108,5 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
             secure_cookie=e.SECURE_COOKIE == "true",
         ),
         rules=rules,
+        enable_api_docs=e.ENABLE_API_DOCS == "true",
     )

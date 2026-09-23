@@ -1,0 +1,14 @@
+.env
+backend/.venv/
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+backend/.env
+backend/eval-results/
+frontend/.env.local
+frontend/.next/
+frontend/node_modules/
+frontend/test-results/
+frontend/playwright-report/
+*.egg-info/

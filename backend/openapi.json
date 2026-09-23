@@ -329,6 +329,10 @@
             "title": "Cells",
             "type": "array"
           },
+          "uncategorized": {
+            "title": "Uncategorized",
+            "type": "integer"
+          },
           "units": {
             "items": {
               "$ref": "#/components/schemas/HeatmapUnit"
@@ -340,7 +344,8 @@
         "required": [
           "units",
           "categories",
-          "cells"
+          "cells",
+          "uncategorized"
         ],
         "title": "Heatmap",
         "type": "object"
@@ -356,8 +361,15 @@
             "type": "integer"
           },
           "unitId": {
-            "title": "Unitid",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unitid"
           }
         },
         "required": [

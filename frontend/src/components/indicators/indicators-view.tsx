@@ -213,17 +213,28 @@ function Outcomes({ data }: { data: Indicators }) {
   );
 }
 
+/** A heatmap row: a unit, or the tickets from unknown numbers (no unit, never divided by attendants). */
+interface HeatRow {
+  key: string;
+  name: string;
+  unitId: number | null;
+  attendants: number | null;
+}
+
 function Heatmap({ data, query }: { data: Indicators; query: IndicatorsQuery }) {
-  const { units, categories, cells } = data.heatmap;
-  const valueOf = (unitId: number, categoryId: number): number | null => {
-    const n = cells.find((c) => c.unitId === unitId && c.categoryId === categoryId)?.count ?? 0;
+  const { units, categories, cells, uncategorized } = data.heatmap;
+  const unknownRow = cells.some((c) => c.unitId === null);
+  const rows: HeatRow[] = [
+    ...units.map((u) => ({ key: String(u.id), name: u.name, unitId: u.id, attendants: u.attendants })),
+    ...(unknownRow ? [{ key: "none", name: "Sem unidade", unitId: null, attendants: null }] : []),
+  ];
+  const valueOf = (row: HeatRow, categoryId: number): number | null => {
+    const n = cells.find((c) => c.unitId === row.unitId && c.categoryId === categoryId)?.count ?? 0;
     if (!query.normalize) return n;
-    const attendants = units.find((u) => u.id === unitId)?.attendants ?? 0;
-    return attendants === 0 ? null : n / attendants;
+    return row.attendants === null || row.attendants === 0 ? null : n / row.attendants;
   };
-  const max = Math.max(0, ...units.flatMap((u) => categories.map((c) => valueOf(u.id, c.id) ?? 0)));
+  const max = Math.max(0, ...rows.flatMap((r) => categories.map((c) => valueOf(r, c.id) ?? 0)));
   const inGrid = cells.reduce((sum, c) => sum + c.count, 0);
-  const outside = Math.max(0, data.volume.total - inGrid);
   return (
     <Block id="block-heatmap" title="3. Unidade × categoria">
       <div className={styles.heatHead}>
@@ -232,12 +243,13 @@ function Heatmap({ data, query }: { data: Indicators; query: IndicatorsQuery }) 
             ? "Tickets divididos pelo número de atendentes ativos de cada unidade."
             : "Quantidade de tickets por unidade e categoria."}{" "}
           Quanto mais forte o teal, maior o valor.
-          {outside > 0 ? (
+          {query.normalize && unknownRow ? " A linha Sem unidade não tem atendentes para dividir." : null}
+          {uncategorized > 0 ? (
             <>
               {" "}
-              {outside === 1
-                ? "1 ticket sem unidade ou sem categoria fica fora desta tabela."
-                : `${outside} tickets sem unidade ou sem categoria ficam fora desta tabela.`}
+              {uncategorized === 1
+                ? "1 ticket sem categoria fica fora desta tabela."
+                : `${uncategorized} tickets sem categoria ficam fora desta tabela.`}
             </>
           ) : null}
         </p>
@@ -245,8 +257,8 @@ function Heatmap({ data, query }: { data: Indicators; query: IndicatorsQuery }) 
           {query.normalize ? "Mostrar números absolutos" : "Dividir pelo número de atendentes da unidade"}
         </a>
       </div>
-      {categories.length === 0 || units.length === 0 || inGrid === 0 ? (
-        <p className={styles.none}>Nenhum ticket com unidade e categoria no período.</p>
+      {categories.length === 0 || rows.length === 0 || inGrid === 0 ? (
+        <p className={styles.none}>Nenhum ticket com categoria no período.</p>
       ) : (
         <div className={styles.scroll}>
           <table className={`${styles.table} ${styles.heat}`}>
@@ -261,11 +273,11 @@ function Heatmap({ data, query }: { data: Indicators; query: IndicatorsQuery }) 
               </tr>
             </thead>
             <tbody>
-              {units.map((u) => (
-                <tr key={u.id}>
-                  <th scope="row">{u.name}</th>
+              {rows.map((r) => (
+                <tr key={r.key}>
+                  <th scope="row">{r.name}</th>
                   {categories.map((c) => {
-                    const v = valueOf(u.id, c.id);
+                    const v = valueOf(r, c.id);
                     const fill = heatFill(v === null || max === 0 ? 0 : v / max);
                     return (
                       <td

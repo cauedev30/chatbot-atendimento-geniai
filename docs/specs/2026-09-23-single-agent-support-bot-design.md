@@ -239,7 +239,10 @@ One page, filtered by period and unit. Everything is computed from the tables in
    **Bot resolution rate** = Resolved by bot ÷ identified tickets that reached a column. No response
    is shown as its own share, so it never counts as a success.
 3. **Unit × category heatmap** — the "which unit suffers most from problem X" view, with an option to
-   normalize by the number of attendants per unit so larger units do not always look worst.
+   normalize by the number of attendants per unit so larger units do not always look worst. Tickets
+   from unknown numbers form a "No unit" row, which normalization leaves as a dash (it has no
+   attendants). An inactive unit with tickets in the period keeps its row. Only tickets without a
+   category stay out of the heatmap, and the page says how many.
 4. **Time** — time in Awaiting human until someone takes it, and time until close.
 5. **FAQ health** — per entry: times used and share confirmed as resolved. Low shares flag text to
    rewrite.

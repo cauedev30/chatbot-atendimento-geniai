@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import insert as sa_insert
 
 from geniai.app.indicators import IndicatorFilter, compute_indicators, list_units
-from geniai.db.schema import ticket
+from geniai.db.schema import ticket, unit
 from tests.conftest import Harness
 
 _conversations = itertools.count(1)
@@ -168,6 +168,33 @@ async def test_builds_the_unit_by_category_heatmap_with_active_attendant_counts(
     assert (h.seed.units["norte"], h.seed.categories["report"], 2) in cells
 
 
+async def test_the_heatmap_has_a_row_for_unknown_numbers_and_counts_only_uncategorized_tickets_as_outside(
+    h: Harness,
+) -> None:
+    await scenario(h)
+    heatmap = (await compute_indicators(h.deps, september())).heatmap
+    cells = {(c.unit_id, c.category_id, c.count) for c in heatmap.cells}
+    assert (None, h.seed.categories["unidentified"], 1) in cells
+    assert sum(c.count for c in heatmap.cells) == 6
+    assert heatmap.uncategorized == 1  # t7, still with the bot
+
+
+async def test_the_heatmap_keeps_an_inactive_unit_that_has_tickets_in_the_period(h: Harness) -> None:
+    await scenario(h)
+    async with h.begin() as conn:
+        old = (
+            await conn.execute(sa_insert(unit).values(name="Unidade Exemplo Antiga", active=False).returning(unit.c.id))
+        ).scalar_one()
+    await insert(h, attendant_id=None, unit_id=old, category_id=h.seed.categories["login"])
+    heatmap = (await compute_indicators(h.deps, september())).heatmap
+    assert [u.name for u in heatmap.units] == [
+        "Unidade Exemplo Antiga",
+        "Unidade Exemplo Centro",
+        "Unidade Exemplo Norte",
+    ]
+    assert (old, h.seed.categories["login"], 1) in {(c.unit_id, c.category_id, c.count) for c in heatmap.cells}
+
+
 async def test_measures_waiting_and_closing_times_in_minutes(h: Harness) -> None:
     await scenario(h)
     time = (await compute_indicators(h.deps, september())).time
@@ -197,6 +224,7 @@ async def test_filters_by_unit(h: Harness) -> None:
     assert r.volume.total == 2
     assert r.outcomes.bot_resolution_rate == 0
     assert [u.id for u in r.heatmap.units] == [h.seed.units["norte"]]
+    assert {c.unit_id for c in r.heatmap.cells} == {h.seed.units["norte"]}
 
 
 async def test_returns_empty_values_for_an_empty_period(h: Harness) -> None:

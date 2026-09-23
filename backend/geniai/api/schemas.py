@@ -100,15 +100,19 @@ class HeatmapUnit(ApiModel):
 
 
 class HeatmapCell(ApiModel):
-    unit_id: int
+    unit_id: int | None
+    """None for tickets from unknown numbers (the "Sem unidade" row)."""
     category_id: int
     count: int
 
 
 class Heatmap(ApiModel):
     units: list[HeatmapUnit]
+    """Active units, plus inactive ones with tickets in the period."""
     categories: list[IdLabel]
     cells: list[HeatmapCell]
+    uncategorized: int
+    """Tickets in the period without a category, which the heatmap leaves out."""
 
 
 class TimeStats(ApiModel):

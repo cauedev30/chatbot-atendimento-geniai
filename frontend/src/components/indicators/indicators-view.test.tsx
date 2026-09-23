@@ -34,7 +34,11 @@ function response(overrides: Partial<IndicatorsResponse["query"]> = {}): Indicat
           { id: 2, name: "Unidade Exemplo Norte", attendants: 0 },
         ],
         categories: [{ id: 3, label: "Painel / Não consegue entrar" }],
-        cells: [{ unitId: 1, categoryId: 3, count: 2 }],
+        cells: [
+          { unitId: 1, categoryId: 3, count: 2 },
+          { unitId: null, categoryId: 3, count: 1 },
+        ],
+        uncategorized: 0,
       },
       time: {
         waitToTakeMedianMin: null,
@@ -90,6 +94,21 @@ describe("IndicatorsView", () => {
     const heatmap = screen.getByRole("region", { name: "3. Unidade × categoria" });
     expect(within(heatmap).getByRole("row", { name: /Unidade Exemplo Centro/ })).toHaveTextContent("1,00");
     expect(within(heatmap).getByRole("row", { name: /Unidade Exemplo Norte/ })).toHaveTextContent("—");
+    // Unknown numbers have no attendants to divide by.
+    expect(within(heatmap).getByRole("row", { name: /Sem unidade/ })).toHaveTextContent("—");
+    expect(heatmap).toHaveTextContent("A linha Sem unidade não tem atendentes para dividir.");
+  });
+
+  it("gives tickets from unknown numbers their own heatmap row, last", () => {
+    render(<IndicatorsView response={response()} />);
+    const heatmap = screen.getByRole("region", { name: "3. Unidade × categoria" });
+    const rows = within(heatmap).getAllByRole("row").slice(1);
+    expect(rows.map((r) => r.firstChild?.textContent)).toEqual([
+      "Unidade Exemplo Centro",
+      "Unidade Exemplo Norte",
+      "Sem unidade",
+    ]);
+    expect(rows[2]).toHaveTextContent("1");
   });
 
   it("keeps the chosen unit, period and normalization in the filter form", () => {
@@ -112,20 +131,26 @@ describe("IndicatorsView", () => {
 });
 
 describe("IndicatorsView context lines", () => {
-  it("says how many tickets the unit × category table leaves out", () => {
-    render(<IndicatorsView response={response()} />);
+  it("counts only the tickets without a category as left out of the unit × category table", () => {
+    const r = response();
+    r.data.heatmap.uncategorized = 1;
+    const { unmount } = render(<IndicatorsView response={r} />);
     const heatmap = screen.getByRole("region", { name: "3. Unidade × categoria" });
-    expect(heatmap).toHaveTextContent("1 ticket sem unidade ou sem categoria fica fora desta tabela.");
+    expect(heatmap).toHaveTextContent("1 ticket sem categoria fica fora desta tabela.");
+    unmount();
+    render(<IndicatorsView response={response()} />);
+    expect(screen.getByRole("region", { name: "3. Unidade × categoria" })).not.toHaveTextContent("fora desta tabela");
   });
 
   it("shows the empty message instead of a grid of zeros", () => {
     const r = response();
     r.data.heatmap.cells = [];
+    r.data.heatmap.uncategorized = 3;
     render(<IndicatorsView response={r} />);
     const heatmap = screen.getByRole("region", { name: "3. Unidade × categoria" });
     expect(within(heatmap).queryByRole("table")).toBeNull();
-    expect(heatmap).toHaveTextContent("Nenhum ticket com unidade e categoria no período.");
-    expect(heatmap).toHaveTextContent("3 tickets sem unidade ou sem categoria ficam fora desta tabela.");
+    expect(heatmap).toHaveTextContent("Nenhum ticket com categoria no período.");
+    expect(heatmap).toHaveTextContent("3 tickets sem categoria ficam fora desta tabela.");
   });
 
   it("states which tickets the time figures cover", () => {

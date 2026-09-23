@@ -154,20 +154,26 @@ async def _compute(conn: AsyncConnection, f: IndicatorFilter) -> Indicators:
     ).one()
 
     # 3. Heatmap
+    # Tickets without a unit (unknown numbers) form their own row; only uncategorized ones stay out.
     cells = [
         HeatmapCell(unit_id=r.unit_id, category_id=r.category_id, count=r.total)
         for r in await conn.execute(
             select(ticket.c.unit_id, ticket.c.category_id, n.label("total"))
-            .where(in_scope, ticket.c.unit_id.is_not(None), ticket.c.category_id.is_not(None))
+            .where(in_scope, ticket.c.category_id.is_not(None))
             .group_by(ticket.c.unit_id, ticket.c.category_id)
         )
     ]
+    uncategorized = (await conn.execute(select(n).where(in_scope, ticket.c.category_id.is_(None)))).scalar_one()
+    units_with_tickets = {c.unit_id for c in cells if c.unit_id is not None}
+    shown_units = (
+        unit.c.active.is_(True) | unit.c.id.in_(units_with_tickets) if f.unit_id is None else unit.c.id == f.unit_id
+    )
     heatmap_units = [
         HeatmapUnit(id=r.id, name=r.name, attendants=r.attendants)
         for r in await conn.execute(
             select(unit.c.id, unit.c.name, func.count(attendant.c.id).filter(attendant.c.active).label("attendants"))
             .select_from(unit.outerjoin(attendant, attendant.c.unit_id == unit.c.id))
-            .where(unit.c.active.is_(True) if f.unit_id is None else unit.c.id == f.unit_id)
+            .where(shown_units)
             .group_by(unit.c.id, unit.c.name)
             .order_by(unit.c.name)
         )
@@ -252,6 +258,7 @@ async def _compute(conn: AsyncConnection, f: IndicatorFilter) -> Indicators:
                 if c.category_id is not None and c.label is not None
             ],
             cells=cells,
+            uncategorized=uncategorized,
         ),
         time=TimeStats(
             wait_to_take_median_min=_number(wait_row.median),

@@ -284,6 +284,8 @@ export interface components {
             categories: components["schemas"]["IdLabel"][];
             /** Cells */
             cells: components["schemas"]["HeatmapCell"][];
+            /** Uncategorized */
+            uncategorized: number;
             /** Units */
             units: components["schemas"]["HeatmapUnit"][];
         };
@@ -294,7 +296,7 @@ export interface components {
             /** Count */
             count: number;
             /** Unitid */
-            unitId: number;
+            unitId: number | null;
         };
         /** HeatmapUnit */
         HeatmapUnit: {

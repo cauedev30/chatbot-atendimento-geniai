@@ -1,5 +1,6 @@
 import asyncio
 import itertools
+import json
 import time
 
 import httpx
@@ -196,3 +197,15 @@ async def test_does_not_wait_for_a_turn_to_close_the_card_from_chatwoot(api: Api
     # The card left triage while the model was thinking: the turn drops its answer.
     assert await turn is None
     assert [s.text for s in h.chatwoot.sent][-1] != "Qual erro?"
+
+
+async def test_logs_each_request_with_the_webhook_token_masked(api: Api) -> None:
+    await incoming(api, 63, "oi")
+    await api.client.post("/webhooks/chatwoot/um-token-errado-qualquer", json={})
+    entries = [e.obj for e in api.h.logger.infos if e.msg == "request"]
+    assert [(e["method"], e["path"], e["status"]) for e in entries] == [
+        ("POST", "/webhooks/chatwoot/***", 200),
+        ("POST", "/webhooks/chatwoot/***", 404),
+    ]
+    assert WEBHOOK_TOKEN not in json.dumps(entries)
+    assert "um-token-errado-qualquer" not in json.dumps(entries)

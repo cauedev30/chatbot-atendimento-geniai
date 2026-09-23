@@ -115,11 +115,16 @@ cp .env.example .env             # then fill it in (see Configuration)
 |---|---|
 | `python -m geniai.db.cli migrate` | Apply `geniai/db/migrations/*.sql` to `DATABASE_URL` |
 | `python -m geniai.db.cli seed` | Load **fictitious** demo data (once; a second run does nothing) |
-| `uvicorn geniai.main:create_app --factory --host 0.0.0.0 --port 8000` | Run the service. It migrates on start, reschedules turns left pending by a restart and sweeps silent tickets every 5 minutes |
+| `python -m geniai` | Run the service on `HOST` and `PORT`. It migrates on start, reschedules turns left pending by a restart and sweeps silent tickets every 5 minutes |
 | `python -m geniai.eval.run` | Run the evaluation set against the models in `EVAL_CANDIDATES` |
 | `python -m geniai.export_openapi` | Rewrite `openapi.json` after an API change |
 
 The service reads only environment variables; load `.env` with your shell or process manager.
+
+Run **one process with one worker**: the order of each conversation's messages and turns, and the
+burst timers, are kept in memory. The service logs each request as a JSON line with the webhook token
+masked; uvicorn's own access log is off because it would print the token. If you start uvicorn
+yourself (`uvicorn geniai.main:create_app --factory`), pass `--no-access-log` and no `--workers`.
 Tunable conversation rules (burst window, silence timeout, re-ask counts, whether "take" asks who)
 live in `backend/geniai/domain/rules.py`; the ones marked `OWNER-UNCONFIRMED` still await the owner's
 confirmation.
@@ -161,7 +166,7 @@ A test also checks that the committed `backend/openapi.json` matches the API.
 |---|---|
 | `DATABASE_URL` | `postgresql://user:pass@host:5432/db` |
 | `TEST_DATABASE_URL` | Empty, dedicated database for `pytest` |
-| `PORT`, `HOST` | Where the service listens (the `uvicorn` flags take precedence) |
+| `PORT`, `HOST` | Where `python -m geniai` listens (default `0.0.0.0:8000`) |
 | `WEBHOOK_TOKEN` | Secret path segment of the webhook URL; at least 16 characters |
 | `CHATWOOT_BASE_URL` | Chatwoot address, e.g. `https://chatwoot.example.com` |
 | `CHATWOOT_ACCOUNT_ID` | Chatwoot account number |

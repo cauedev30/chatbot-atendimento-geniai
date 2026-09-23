@@ -1,9 +1,11 @@
 """The service: JSON API under /api, the Chatwoot webhook, and the bot's background work.
 
-uvicorn geniai.main:create_app --factory --host 0.0.0.0 --port 8000
+Run it with `python -m geniai` (see __main__.py).
 """
 
-from collections.abc import AsyncIterator, Callable
+import re
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
@@ -31,6 +33,13 @@ from geniai.db.migrate import migrate
 from geniai.llm.openai_compatible import create_openai_compatible_llm
 
 SWEEP_INTERVAL_S = 5 * 60
+
+_WEBHOOK_TOKEN_IN_PATH = re.compile(r"^/webhooks/chatwoot/[^/]*")
+
+
+def loggable_path(path: str) -> str:
+    """The request path with the webhook token masked: it is a secret."""
+    return _WEBHOOK_TOKEN_IN_PATH.sub("/webhooks/chatwoot/***", path)
 
 
 def _lifespan(state: AppState) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
@@ -96,6 +105,22 @@ def create_app(
         openapi_url="/openapi.json" if docs else None,
     )
     app.state.geniai = state
+
+    @app.middleware("http")
+    async def access_log(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        started = time.perf_counter()
+        response = await call_next(request)
+        if state.deps is not None:
+            state.deps.log.info(
+                {
+                    "method": request.method,
+                    "path": loggable_path(request.url.path),
+                    "status": response.status_code,
+                    "ms": round((time.perf_counter() - started) * 1000),
+                },
+                "request",
+            )
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, exc: RequestValidationError) -> Response:

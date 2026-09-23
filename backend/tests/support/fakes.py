@@ -66,11 +66,12 @@ class LogEntry:
 
 class RecordingLogger:
     def __init__(self) -> None:
+        self.infos: list[LogEntry] = []
         self.errors: list[LogEntry] = []
         self.warnings: list[LogEntry] = []
 
     def info(self, obj: dict[str, object], msg: str | None = None) -> None:
-        pass
+        self.infos.append(LogEntry(obj, msg))
 
     def warn(self, obj: dict[str, object], msg: str | None = None) -> None:
         self.warnings.append(LogEntry(obj, msg))

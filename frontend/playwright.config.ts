@@ -32,12 +32,12 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } }],
   webServer: [
     {
-      command: `"${python}" -m geniai.db.cli migrate && "${python}" -m geniai.db.cli seed && "${python}" -m uvicorn geniai.main:create_app --factory --host 127.0.0.1 --port ${BACKEND_PORT}`,
+      command: `"${python}" -m geniai.db.cli migrate && "${python}" -m geniai.db.cli seed && "${python}" -m geniai`,
       cwd: backendDir,
       url: `http://127.0.0.1:${BACKEND_PORT}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
-      env: { SECURE_COOKIE: "false" },
+      env: { SECURE_COOKIE: "false", HOST: "127.0.0.1", PORT: String(BACKEND_PORT) },
     },
     {
       command: `npx next build && npx next start -p ${FRONTEND_PORT} -H 127.0.0.1`,

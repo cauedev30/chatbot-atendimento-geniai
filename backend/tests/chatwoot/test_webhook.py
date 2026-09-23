@@ -86,3 +86,16 @@ def test_event_kinds_are_stable_names() -> None:
         "conversation_resolved",
         "ignored",
     ]
+
+
+def test_a_null_status_change_is_not_a_status_and_closes_nothing() -> None:
+    event = parse_chatwoot_event({"event": "conversation_status_changed", "id": 45, "status": None})
+    assert event == Ignored("event conversation_status_changed")
+    resolved_null = parse_chatwoot_event({"event": "conversation_resolved", "id": 45, "status": None})
+    assert resolved_null == Ignored("event conversation_resolved")
+
+
+def test_a_null_conversation_status_counts_as_absent() -> None:
+    event = parse_chatwoot_event(INCOMING | {"conversation": {"id": 45, "status": None}})
+    assert isinstance(event, IncomingMessage)
+    assert event.conversation_status is None

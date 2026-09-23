@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import ClassVar, Literal
 
-from pydantic import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, ValidationError
+from pydantic import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, ValidationError, field_validator
 
 from geniai.json_types import JsonInt
 
@@ -66,6 +66,14 @@ class _StatusChanged(BaseModel):
     event: Literal["conversation_status_changed", "conversation_resolved"]
     id: JsonInt
     status: StrictStr | None = None
+    """May be absent; an explicit null is not a status, so the event is ignored."""
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _present_status_is_text(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("status is null")
+        return value
 
 
 class _Event(BaseModel):

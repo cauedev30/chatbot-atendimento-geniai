@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Board, BoardCard } from "@/lib/types";
@@ -131,12 +131,20 @@ describe("BoardView", () => {
     expect(screen.getByText("4 conversas com o bot agora")).toBeInTheDocument();
   });
 
-  it("refuses to take without choosing a person when one is required", async () => {
+  it("refuses to take without choosing a person, next to the card, and focuses the field", async () => {
     render(<BoardView board={board()} />);
     const { u, article } = await openActions(1);
+    const who = within(article).getByLabelText("Quem assume");
+    expect(who).toBeRequired();
+    expect(who).not.toHaveAttribute("aria-invalid");
     await u.click(within(article).getByRole("button", { name: "Assumir" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Escolha quem vai assumir o ticket.");
+    expect(who).toHaveAttribute("aria-invalid", "true");
+    expect(who).toHaveAccessibleDescription("Escolha quem vai assumir o ticket.");
+    expect(who).toHaveFocus();
+    expect(within(article).getByText("Escolha quem vai assumir o ticket.")).toBeInTheDocument();
     expect(apiPost).not.toHaveBeenCalled();
+    await u.selectOptions(who, "1");
+    expect(who).not.toHaveAttribute("aria-invalid");
   });
 
   it("takes the ticket for the chosen person and refreshes", async () => {
@@ -162,13 +170,44 @@ describe("BoardView", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("posts the new category", async () => {
+  it("posts the new category, announces it and keeps Corrigir usable", async () => {
     apiPost.mockResolvedValue(undefined);
     render(<BoardView board={board()} />);
     const { u, article } = await openActions(1);
     await u.selectOptions(within(article).getByLabelText("Categoria"), "4");
-    await u.click(within(article).getByRole("button", { name: "Corrigir" }));
+    const fix = within(article).getByRole("button", { name: "Corrigir" });
+    await u.click(fix);
     expect(apiPost).toHaveBeenCalledWith("/api/board/tickets/1/category", { categoryId: 4 });
+    expect(await screen.findByRole("status", { name: "Resultado da ação" })).toHaveTextContent(
+      "Categoria do ticket 1 corrigida para Painel / Relatório não carrega.",
+    );
+    expect(fix).toBeEnabled();
+  });
+
+  it("moves focus to the moved card and announces where it went", async () => {
+    apiPost.mockResolvedValue(undefined);
+    render(<BoardView board={board()} />);
+    const { u, article } = await openActions(1);
+    await u.selectOptions(within(article).getByLabelText("Mover para"), "in_progress");
+    await u.click(within(article).getByRole("button", { name: "Mover" }));
+    await waitFor(() => expect(ticket(1)).toHaveFocus());
+    expect(within(column(/^Em atendimento/)).getByRole("article", { name: /^Ticket 1\b/ })).toBe(ticket(1));
+    expect(screen.getByRole("status", { name: "Resultado da ação" })).toHaveTextContent("Ticket 1 movido para Em atendimento.");
+  });
+
+  it("keeps focus on the card when the backend refuses", async () => {
+    apiPost.mockRejectedValue(new ApiError(400, "Não foi possível mover este ticket."));
+    render(<BoardView board={board()} />);
+    const { u, article } = await openActions(3);
+    await u.click(within(article).getByRole("button", { name: "Fechar" }));
+    await waitFor(() => expect(ticket(3)).toHaveFocus());
+    expect(screen.getByRole("alert")).toHaveTextContent("Não foi possível mover este ticket.");
+  });
+
+  it("describes the drag handle in Portuguese", () => {
+    render(<BoardView board={board()} />);
+    const handle = within(ticket(1)).getByRole("button", { name: "Arrastar ticket 1" });
+    expect(handle).toHaveAttribute("aria-roledescription", "ticket arrastável");
   });
 
   it("closes a ticket into Resolvido por humano", async () => {
@@ -185,5 +224,49 @@ describe("BoardView", () => {
     render(<BoardView board={board()} />);
     vi.advanceTimersByTime(60_000);
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("BoardView in a narrow window", () => {
+  let report: ((width: number) => void) | undefined;
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(private readonly callback: ResizeObserverCallback) {
+          report = (width) =>
+            this.callback([{ contentRect: { width } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("takes the drag handle out of the keyboard order under 1040 px and keeps it in wider windows", () => {
+    render(<BoardView board={board()} />);
+    act(() => report?.(1280));
+    expect(within(ticket(1)).getByRole("button", { name: "Arrastar ticket 1" })).toHaveAttribute("tabindex", "0");
+    act(() => report?.(800));
+    // "Mover para" covers keyboard moves here; the handle stays for touch and mouse.
+    const handle = within(ticket(1)).getByLabelText("Arrastar ticket 1");
+    expect(handle).toHaveAttribute("tabindex", "-1");
+    expect(handle).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("after a move to a hidden column, focuses the heading of the column on screen", async () => {
+    apiPost.mockResolvedValue(undefined);
+    render(<BoardView board={board()} />);
+    act(() => report?.(800));
+    const { u, article } = await openActions(1);
+    await u.selectOptions(within(article).getByLabelText("Mover para"), "in_progress");
+    await u.click(within(article).getByRole("button", { name: "Mover" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: /^Aguardando humano/ })).toHaveFocus());
+    expect(screen.getByRole("status", { name: "Resultado da ação" })).toHaveTextContent("Ticket 1 movido para Em atendimento.");
   });
 });

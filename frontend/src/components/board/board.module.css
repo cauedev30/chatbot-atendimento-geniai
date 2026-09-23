@@ -333,6 +333,15 @@
   justify-self: start;
 }
 
+.fieldError {
+  grid-column: 1 / -1;
+}
+
+/* A heading or card that takes the focus after an action (never tabbable) keeps the global ring. */
+.columnHead:focus-visible {
+  outline-offset: -2px;
+}
+
 /* The longest wait: the one inverse card on the board. */
 .longest {
   background: var(--teal);
@@ -360,8 +369,14 @@
   border-color: var(--on-teal);
 }
 
+/* Inside the plate the ring is dark ink on teal (8.5:1). The action panel is back on the dark
+   panel, so its controls take the normal teal-hi ring; the card itself rings outside the plate. */
 .longest :focus-visible {
   outline-color: var(--on-teal);
+}
+
+.longest .actionsPanel :focus-visible {
+  outline-color: var(--teal-hi);
 }
 
 .longest .actionsPanel :global(.label) {

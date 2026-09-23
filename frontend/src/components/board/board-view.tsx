@@ -14,7 +14,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ApiError, apiPost, NETWORK_ERROR } from "@/lib/api";
 import { BOARD_COLUMNS, COLUMN_LABELS, triageCounter } from "@/lib/format";
 import type { Board, BoardCard, BoardColumn } from "@/lib/types";
@@ -23,7 +23,8 @@ import { columnKeyboardCoordinates } from "./column-keyboard";
 import { TicketCard, type CardActions } from "./ticket-card";
 
 const REFRESH_MS = 60_000;
-const TAKE_NEEDS_PERSON = "Escolha quem vai assumir o ticket.";
+/** Board width under which the columns become tabs (the container query in board.module.css). */
+const NARROW_PX = 1040;
 
 type Columns = Board["columns"];
 
@@ -59,11 +60,31 @@ const collision: CollisionDetection = (args) => (args.pointerCoordinates ? point
 const INSTRUCTIONS =
   "Para mover um ticket: foque o botão de arrastar, aperte espaço, use as setas para a esquerda e para a direita e aperte espaço de novo para soltar. Esc cancela.";
 
+/** True while the board is narrow enough to show one column at a time. */
+function useNarrow(ref: RefObject<HTMLElement | null>): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setNarrow(entry.contentRect.width <= NARROW_PX);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref]);
+  return narrow;
+}
+
 export function BoardView({ board }: { board: Board }) {
   const router = useRouter();
+  const boardRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(boardRef);
   const [loaded, setLoaded] = useState(board);
   const [columns, setColumns] = useState(board.columns);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
+  const [takeError, setTakeError] = useState<number | null>(null);
+  const focusCard = useRef<number | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<number>>(new Set());
   const [landed, setLanded] = useState<number | null>(null);
   const [shown, setShown] = useState<BoardColumn>("awaiting_human");
@@ -79,14 +100,31 @@ export function BoardView({ board }: { board: Board }) {
     return () => clearInterval(timer);
   }, [router]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: columnKeyboardCoordinates }),
-  );
+  // After an action the focus goes back to the card, or, when the card left the column on screen,
+  // to that column's heading: never to the page body.
+  useEffect(() => {
+    const id = focusCard.current;
+    if (id === null) return;
+    focusCard.current = null;
+    const root = boardRef.current;
+    const cardEl = root?.querySelector<HTMLElement>(`[data-card-id="${id}"]`);
+    const target =
+      cardEl && !(narrow && cardEl.closest('[data-shown="false"]'))
+        ? cardEl
+        : root?.querySelector<HTMLElement>(`#column-${shown}`);
+    target?.focus();
+  }, [busy, columns, shown, narrow]);
 
-  async function run(card: BoardCard, request: () => Promise<void>, optimistic?: BoardColumn) {
+  const pointer = useSensor(PointerSensor, { activationConstraint: { distance: 6 } });
+  const keyboard = useSensor(KeyboardSensor, { coordinateGetter: columnKeyboardCoordinates });
+  // One column at a time: a keyboard drag has nowhere visible to go, and "Mover para" covers it.
+  const sensors = useSensors(pointer, narrow ? null : keyboard);
+
+  async function run(card: BoardCard, request: () => Promise<void>, done: string, optimistic?: BoardColumn) {
     const before = columns;
     setError(null);
+    setStatus("");
+    setTakeError(null);
     setBusy((s) => new Set(s).add(card.id));
     if (optimistic) {
       setColumns(withMove(columns, card.id, optimistic));
@@ -94,12 +132,14 @@ export function BoardView({ board }: { board: Board }) {
     }
     try {
       await request();
+      setStatus(done);
       router.refresh();
     } catch (err) {
       if (optimistic) setColumns(before);
       setLanded(null);
       setError(err instanceof ApiError ? err.detail : NETWORK_ERROR);
     } finally {
+      focusCard.current = card.id;
       setBusy((s) => {
         const next = new Set(s);
         next.delete(card.id);
@@ -111,23 +151,47 @@ export function BoardView({ board }: { board: Board }) {
   const actions: CardActions = {
     take(card, responsibleId) {
       if (responsibleId === null && board.requireResponsible) {
-        setError(TAKE_NEEDS_PERSON);
+        setTakeError(card.id);
+        return;
+      }
+      const who = board.teamMembers.find((m) => m.id === responsibleId)?.name;
+      void run(
+        card,
+        () => apiPost(`/api/board/tickets/${card.id}/take`, { responsibleId }),
+        who ? `Ticket ${card.id} assumido por ${who}.` : `Ticket ${card.id} assumido.`,
+        card.column === "in_progress" ? undefined : "in_progress",
+      );
+    },
+    clearTakeError(card) {
+      if (takeError === card.id) setTakeError(null);
+    },
+    recategorize(card, categoryId) {
+      const label = board.categories.find((c) => c.id === categoryId)?.label ?? "a categoria escolhida";
+      if (categoryId === card.categoryId) {
+        setStatus(`O ticket ${card.id} já está em ${label}.`);
         return;
       }
       void run(
         card,
-        () => apiPost(`/api/board/tickets/${card.id}/take`, { responsibleId }),
-        card.column === "in_progress" ? undefined : "in_progress",
+        () => apiPost(`/api/board/tickets/${card.id}/category`, { categoryId }),
+        `Categoria do ticket ${card.id} corrigida para ${label}.`,
       );
     },
-    recategorize(card, categoryId) {
-      void run(card, () => apiPost(`/api/board/tickets/${card.id}/category`, { categoryId }));
-    },
     move(card, to) {
-      void run(card, () => apiPost(`/api/board/tickets/${card.id}/move`, { to }), to);
+      void run(
+        card,
+        () => apiPost(`/api/board/tickets/${card.id}/move`, { to }),
+        `Ticket ${card.id} movido para ${COLUMN_LABELS[to]}.`,
+        to,
+      );
     },
     close(card) {
-      void run(card, () => apiPost(`/api/board/tickets/${card.id}/close`), "resolved_by_human");
+      void run(
+        card,
+        () => apiPost(`/api/board/tickets/${card.id}/close`),
+        `Ticket ${card.id} fechado, em ${COLUMN_LABELS.resolved_by_human}.`,
+        "resolved_by_human",
+      );
     },
   };
 
@@ -142,7 +206,7 @@ export function BoardView({ board }: { board: Board }) {
   const longestWait = waitingIds[0];
 
   return (
-    <div className={styles.board}>
+    <div className={styles.board} ref={boardRef}>
       <div className={styles.status}>
         <p className={styles.counter}>
           <span aria-hidden="true" className={`figure ${styles.counterFigure}`}>
@@ -155,6 +219,10 @@ export function BoardView({ board }: { board: Board }) {
         </p>
         <p className={styles.hint}>Atualiza sozinho a cada minuto.</p>
       </div>
+
+      <p role="status" aria-label="Resultado da ação" className="visually-hidden">
+        {status}
+      </p>
 
       {error ? (
         <div role="alert" className={styles.alert}>
@@ -198,6 +266,9 @@ export function BoardView({ board }: { board: Board }) {
                   longestWait={card.id === longestWait}
                   landed={card.id === landed}
                   busy={busy.has(card.id)}
+                  keyboardDrag={!narrow}
+                  takeError={takeError === card.id}
+                  requireResponsible={board.requireResponsible}
                   teamMembers={board.teamMembers}
                   categories={board.categories}
                   actions={actions}
@@ -222,7 +293,7 @@ function Column(props: { column: BoardColumn; count: number; shown: boolean; chi
       aria-labelledby={headingId}
       data-shown={shown}
     >
-      <h2 id={headingId} className={styles.columnHead}>
+      <h2 id={headingId} className={styles.columnHead} tabIndex={-1}>
         <span>{COLUMN_LABELS[column]}</span>
         <span className={`figure ${styles.columnCount}`}>{count}</span>
       </h2>

@@ -11,7 +11,10 @@ export const columnKeyboardCoordinates: KeyboardCoordinateGetter = (event, { con
   const { collisionRect, droppableRects } = context;
   if (!collisionRect) return undefined;
 
-  const rects = BOARD_COLUMNS.map((column) => droppableRects.get(column)).filter((r) => r !== undefined);
+  // A column hidden by the narrow layout (display: none) measures 0×0: never a destination.
+  const rects = BOARD_COLUMNS.map((column) => droppableRects.get(column)).filter(
+    (r): r is NonNullable<typeof r> => r !== undefined && r.width > 0 && r.height > 0,
+  );
   if (rects.length === 0) return undefined;
   const centerX = collisionRect.left + collisionRect.width / 2;
   let index = rects.findIndex((r) => centerX >= r.left && centerX < r.left + r.width);

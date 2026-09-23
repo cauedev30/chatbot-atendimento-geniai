@@ -1,7 +1,7 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import controls from "@/components/ui/controls.module.css";
 import { ExternalIcon, GripIcon } from "@/components/ui/icons";
 import { BOARD_COLUMNS, COLUMN_LABELS, formatElapsed } from "@/lib/format";
@@ -10,6 +10,7 @@ import styles from "./board.module.css";
 
 export interface CardActions {
   take(card: BoardCard, responsibleId: number | null): void;
+  clearTakeError(card: BoardCard): void;
   recategorize(card: BoardCard, categoryId: number): void;
   move(card: BoardCard, to: BoardColumn): void;
   close(card: BoardCard): void;
@@ -22,21 +23,33 @@ interface TicketCardProps {
   longestWait: boolean;
   landed: boolean;
   busy: boolean;
+  /** False in the one-column layout: the handle then serves only mouse and touch. */
+  keyboardDrag: boolean;
+  /** "Assumir" was pressed without choosing who takes the ticket. */
+  takeError: boolean;
+  requireResponsible: boolean;
   teamMembers: IdName[];
   categories: IdLabel[];
   actions: CardActions;
 }
 
 const OPEN: readonly BoardColumn[] = ["awaiting_human", "in_progress"];
+const TAKE_NEEDS_PERSON = "Escolha quem vai assumir o ticket.";
 
 export function TicketCard(props: TicketCardProps) {
-  const { card, generatedAt, longestWait, landed, busy, teamMembers, categories, actions } = props;
+  const { card, generatedAt, longestWait, landed, busy, keyboardDrag, takeError, requireResponsible } = props;
+  const { teamMembers, categories, actions } = props;
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } = useDraggable({
     id: card.id,
     data: { column: card.column },
     disabled: busy,
+    attributes: { roleDescription: "ticket arrastável" },
   });
   const ids = useId();
+  const whoRef = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    if (takeError) whoRef.current?.focus();
+  }, [takeError]);
   const [responsibleId, setResponsibleId] = useState("");
   const [categoryId, setCategoryId] = useState(card.categoryId === null ? "" : String(card.categoryId));
   const [destination, setDestination] = useState("");
@@ -64,6 +77,8 @@ export function TicketCard(props: TicketCardProps) {
       className={className}
       aria-label={name}
       aria-busy={busy || undefined}
+      data-card-id={card.id}
+      tabIndex={-1}
       style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
     >
       <div className={styles.cardTop}>
@@ -82,6 +97,7 @@ export function TicketCard(props: TicketCardProps) {
           aria-label={`Arrastar ticket ${card.id}`}
           {...attributes}
           {...listeners}
+          {...(keyboardDrag ? {} : { tabIndex: -1, "aria-hidden": true })}
         >
           <GripIcon />
         </button>
@@ -108,10 +124,17 @@ export function TicketCard(props: TicketCardProps) {
                 <label className={controls.field}>
                   <span className="label">Quem assume</span>
                   <select
+                    ref={whoRef}
                     className={controls.select}
                     value={responsibleId}
-                    onChange={(e) => setResponsibleId(e.target.value)}
+                    onChange={(e) => {
+                      setResponsibleId(e.target.value);
+                      actions.clearTakeError(card);
+                    }}
                     disabled={busy}
+                    required={requireResponsible}
+                    aria-invalid={takeError || undefined}
+                    aria-describedby={takeError ? `${ids}-take-error` : undefined}
                   >
                     <option value="">Escolha…</option>
                     {teamMembers.map((m) => (
@@ -129,6 +152,11 @@ export function TicketCard(props: TicketCardProps) {
                 >
                   Assumir
                 </button>
+                {takeError ? (
+                  <p id={`${ids}-take-error`} className={`${controls.error} ${styles.fieldError}`}>
+                    {TAKE_NEEDS_PERSON}
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -155,7 +183,7 @@ export function TicketCard(props: TicketCardProps) {
               <button
                 type="button"
                 className={controls.button}
-                disabled={busy || categoryId === "" || Number(categoryId) === card.categoryId}
+                disabled={busy || categoryId === ""}
                 onClick={() => actions.recategorize(card, Number(categoryId))}
               >
                 Corrigir

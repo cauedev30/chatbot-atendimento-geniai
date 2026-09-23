@@ -223,6 +223,9 @@ chatwoot_conversation_id, opened_at, handed_off_at, taken_at, closed_at.
   conversation.
 - **Actions:** drag between columns; **take** (pick who is taking it — the login is shared — which
   sets the responsible person and moves the card to In progress); correct the category; close.
+- **Moves are free for people** (owner, 2026-09-23): dragging a card, or "Mover para", into In
+  progress moves it without a responsible person; only **take** sets one. A person may also move a
+  card into Resolved by bot.
 - **Chatwoot sync, both ways:** closing a card resolves the Chatwoot conversation, and resolving the
   conversation in Chatwoot moves the card to Resolved by human. Nobody has to close the same thing
   twice.

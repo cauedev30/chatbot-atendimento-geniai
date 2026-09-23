@@ -9,7 +9,8 @@
   --ink-1: #061110;
   --ink-2: #0a2f2c;
   --rule: #173a36;
-  --rule-strong: #2a5f59;
+  /* Control borders: at least 3:1 on the ground and on the panels. */
+  --rule-strong: #2f6a63;
 
   /* Signature teal and its highlight; white type. */
   --teal: #14c8b4;

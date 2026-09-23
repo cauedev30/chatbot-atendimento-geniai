@@ -6,7 +6,7 @@ colors:
   ink-1: "#061110"
   ink-2: "#0a2f2c"
   rule: "#173a36"
-  rule-strong: "#2a5f59"
+  rule-strong: "#2f6a63"
   teal: "#14c8b4"
   teal-hi: "#3ff0da"
   on-teal: "#021a18"
@@ -169,7 +169,7 @@ A single-hue world: teal on near-black, with white for content and one warm red 
 - **Panel Teal-Black** (`ink-1`): columns, filter bar, login panel, action panels, default buttons, table-row hover.
 - **Deep Teal Shadow** (`ink-2`): the lead column's header strip and the empty track of magnitude bars.
 - **Rule** (`rule`): every 1px divider and panel border.
-- **Strong Rule** (`rule-strong`): control borders, the lead column's border, section-heading underlines, the scrollbar thumb.
+- **Strong Rule** (`rule-strong`): control borders (at least 3:1 on the ground and on the panels, so a field is findable), the lead column's border, section-heading underlines, the scrollbar thumb.
 - **Paper White** (`text`): content: summaries, table values, figures in indicators.
 - **Dim Teal-Grey** (`text-2`): secondary text: nav links at rest, column heads, notes.
 - **Faint Teal-Grey** (`text-3`): labels, placeholders, empty-state lines, table column heads.

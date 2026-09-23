@@ -9,6 +9,8 @@ export function backendUrl(): string {
   return url.replace(/\/+$/, "");
 }
 
+export const BACKEND_UNAVAILABLE = "O servidor do suporte não respondeu.";
+
 export class BackendError extends Error {
   constructor(
     readonly status: number,
@@ -19,13 +21,21 @@ export class BackendError extends Error {
   }
 }
 
-/** Server-only GET that forwards the visitor's cookies; a 401 sends them to the login page. */
+/**
+ * Server-only GET that forwards the visitor's cookies; a 401 sends them to the login page. Any other
+ * failure, including an unreachable backend, is a BackendError the page can show.
+ */
 export async function backendGet<T>(path: string): Promise<T> {
   const cookieHeader = (await cookies()).toString();
-  const res = await fetch(`${backendUrl()}${path}`, {
-    headers: cookieHeader ? { cookie: cookieHeader } : {},
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${backendUrl()}${path}`, {
+      headers: cookieHeader ? { cookie: cookieHeader } : {},
+      cache: "no-store",
+    });
+  } catch {
+    throw new BackendError(503, BACKEND_UNAVAILABLE);
+  }
   if (res.status === 401) redirect("/login");
   if (!res.ok) {
     let detail = `Erro ${res.status} do servidor.`;

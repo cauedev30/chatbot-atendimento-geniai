@@ -1,0 +1,80 @@
+/* Error and empty-state pages: the same terminal panel as the login, with the state as a label
+   plate and the recovery as the one primary action. */
+
+.screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+}
+
+.stack {
+  width: min(100%, 460px);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.wordmark {
+  justify-self: start;
+  padding-bottom: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background-image: var(--brand-gradient);
+  background-size: 100% 2px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+}
+
+.panel {
+  width: min(100%, 460px);
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--rule-strong);
+  background: var(--ink-1);
+}
+
+.code {
+  justify-self: start;
+  margin: 0;
+  padding: 2px var(--space-2);
+  background: var(--teal);
+  color: var(--on-teal);
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.title {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.text {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 60ch;
+  color: var(--text-2);
+}
+
+.text p {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.actions a {
+  text-decoration: none;
+}

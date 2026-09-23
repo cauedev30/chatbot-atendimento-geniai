@@ -1,13 +1,17 @@
 import type { Metadata } from "next";
 import { IndicatorsView, InvalidPeriod, unitIdOf } from "@/components/indicators/indicators-view";
 import { AppShell } from "@/components/ui/app-shell";
+import { BackendUnavailable } from "@/components/ui/backend-unavailable";
 import { BackendError, backendGet } from "@/lib/backend";
 import type { IndicatorsResponse } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Indicadores" };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-type Loaded = { ok: true; response: IndicatorsResponse } | { ok: false; detail: string; fallback: IndicatorsResponse };
+type Loaded =
+  | { ok: true; response: IndicatorsResponse }
+  | { ok: false; detail: string; fallback: IndicatorsResponse }
+  | { ok: "unavailable" };
 
 const PASSED = ["from", "to", "unit", "norm"] as const;
 
@@ -17,10 +21,15 @@ function first(value: string | string[] | undefined): string | undefined {
 
 async function load(query: string): Promise<Loaded> {
   try {
-    return { ok: true, response: await backendGet<IndicatorsResponse>(`/api/indicators${query ? `?${query}` : ""}`) };
+    try {
+      return { ok: true, response: await backendGet<IndicatorsResponse>(`/api/indicators${query ? `?${query}` : ""}`) };
+    } catch (err) {
+      if (!(err instanceof BackendError) || err.status !== 400) throw err;
+      return { ok: false, detail: err.detail, fallback: await backendGet<IndicatorsResponse>("/api/indicators") };
+    }
   } catch (err) {
-    if (!(err instanceof BackendError) || err.status !== 400) throw err;
-    return { ok: false, detail: err.detail, fallback: await backendGet<IndicatorsResponse>("/api/indicators") };
+    if (err instanceof BackendError) return { ok: "unavailable" };
+    throw err;
   }
 }
 
@@ -36,7 +45,9 @@ export default async function IndicatorsPage({ searchParams }: { searchParams: S
   return (
     <AppShell current="indicators">
       <h1 className="visually-hidden">Indicadores do suporte</h1>
-      {loaded.ok ? (
+      {loaded.ok === "unavailable" ? (
+        <BackendUnavailable what="os indicadores" retryHref={`/indicators${params.size ? `?${params.toString()}` : ""}`} />
+      ) : loaded.ok ? (
         <IndicatorsView response={loaded.response} />
       ) : (
         // Invalid period: keep what was chosen in the form and show the backend's message.

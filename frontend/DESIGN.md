@@ -253,7 +253,7 @@ A panel in `ink-1` with a 1px rule border and a header row: mono caps name on th
 
 ### Ticket Card (signature)
 A square `ink-0` block with a 1px rule border and 12px padding. From top to bottom: a mono caps state label and the wait in large tabular teal figures (waiting cards) or a single "há N min" label (other cards); unit, then category in faint mono; the summary in body text; the responsible person in meta text; a ruled footer with "Abrir no Chatwoot" and an "Ações" disclosure. A 32px grip button (44px on touch) handles dragging. Every card also has "Mover para" in its actions, so no move depends on dragging.
-- **Longest wait:** the one inverse card: teal plate, every inner text in `on-teal`, focus outline in `on-teal`.
+- **Longest wait:** the one inverse card: teal plate, every inner text in `on-teal`, focus outline in `on-teal` while it sits on the plate. The open actions panel is back on `ink-1`, so its controls keep the `teal-hi` ring.
 - **Landed:** when a card lands in a new column it settles in one step (240ms, 6px drop, teal-hi edge). Under reduced motion the edge stays and the movement is dropped.
 
 ### Column Tabs (narrow only)
@@ -261,6 +261,9 @@ A strip of mono caps tabs joined by 1px rule gaps, 40px tall, each showing its c
 
 ### Indicator Table
 Mono caps caption, faint mono column heads over a `rule-strong` line, 1px rule row dividers, right-aligned tabular numbers. Count cells carry a 6px bar: teal fill on an `ink-2` track. The heatmap fills cells with teal at an alpha set by the value. Strong fills switch the cell ink to `on-teal` so contrast holds. Empty data shows a faint mono sentence, never a table of zeros.
+
+### Status Panel
+What a page shows instead of its content: not found (404), a broken page, or the backend not answering. An `ink-1` panel with a `rule-strong` border: the state as a small inverse-video label plate ("404", "Sem conexão", "Erro"), a mono bold title, a short `text-2` sentence that says what failed and that the tickets are safe, and one primary recovery action (Tentar de novo, Ir para o quadro). On a page of its own it sits centered under the login-size wordmark; inside the app shell it replaces the board or the indicators under the top bar.
 
 ### Stat
 A mono caps label, a figure in white, and a meta note that states what the number counts (for example, "de N tickets identificados…").

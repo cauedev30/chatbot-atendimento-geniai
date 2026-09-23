@@ -1,10 +1,11 @@
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from geniai.app.outbox import Outbox
 from geniai.domain.rules import TriageRules
 
 
@@ -50,3 +51,4 @@ class Deps:
     rules: TriageRules
     now: Callable[[], datetime]
     log: Logger
+    outbox: Outbox = field(default_factory=Outbox)

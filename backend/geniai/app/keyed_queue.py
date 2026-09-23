@@ -3,8 +3,9 @@ from collections.abc import Awaitable, Callable
 
 
 class KeyedQueue:
-    """Serializes async tasks per key, in process. Every webhook and every turn of one Chatwoot
-    conversation runs under the same key, so the ticket of a conversation is never raced."""
+    """Serializes async tasks per key, in process (so the backend runs one worker). The webhooks of a
+    conversation run under conversation_key, in arrival order; its turns run under turn_key, so a
+    webhook never waits for the LLM."""
 
     def __init__(self) -> None:
         self._locks: dict[str, asyncio.Lock] = {}
@@ -25,3 +26,7 @@ class KeyedQueue:
 
 def conversation_key(conversation_id: int) -> str:
     return f"conversation:{conversation_id}"
+
+
+def turn_key(conversation_id: int) -> str:
+    return f"turn:{conversation_id}"

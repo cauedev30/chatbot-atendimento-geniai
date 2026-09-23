@@ -1,9 +1,12 @@
+import asyncio
 import itertools
 
 import pytest
 from sqlalchemy import select
 
+from geniai.app.board import take_card
 from geniai.app.handle_inbound import handle_inbound_message
+from geniai.app.ports import LlmRequest
 from geniai.app.process_turn import TurnOutcome, pending_customer_messages, process_turn
 from geniai.app.tickets_repo import MessageRow, TicketRow
 from geniai.app.turn_scheduler import RecordingScheduler
@@ -247,13 +250,65 @@ async def test_keeps_the_ticket_state_when_chatwoot_is_down(h: Harness, chat: Ch
     assert len(h.logger.errors) > 0
 
 
-def test_pending_customer_messages_are_the_ones_after_the_last_bot_message() -> None:
+def test_pending_customer_messages_are_the_ones_after_the_last_consumed_one() -> None:
     def m(i: int, author: MessageAuthor) -> MessageRow:
         return MessageRow(
             id=i, ticket_id=1, author=author, text=str(i), is_media=False, at=START, chatwoot_message_id=None
         )
 
-    messages = [m(1, "customer"), m(2, "bot"), m(3, "customer"), m(4, "customer")]
-    assert [x.id for x in pending_customer_messages(messages)] == [3, 4]
-    assert [x.id for x in pending_customer_messages([m(1, "customer")])] == [1]
-    assert pending_customer_messages([m(1, "customer"), m(2, "bot")]) == []
+    # A message stored while a turn was running lands before that turn's reply, and is still pending.
+    messages = [m(1, "customer"), m(2, "customer"), m(3, "bot"), m(4, "customer")]
+    assert [x.id for x in pending_customer_messages(messages, 1)] == [2, 4]
+    assert [x.id for x in pending_customer_messages(messages, None)] == [1, 2, 4]
+    assert pending_customer_messages(messages, 4) == []
+
+
+class SlowLlm:
+    """Holds every LLM call until released, to act while a turn is in progress."""
+
+    def __init__(self, h: Harness) -> None:
+        self.release = asyncio.Event()
+        complete = h.llm.complete
+
+        async def slow(request: LlmRequest) -> str:
+            await self.release.wait()
+            return await complete(request)
+
+        h.llm.complete = slow  # type: ignore[method-assign]
+
+
+async def test_a_turn_that_would_close_the_ticket_yields_to_a_message_that_arrived_meanwhile(
+    h: Harness, chat: Chat
+) -> None:
+    conversation_id = await chat.faq_sent()
+    await chat.receive(conversation_id, "sim, resolveu")
+    llm = SlowLlm(h)
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], faq_feedback="resolved"))
+    turn = asyncio.create_task(process_turn(h.deps, conversation_id))
+    await asyncio.sleep(0.05)
+    await chat.receive(conversation_id, "ah, e a impressora também parou")
+    sent_before = len(h.chatwoot.sent)
+    llm.release.set()
+    assert await turn is None
+    assert len(h.chatwoot.sent) == sent_before
+    assert (await chat.ticket_of(conversation_id)).column == "in_triage"
+
+    h.llm.push(turn_json(category_id=h.seed.categories["other"], faq_feedback="unclear"))
+    assert await process_turn(h.deps, conversation_id) == "reask_feedback"
+    assert "sim, resolveu" in h.llm.requests[-1].user
+    assert "a impressora também parou" in h.llm.requests[-1].user
+
+
+async def test_a_turn_drops_its_answer_when_a_person_took_the_ticket_meanwhile(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.greeted()
+    await chat.receive(conversation_id, "o painel não abre")
+    llm = SlowLlm(h)
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], needs_clarification=True, reply="Qual erro?"))
+    turn = asyncio.create_task(process_turn(h.deps, conversation_id))
+    await asyncio.sleep(0.05)
+    t = await chat.ticket_of(conversation_id)
+    await take_card(h.deps, t.id, h.seed.team["first"])
+    llm.release.set()
+    assert await turn is None
+    assert chat.last_sent() != "Qual erro?"
+    assert (await chat.ticket_of(conversation_id)).column == "in_progress"

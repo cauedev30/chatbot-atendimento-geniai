@@ -35,6 +35,7 @@ class TicketRow:
     closed_at: datetime | None
     last_customer_message_at: datetime
     last_moved_at: datetime
+    last_consumed_message_id: int | None
 
 
 @dataclass(frozen=True)
@@ -127,18 +128,20 @@ async def get_attendant_with_unit(conn: AsyncConnection, attendant_id: int) -> A
     return AttendantWithUnit(**row._mapping)
 
 
-async def find_open_ticket(conn: AsyncConnection, conversation_id: int) -> TicketRow | None:
+async def find_open_ticket(conn: AsyncConnection, conversation_id: int, *, lock: bool = False) -> TicketRow | None:
+    """With lock, the row stays locked until the transaction ends, so a concurrent move waits for it."""
     query = (
         select(ticket)
         .where(ticket.c.chatwoot_conversation_id == conversation_id, ticket.c.column.in_(OPEN_COLUMNS))
         .limit(1)
     )
-    row = (await conn.execute(query)).first()
+    row = (await conn.execute(query.with_for_update() if lock else query)).first()
     return _ticket(row) if row else None
 
 
-async def get_ticket(conn: AsyncConnection, ticket_id: int) -> TicketRow | None:
-    row = (await conn.execute(select(ticket).where(ticket.c.id == ticket_id).limit(1))).first()
+async def get_ticket(conn: AsyncConnection, ticket_id: int, *, lock: bool = False) -> TicketRow | None:
+    query = select(ticket).where(ticket.c.id == ticket_id).limit(1)
+    row = (await conn.execute(query.with_for_update() if lock else query)).first()
     return _ticket(row) if row else None
 
 

@@ -1,12 +1,16 @@
+import asyncio
 import itertools
+import time
 
 import httpx
 from sqlalchemy import select
 
-from geniai.app.process_turn import process_turn
-from geniai.db.schema import ticket
+from geniai.app.ports import LlmRequest
+from geniai.app.process_turn import process_turn, run_turn
+from geniai.db.schema import ticket, triage_message
+from geniai.domain.texts import TEXT
 from tests.api.conftest import WEBHOOK_TOKEN, Api
-from tests.support.fakes import StatusSet, turn_json
+from tests.support.fakes import Sent, StatusSet, turn_json
 
 _message_ids = itertools.count(1)
 URL = f"/webhooks/chatwoot/{WEBHOOK_TOKEN}"
@@ -83,6 +87,7 @@ async def test_passes_the_conversation_status_through_so_a_reopened_conversation
             "sender": {"phone_number": "+5511900000001"},
         },
     )
+    await api.h.settle()
     assert api.h.chatwoot.statuses == [StatusSet(47, "pending")]
 
 
@@ -97,3 +102,97 @@ async def test_closes_the_card_when_the_conversation_is_resolved_in_chatwoot(api
 
 async def test_the_webhook_needs_no_session_and_is_not_under_api(api: Api) -> None:
     assert (await api.client.post(f"/api/webhooks/chatwoot/{WEBHOOK_TOKEN}", json={})).status_code == 404
+
+
+async def stored_texts(api: Api, conversation_id: int) -> list[str]:
+    async with api.h.begin() as conn:
+        query = (
+            select(triage_message.c.text)
+            .select_from(triage_message.join(ticket, triage_message.c.ticket_id == ticket.c.id))
+            .where(ticket.c.chatwoot_conversation_id == conversation_id)
+            .order_by(triage_message.c.id)
+        )
+        return list((await conn.execute(query)).scalars())
+
+
+async def test_answers_at_once_while_a_turn_of_the_same_conversation_waits_on_the_llm(api: Api) -> None:
+    h = api.h
+    await incoming(api, 60, "oi")
+    assert await process_turn(h.deps, 60) == "greeting"
+    await incoming(api, 60, "o painel não abre")
+
+    release = asyncio.Event()
+    complete = h.llm.complete
+
+    async def slow_llm(request: LlmRequest) -> str:
+        await release.wait()  # a model that takes as long as the test wants
+        return await complete(request)
+
+    h.llm.complete = slow_llm  # type: ignore[method-assign]
+    clarify = turn_json(category_id=h.seed.categories["login"], needs_clarification=True, reply="Aparece algum erro?")
+    h.llm.push(clarify, clarify)
+    turn = asyncio.create_task(run_turn(api.app.state.geniai.queue, h.deps, 60))
+    await asyncio.sleep(0.05)
+    assert not turn.done()
+
+    started = time.perf_counter()
+    res = await asyncio.wait_for(incoming(api, 60, "aparece erro 500"), timeout=1)
+    assert time.perf_counter() - started < 1
+    assert res.json() == {"outcome": "attached_to_triage"}
+    assert "aparece erro 500" in await stored_texts(api, 60)
+
+    release.set()
+    assert await turn == "ask_clarification"
+    assert "aparece erro 500" not in h.llm.requests[0].user
+    # The message that arrived during the turn was not answered by it: the next turn takes it.
+    assert await process_turn(h.deps, 60) == "ask_clarification"
+    assert "aparece erro 500" in h.llm.requests[1].user
+
+
+async def test_answers_without_waiting_for_chatwoot_and_calls_it_after_the_commit(api: Api) -> None:
+    h = api.h
+    release = asyncio.Event()
+    send = h.chatwoot.send_message
+
+    async def slow_send(conversation_id: int, text: str) -> None:
+        await release.wait()
+        await send(conversation_id, text)
+
+    h.chatwoot.send_message = slow_send  # type: ignore[method-assign]
+    started = time.perf_counter()
+    res = await asyncio.wait_for(incoming(api, 61, "socorro", "+5511900000099"), timeout=1)
+    assert time.perf_counter() - started < 1
+    assert res.json() == {"outcome": "unidentified_ticket"}
+    assert h.chatwoot.sent == []
+
+    release.set()
+    await h.settle()
+    assert h.chatwoot.sent == [Sent(61, TEXT.unidentified_ack)]
+    assert h.chatwoot.statuses == [StatusSet(61, "open")]
+
+
+async def test_does_not_wait_for_a_turn_to_close_the_card_from_chatwoot(api: Api) -> None:
+    h = api.h
+    await incoming(api, 62, "oi")
+    assert await process_turn(h.deps, 62) == "greeting"
+    await incoming(api, 62, "o painel não abre")
+    release = asyncio.Event()
+    complete = h.llm.complete
+
+    async def slow_llm(request: LlmRequest) -> str:
+        await release.wait()
+        return await complete(request)
+
+    h.llm.complete = slow_llm  # type: ignore[method-assign]
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], needs_clarification=True, reply="Qual erro?"))
+    turn = asyncio.create_task(run_turn(api.app.state.geniai.queue, h.deps, 62))
+    await asyncio.sleep(0.05)
+
+    status = {"event": "conversation_status_changed", "id": 62, "status": "resolved"}
+    res = await asyncio.wait_for(api.client.post(URL, json=status), timeout=1)
+    assert res.json() == {"moved": True}
+
+    release.set()
+    # The card left triage while the model was thinking: the turn drops its answer.
+    assert await turn is None
+    assert [s.text for s in h.chatwoot.sent][-1] != "Qual erro?"

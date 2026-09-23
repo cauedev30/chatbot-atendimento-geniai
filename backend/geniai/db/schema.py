@@ -96,6 +96,7 @@ ticket = sa.Table(
     sa.Column("closed_at", _tz()),
     sa.Column("last_customer_message_at", _tz(), nullable=False, server_default=sa.func.now()),
     sa.Column("last_moved_at", _tz(), nullable=False, server_default=sa.func.now()),
+    sa.Column("last_consumed_message_id", sa.Integer),
 )
 
 ticket_move = sa.Table(

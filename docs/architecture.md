@@ -11,16 +11,16 @@ that implements them.
 flowchart LR
     CW["Chatwoot"] -- "webhook" --> WH
     subgraph BE["Backend · FastAPI (backend/geniai)"]
-        WH["api/webhook.py"] --> Q["KeyedQueue<br/>(one lane per conversation)"]
+        WH["api/webhook.py"] --> Q["KeyedQueue<br/>(webhook lane per conversation)"]
         Q --> IN["app/handle_inbound.py"]
         IN --> SCH["DebouncedScheduler<br/>(burst window)"]
-        SCH --> Q2["KeyedQueue"] --> TURN["app/process_turn.py"]
+        SCH --> Q2["KeyedQueue<br/>(turn lane per conversation)"] --> TURN["app/process_turn.py"]
         TURN --> DOM["domain/<br/>triage · transitions · silence"]
         TURN --> LLMA["llm/<br/>interpret · openai_compatible"]
         SW["app/silence_sweeper.py<br/>(every 5 min)"]
         API["api/auth · board · indicators"] --> USE["app/board · app/indicators"]
         IN & TURN & SW & USE --> REPO["app/tickets_repo.py"] --> DB[("PostgreSQL")]
-        IN & TURN & SW & USE --> CWC["chatwoot/http.py"]
+        IN & TURN & SW & USE --> OB["app/outbox.py<br/>(Chatwoot calls in order)"] --> CWC["chatwoot/http.py"]
     end
     CWC --> CW
     LLMA --> LLM["LLM provider"]
@@ -61,6 +61,7 @@ sequenceDiagram
     CW->>B: POST /webhooks/chatwoot/<token>
     B->>B: dedupe by message id, find the open ticket or identify the phone
     B->>B: store the message, (re)start the burst window
+    B-->>CW: 200 at once (Chatwoot calls follow in the background)
     Note over B: ~5 s without new messages
     B->>B: read the ticket and its pending messages
     alt keyword asks for a person, or media rule applies
@@ -73,7 +74,7 @@ sequenceDiagram
     B->>CW: send the reply, update the conversation status
 ```
 
-1. **Inbound** (`handle_inbound.py`, under the conversation's queue lane). A duplicate Chatwoot
+1. **Inbound** (`handle_inbound.py`, under the conversation's webhook lane). A duplicate Chatwoot
    message id is ignored. A message on an open ticket is attached to it: a triage ticket gets its
    burst window restarted, a ticket with a person gets no reply. With no open ticket the phone is
    normalized and looked up among active attendants:
@@ -82,14 +83,19 @@ sequenceDiagram
    - **known** → a ticket *in triage*, with the unit copied onto it; if Chatwoot says the
      conversation is not `pending`, it is set back to `pending` so the bot keeps it.
 
-   The database writes commit before any Chatwoot call.
+   The database writes commit first; the Chatwoot calls then go to the outbox, which runs them in the
+   background, in order per conversation. The webhook never waits for a turn or for Chatwoot.
 2. **Burst window** (`turn_scheduler.py`): each message restarts a timer per conversation; when it
-   fires, the turn runs under the same queue lane.
-3. **Turn** (`process_turn.py`). The pending customer messages (those after the bot's last message)
-   form one turn. The first turn gets the greeting, written by code, unless it already asks for a
+   fires, the turn runs under the conversation's turn lane, one turn at a time.
+3. **Turn** (`process_turn.py`). The pending customer messages (those after the last one a turn has
+   read, `ticket.last_consumed_message_id`) form one turn. A message stored while a turn is running
+   stays pending for the next turn. The first turn gets the greeting, written by code, unless it already asks for a
    person. Later turns are decided in code first (keyword request for a person, media), then by the
    LLM through the precedence rules. The LLM runs outside any database transaction; the decision, the
-   summary and category, and the bot's reply are written in one transaction, then sent.
+   summary and category, and the bot's reply are written in one transaction, then sent. That
+   transaction locks the ticket and drops the decision if a person moved the ticket out of triage
+   meanwhile, or if it would close the ticket while a newer customer message waits: the next turn then
+   reads all of them.
 4. **Silence** (`silence_sweeper.py`): every 5 minutes, triage tickets silent for 24 h move to
    *Sem resposta* and the conversation is resolved.
 5. **Restart**: timers live in memory, so on start the backend reschedules every triage conversation
@@ -144,7 +150,8 @@ One PostgreSQL database; the DDL is `backend/geniai/db/migrations/0001_init.sql`
 handoff reason, the FAQ entry sent, the counters (`faq_attempted`, `clarifications_asked`,
 `unclear_feedback_reasks`, `media_prompts`), the summary, the responsible person, the Chatwoot
 conversation id and the timestamps `opened_at`, `handed_off_at`, `taken_at`, `closed_at`,
-`last_customer_message_at`, `last_moved_at`. A partial unique index allows at most one open ticket
+`last_customer_message_at`, `last_moved_at`, and `last_consumed_message_id`, the last customer message a
+turn has read. A partial unique index allows at most one open ticket
 (triage, awaiting or in progress) per conversation.
 
 ## JSON API
@@ -180,8 +187,9 @@ by default.
 - **Chatwoot:** the ticket and the bot's message are stored before any send. Sends retry twice with a
   growing delay and a 10 s timeout; a final failure is logged, never raised into the flow.
 - **Duplicates:** a Chatwoot message id is stored once; a repeated delivery answers `duplicate`.
-- **Races:** every webhook and every turn of a conversation runs in that conversation's queue lane,
-  and the database allows one open ticket per conversation. Reopening a card whose conversation
+- **Races:** the webhooks of a conversation run one at a time in its webhook lane and its turns in its
+  turn lane; both lock the ticket row when they write, and the database allows one open ticket per
+  conversation. The lanes live in the process, so the backend runs a single worker. Reopening a card whose conversation
   already has an open ticket is refused with a message, not an error page.
 - **Board:** a refused move keeps the card where it was and shows the backend's message.
 - **Logs:** one JSON line per event on stdout; errors keep their message and stack.

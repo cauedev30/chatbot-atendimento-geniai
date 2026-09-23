@@ -3,7 +3,13 @@ import asyncio
 from geniai.app.notify import sync_chatwoot_status
 from geniai.app.ports import Deps
 from geniai.app.process_turn import pending_customer_messages
-from geniai.app.tickets_repo import InvalidMoveError, list_messages, list_tickets_in_column, move_ticket
+from geniai.app.tickets_repo import (
+    InvalidMoveError,
+    get_ticket,
+    list_messages,
+    list_tickets_in_column,
+    move_ticket,
+)
 from geniai.app.turn_scheduler import TurnScheduler
 from geniai.domain.silence import SilenceInput, is_silent
 
@@ -20,9 +26,17 @@ async def sweep_silent_tickets(deps: Deps) -> list[int]:
             continue
         try:
             async with deps.engine.begin() as conn:
+                # Checked again under the lock: a message may have arrived since the list was read.
+                current = await get_ticket(conn, t.id, lock=True)
+                if current is None or not is_silent(
+                    SilenceInput(current.column, current.faq_attempted, current.last_customer_message_at),
+                    now,
+                    deps.rules,
+                ):
+                    continue
                 result = await move_ticket(conn, t.id, "no_response", "bot", now)
         except InvalidMoveError:
-            # The ticket moved in the meantime (a message arrived); nothing to do.
+            # The ticket moved in the meantime; nothing to do.
             continue
         await sync_chatwoot_status(deps, t.chatwoot_conversation_id, result.from_, "no_response")
         moved.append(t.id)
@@ -34,7 +48,7 @@ async def resume_pending_turns(deps: Deps, scheduler: TurnScheduler) -> int:
     count = 0
     async with deps.engine.connect() as conn:
         for t in await list_tickets_in_column(conn, "in_triage"):
-            if not pending_customer_messages(await list_messages(conn, t.id)):
+            if not pending_customer_messages(await list_messages(conn, t.id), t.last_consumed_message_id):
                 continue
             scheduler.schedule(t.chatwoot_conversation_id)
             count += 1

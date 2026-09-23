@@ -18,10 +18,10 @@ from geniai.api import auth, board, indicators, webhook
 from geniai.api.deps import INVALID_REQUEST, AppState
 from geniai.api.schemas import HealthOut
 from geniai.app.board import BoardError
-from geniai.app.keyed_queue import KeyedQueue, conversation_key
+from geniai.app.keyed_queue import KeyedQueue
 from geniai.app.logging import ConsoleLogger
 from geniai.app.ports import Deps
-from geniai.app.process_turn import process_turn
+from geniai.app.process_turn import run_turn
 from geniai.app.silence_sweeper import resume_pending_turns, start_sweeper
 from geniai.app.turn_scheduler import DebouncedScheduler, TurnScheduler
 from geniai.chatwoot.http import create_chatwoot_http
@@ -54,13 +54,13 @@ def _lifespan(state: AppState) -> Callable[[FastAPI], AbstractAsyncContextManage
             log=log,
         )
 
-        async def run_turn(conversation_id: int) -> None:
-            await state.queue.run(conversation_key(conversation_id), lambda: process_turn(deps, conversation_id))
+        async def turn(conversation_id: int) -> None:
+            await run_turn(state.queue, deps, conversation_id)
 
         def on_error(err: BaseException, conversation_id: int) -> None:
             log.error({"err": err, "conversationId": conversation_id}, "turn processing failed")
 
-        scheduler = DebouncedScheduler(config.rules.burst_window_ms, run_turn, on_error)
+        scheduler = DebouncedScheduler(config.rules.burst_window_ms, turn, on_error)
         state.deps, state.scheduler = deps, scheduler
         resumed = await resume_pending_turns(deps, scheduler)
         if resumed:
@@ -71,6 +71,7 @@ def _lifespan(state: AppState) -> Callable[[FastAPI], AbstractAsyncContextManage
         finally:
             sweeper.cancel()
             await scheduler.stop()
+            await deps.outbox.drain()
             await engine.dispose()
 
     return lifespan

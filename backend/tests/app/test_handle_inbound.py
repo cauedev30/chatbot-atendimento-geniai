@@ -54,6 +54,7 @@ async def test_sends_an_unknown_number_straight_to_a_human_with_no_faq(
     assert t.phone_e164 == "+5511900000099"
     assert t.summary == "socorro"
     assert t.handed_off_at == h.now
+    await h.settle()
     assert h.chatwoot.sent == [Sent(50, TEXT.unidentified_ack)]
     assert h.chatwoot.statuses == [StatusSet(50, "open")]
     assert scheduler.scheduled == []
@@ -90,6 +91,7 @@ async def test_puts_the_conversation_back_to_pending_when_a_triage_ticket_opens_
 ) -> None:
     msg = inbound(h, conversation_status="resolved")
     assert await handle_inbound_message(h.deps, scheduler, msg) == "triage_ticket"
+    await h.settle()
     assert h.chatwoot.statuses == [StatusSet(50, "pending")]
     assert h.chatwoot.sent == []
 
@@ -98,6 +100,7 @@ async def test_leaves_a_pending_or_unknown_conversation_status_alone(h: Harness,
     await handle_inbound_message(h.deps, scheduler, inbound(h, conversation_status="pending"))
     await handle_inbound_message(h.deps, scheduler, inbound(h, conversation_id=51, conversation_status=None))
     await handle_inbound_message(h.deps, scheduler, inbound(h, conversation_id=52))
+    await h.settle()
     assert h.chatwoot.statuses == []
 
 
@@ -106,6 +109,7 @@ async def test_does_not_touch_the_status_of_a_conversation_already_with_a_human(
 ) -> None:
     await handle_inbound_message(h.deps, scheduler, inbound(h, phone=None))
     await handle_inbound_message(h.deps, scheduler, inbound(h, conversation_status="open"))
+    await h.settle()
     assert h.chatwoot.statuses == [StatusSet(50, "open")]
 
 
@@ -160,6 +164,7 @@ async def test_keeps_the_ticket_when_chatwoot_is_down(h: Harness, scheduler: Rec
     h.chatwoot.fail_sends = True
     assert await handle_inbound_message(h.deps, scheduler, inbound(h, phone=None)) == "unidentified_ticket"
     assert len(await tickets_of(h, 50)) == 1
+    await h.settle()
     assert len(h.logger.errors) > 0
 
 
@@ -174,4 +179,5 @@ async def test_writes_the_ticket_before_any_outbound_message(h: Harness, schedul
 
     h.chatwoot.send_message = send_after_checking  # type: ignore[method-assign]
     await handle_inbound_message(h.deps, scheduler, inbound(h, phone=None))
+    await h.settle()
     assert seen == [1]

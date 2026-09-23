@@ -41,6 +41,7 @@ async def test_moves_a_silent_ticket_to_no_response_and_resolves_the_conversatio
         row = await get_ticket(conn, t.id)
     assert row is not None
     assert row.column == "no_response"
+    await h.settle()
     assert h.chatwoot.statuses == [StatusSet(1, "resolved")]
 
 
@@ -67,6 +68,16 @@ async def test_reschedules_only_conversations_with_unanswered_customer_messages(
     scheduler = RecordingScheduler()
     assert await resume_pending_turns(h.deps, scheduler) == 1
     assert scheduler.scheduled == [1]
+
+
+async def test_reschedules_a_message_stored_while_the_last_turn_was_running(h: Harness) -> None:
+    t = await open_triage(h, 1)
+    assert await process_turn(h.deps, 1) == "greeting"
+    async with h.begin() as conn:
+        # The customer message sits before the bot reply, but that turn never read it.
+        await update_ticket(conn, t.id, {"last_consumed_message_id": 0})
+    scheduler = RecordingScheduler()
+    assert await resume_pending_turns(h.deps, scheduler) == 1
 
 
 async def eventually(check: Callable[[], Awaitable[bool]], attempts: int = 150) -> None:

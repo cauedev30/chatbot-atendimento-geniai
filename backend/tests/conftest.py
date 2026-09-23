@@ -86,6 +86,10 @@ class Harness:
             log=self.logger,
         )
 
+    async def settle(self) -> None:
+        """Waits for the Chatwoot calls posted in the background."""
+        await self.deps.outbox.drain()
+
     def advance(self, ms: int) -> None:
         self.now = self.now + timedelta(milliseconds=ms)
 

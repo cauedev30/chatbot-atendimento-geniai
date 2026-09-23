@@ -3,7 +3,8 @@ from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from geniai.app.notify import safely, sync_chatwoot_status
+from geniai.app.keyed_queue import KeyedQueue, turn_key
+from geniai.app.notify import send_message, sync_chatwoot_status
 from geniai.app.ports import Deps
 from geniai.app.tickets_repo import (
     MessageRow,
@@ -14,6 +15,7 @@ from geniai.app.tickets_repo import (
     get_attendant_with_unit,
     get_category_id_by_key,
     get_faq_item,
+    get_ticket,
     list_active_categories,
     list_active_faq_items,
     list_messages,
@@ -43,9 +45,10 @@ from geniai.llm.prompt import PromptCategory, PromptFaqItem, PromptMessage, Turn
 TurnOutcome = Literal["greeting"] | DecisionKind
 
 
-def pending_customer_messages(messages: list[MessageRow]) -> list[MessageRow]:
-    last_bot = max((i for i, m in enumerate(messages) if m.author == "bot"), default=-1)
-    return [m for m in messages[last_bot + 1 :] if m.author == "customer"]
+def pending_customer_messages(messages: list[MessageRow], consumed_id: int | None) -> list[MessageRow]:
+    """Customer messages no turn has read yet. One stored while a turn was running stays pending even
+    though that turn's reply is stored after it."""
+    return [m for m in messages if m.author == "customer" and m.id > (consumed_id or 0)]
 
 
 def _state_of(t: TicketRow) -> TriageState:
@@ -79,14 +82,31 @@ async def build_turn_context(
     )
 
 
-async def _send(deps: Deps, t: TicketRow, text: str) -> None:
-    await safely(deps.log, "send message", lambda: deps.chatwoot.send_message(t.chatwoot_conversation_id, text))
+async def run_turn(queue: KeyedQueue, deps: Deps, conversation_id: int) -> TurnOutcome | None:
+    """How the scheduler runs a turn: one at a time per conversation, apart from its webhooks."""
+    return await queue.run(turn_key(conversation_id), lambda: process_turn(deps, conversation_id))
+
+
+async def _claim(conn: AsyncConnection, t: TicketRow, consumed_id: int, closes: bool) -> bool:
+    """Locks the ticket and checks the turn still applies, then marks its messages as read. It does not
+    when a person moved the ticket out of triage meanwhile, nor, for a decision that closes the ticket,
+    when a customer message arrived meanwhile: the next turn reads it together with these."""
+    current = await get_ticket(conn, t.id, lock=True)
+    if current is None or current.column != "in_triage":
+        return False
+    if current.last_consumed_message_id != t.last_consumed_message_id:
+        return False
+    if closes and pending_customer_messages(await list_messages(conn, t.id), consumed_id):
+        return False
+    await update_ticket(conn, t.id, {"last_consumed_message_id": consumed_id})
+    return True
 
 
 async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
     """Processes the pending customer messages of a conversation as one turn (spec §5.1 steps 3-10).
     Reads, then decides (the LLM runs outside any open transaction), then writes the state with the
-    bot message stored first, then sends (spec §10).
+    bot message stored first, then sends (spec §10). Returns None when there was nothing to do or the
+    decision no longer applied (see _claim).
     """
     ctx: TurnContext | None = None
     decision: Decision | None = None
@@ -95,9 +115,10 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
         if t is None or t.column != "in_triage":
             return None
         messages = await list_messages(conn, t.id)
-        pending = pending_customer_messages(messages)
+        pending = pending_customer_messages(messages, t.last_consumed_message_id)
         if not pending:
             return None
+        consumed_id = pending[-1].id
 
         text = "\n".join(m.text for m in pending if not m.is_media)
         keyword_human_request = mentions_human_request(text)
@@ -120,20 +141,22 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
 
     if decision is None and ctx is None:
         async with deps.engine.begin() as conn:
+            if not await _claim(conn, t, consumed_id, closes=False):
+                return None
             await add_message(conn, NewMessage(ticket_id=t.id, author="bot", text=greeting, at=deps.now()))
-        await _send(deps, t, greeting)
+        await send_message(deps, conversation_id, greeting)
         return "greeting"
 
     if decision is not None:
-        return await _apply(deps, t, messages, decision, None)
+        return await _apply(deps, t, messages, consumed_id, decision, None)
 
     assert ctx is not None
     result = await interpret_turn(deps.llm, ctx, deps.rules)
     if not result.ok or result.turn is None:
         deps.log.warn({"ticketId": t.id, "error": result.error}, "LLM failed; handing over")
-        return await _apply(deps, t, messages, Handoff("llm_failure"), None)
+        return await _apply(deps, t, messages, consumed_id, Handoff("llm_failure"), None)
     turn = result.turn
-    return await _apply(deps, t, messages, decide_turn(_state_of(t), turn, deps.rules), turn)
+    return await _apply(deps, t, messages, consumed_id, decide_turn(_state_of(t), turn, deps.rules), turn)
 
 
 @dataclass(frozen=True)
@@ -178,9 +201,16 @@ async def _write_decision(
 
 
 async def _apply(
-    deps: Deps, t: TicketRow, messages: list[MessageRow], decision: Decision, turn: InterpretedTurn | None
-) -> TurnOutcome:
+    deps: Deps,
+    t: TicketRow,
+    messages: list[MessageRow],
+    consumed_id: int,
+    decision: Decision,
+    turn: InterpretedTurn | None,
+) -> TurnOutcome | None:
     async with deps.engine.begin() as conn:
+        if not await _claim(conn, t, consumed_id, closes=isinstance(decision, ResolvedByBot)):
+            return None
         if turn is not None:
             patch: dict[str, object] = {
                 "summary": turn.summary,
@@ -191,7 +221,7 @@ async def _apply(
         written = await _write_decision(deps, conn, t, decision, turn)
         await add_message(conn, NewMessage(ticket_id=t.id, author="bot", text=written.reply, at=deps.now()))
 
-    await _send(deps, t, written.reply)
+    await send_message(deps, t.chatwoot_conversation_id, written.reply)
     if written.move is not None:
         await sync_chatwoot_status(deps, t.chatwoot_conversation_id, *written.move)
     summary = turn.summary if turn is not None else t.summary

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.pool import NullPool
 
 from geniai.db.engine import asyncpg_connect_args, create_engine, to_async_url
-from geniai.db.migrate import migrate, split_statements
+from geniai.db.migrate import MIGRATIONS_DIR, migrate, split_statements
 from geniai.db.schema import category, ticket, unit
 
 SCRATCH_SCHEMA = "migrate_test"
@@ -81,7 +81,7 @@ async def scratch_engine(test_database_url: str) -> AsyncIterator[AsyncEngine]:
 
 
 async def test_applies_pending_migrations_once_and_seeds_system_categories(scratch_engine: AsyncEngine) -> None:
-    assert await migrate(scratch_engine) == ["0001_init.sql"]
+    assert await migrate(scratch_engine) == ["0001_init.sql", "0002_last_consumed_message.sql"]
     assert await migrate(scratch_engine) == []
     async with scratch_engine.connect() as conn:
         keys = sorted((await conn.execute(select(category.c.key))).scalars())
@@ -100,3 +100,25 @@ async def test_allows_only_one_open_ticket_per_conversation(engine: AsyncEngine)
             update(ticket).where(ticket.c.chatwoot_conversation_id == 7).values(column="resolved_by_bot")
         )
         await conn.execute(insert(ticket).values(column="in_triage", chatwoot_conversation_id=7))
+
+
+async def test_marks_what_existing_tickets_already_answered(scratch_engine: AsyncEngine) -> None:
+    init = MIGRATIONS_DIR / "0001_init.sql"
+    async with scratch_engine.begin() as conn:
+        for statement in split_statements(init.read_text(encoding="utf-8")):
+            await conn.exec_driver_sql(statement)
+        await conn.exec_driver_sql("CREATE TABLE schema_migration (name text PRIMARY KEY, applied_at timestamptz)")
+        await conn.exec_driver_sql("INSERT INTO schema_migration (name) VALUES ('0001_init.sql')")
+        await conn.exec_driver_sql(
+            'INSERT INTO ticket (id, "column", chatwoot_conversation_id) '
+            "VALUES (1, 'in_triage', 1), (2, 'in_triage', 2)"
+        )
+        await conn.exec_driver_sql(
+            "INSERT INTO triage_message (id, ticket_id, author, text) VALUES "
+            "(1, 1, 'customer', 'oi'), (2, 1, 'bot', 'olá'), (3, 1, 'customer', 'o painel caiu'), "
+            "(4, 2, 'customer', 'oi')"
+        )
+    assert await migrate(scratch_engine) == ["0002_last_consumed_message.sql"]
+    async with scratch_engine.connect() as conn:
+        rows = (await conn.exec_driver_sql("SELECT id, last_consumed_message_id FROM ticket ORDER BY id")).all()
+    assert [tuple(r) for r in rows] == [(1, 1), (2, None)]

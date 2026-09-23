@@ -22,6 +22,8 @@ async def chatwoot_webhook(token: str, request: Request) -> Response:
     except ValueError:
         body = None
     event = parse_chatwoot_event(body)
+    # Webhooks of one conversation run in arrival order, never behind its turn (see KeyedQueue); the
+    # Chatwoot calls they cause run afterwards, in the background (see Outbox).
     deps = app_deps(request)
     queue = app_state(request).queue
     if isinstance(event, IncomingMessage):

@@ -1,6 +1,5 @@
 from typing import Literal
 
-from geniai.app.notify import safely
 from geniai.app.ports import Deps
 from geniai.app.tickets_repo import (
     NewMessage,
@@ -28,9 +27,10 @@ InboundOutcome = Literal[
 
 
 async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: IncomingMessage) -> InboundOutcome:
-    """Spec §5.1 steps 1, 2 and 8. Runs under the conversation's KeyedQueue key.
+    """Spec §5.1 steps 1, 2 and 8. Runs under the conversation's KeyedQueue key, never behind a turn.
     The customer turn itself is processed later by process_turn, after the burst window.
-    Database writes commit in one transaction before any outbound Chatwoot call (spec §10).
+    Database writes commit in one transaction; the Chatwoot calls are then posted to the outbox and run
+    in the background (spec §10).
     """
     now = deps.now()
     is_media = msg.has_media and msg.text.strip() == ""
@@ -51,7 +51,8 @@ async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: Inco
         if await message_exists(conn, msg.message_id):
             return "duplicate"
 
-        open_ticket = await find_open_ticket(conn, msg.conversation_id)
+        # Locked, so a turn closing this ticket meanwhile either waits or makes a new ticket open here.
+        open_ticket = await find_open_ticket(conn, msg.conversation_id, lock=True)
         if open_ticket is not None:
             await add_message(conn, customer_message(open_ticket.id))
             await update_ticket(conn, open_ticket.id, {"last_customer_message_at": now})
@@ -97,17 +98,23 @@ async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: Inco
 
     conversation_id = msg.conversation_id
     if outcome == "unidentified_ticket":
-        await safely(
+        deps.outbox.post(
             deps.log,
+            conversation_id,
             "send unidentified ack",
             lambda: deps.chatwoot.send_message(conversation_id, TEXT.unidentified_ack),
         )
-        await safely(deps.log, "open conversation", lambda: deps.chatwoot.set_status(conversation_id, "open"))
+        deps.outbox.post(
+            deps.log, conversation_id, "open conversation", lambda: deps.chatwoot.set_status(conversation_id, "open")
+        )
     elif outcome == "triage_ticket":
         # The bot must not depend on how Chatwoot reopens a resolved conversation: triage runs in "pending".
         if msg.conversation_status is not None and msg.conversation_status != "pending":
-            await safely(
-                deps.log, "set conversation pending", lambda: deps.chatwoot.set_status(conversation_id, "pending")
+            deps.outbox.post(
+                deps.log,
+                conversation_id,
+                "set conversation pending",
+                lambda: deps.chatwoot.set_status(conversation_id, "pending"),
             )
         scheduler.schedule(conversation_id)
     elif outcome == "attached_to_triage":

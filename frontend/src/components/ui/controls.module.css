@@ -1,0 +1,114 @@
+/* Terminal controls: square, 1px rules, mono caps labels. Inverse video is the only "primary". */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: 0;
+  background: var(--ink-1);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background-color 120ms var(--ease-settle),
+    border-color 120ms var(--ease-settle),
+    color 120ms var(--ease-settle);
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--teal);
+  color: var(--teal-hi);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.primary {
+  composes: button;
+  background: var(--teal);
+  border-color: var(--teal);
+  color: var(--on-teal);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--teal-hi);
+  border-color: var(--teal-hi);
+  color: var(--on-teal);
+}
+
+.quiet {
+  composes: button;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-2);
+}
+
+.select,
+.input {
+  min-height: 36px;
+  min-width: 0;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: 0;
+  background: var(--ink-0);
+  color: var(--text);
+}
+
+.select {
+  appearance: none;
+  padding-right: 28px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--teal) 50%),
+    linear-gradient(135deg, var(--teal) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 50%,
+    calc(100% - 10px) 50%;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+  text-overflow: ellipsis;
+}
+
+.select:hover,
+.input:hover {
+  border-color: var(--teal);
+}
+
+.select option {
+  background: var(--ink-1);
+  color: var(--text);
+}
+
+.input::placeholder {
+  color: var(--text-3);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--danger);
+  background: var(--danger-ground);
+  color: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+}

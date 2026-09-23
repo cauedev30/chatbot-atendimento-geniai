@@ -1,0 +1,98 @@
+.shell {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: 0 var(--space-4);
+  min-height: 48px;
+  background: var(--ink-0);
+  border-bottom: 1px solid var(--rule);
+}
+
+.wordmark {
+  position: relative;
+  padding: var(--space-1) 0;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  text-decoration: none;
+}
+
+/* The brand gradient, spent once in the whole app. */
+.wordmark::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--brand-gradient);
+}
+
+.wordmark:hover {
+  color: var(--text);
+}
+
+.nav {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  gap: var(--space-1);
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-2);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.link:hover {
+  color: var(--teal-hi);
+}
+
+.link[aria-current="page"] {
+  color: var(--teal);
+  border-bottom-color: var(--teal);
+}
+
+.end {
+  margin-left: auto;
+}
+
+.main {
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+@media (max-width: 520px) {
+  .bar {
+    gap: var(--space-3);
+    padding: 0 var(--space-3);
+  }
+
+  .link {
+    padding: 0 var(--space-2);
+  }
+
+  .main {
+    padding: var(--space-3);
+  }
+}

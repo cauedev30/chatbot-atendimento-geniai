@@ -1,0 +1,49 @@
+.screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+}
+
+.panel {
+  width: min(100%, 380px);
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-5);
+  border: 1px solid var(--rule);
+  background: var(--ink-1);
+}
+
+.head {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.wordmark {
+  justify-self: start;
+  padding-bottom: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background-image: var(--brand-gradient);
+  background-size: 100% 2px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+}
+
+.title {
+  font-size: var(--size-body);
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.submit {
+  width: 100%;
+  min-height: 44px;
+}

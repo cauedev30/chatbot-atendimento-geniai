@@ -1,0 +1,152 @@
+/* geniAI support desk: a service-counter terminal. Near-black ground, deep-teal panels, matte teal
+   type (no glow), 1px rules as the only chrome, square corners, inverse video for emphasis. */
+
+:root {
+  color-scheme: dark;
+
+  /* Ground and panels, derived from the brand's near-black and deep-teal shadow. */
+  --ink-0: #030606;
+  --ink-1: #061110;
+  --ink-2: #0a2f2c;
+  --rule: #173a36;
+  --rule-strong: #2a5f59;
+
+  /* Signature teal and its highlight; white type. */
+  --teal: #14c8b4;
+  --teal-hi: #3ff0da;
+  --on-teal: #021a18;
+  --text: #f3f8f7;
+  --text-2: #b3ccc8;
+  --text-3: #7f9f9a;
+  --danger: #ff8a7a;
+  --danger-ground: #2a0f0c;
+
+  /* The brand gradient, spent once: the rule under the wordmark. */
+  --brand-gradient: linear-gradient(90deg, #1fd1a8 0%, #1fb8e0 50%, #2a8cf0 100%);
+
+  --font-mono: var(--font-red-hat-mono), ui-monospace, monospace;
+  --font-text: var(--font-red-hat-text), system-ui, sans-serif;
+
+  /* Type roles: one size per role family; rank by weight, case and inversion. */
+  --size-label: 0.75rem;
+  --size-body: 0.9375rem;
+  --size-figure: 1.75rem;
+  --tracking-label: 0.06em;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scrollbar-color: var(--rule-strong) var(--ink-0);
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--ink-0);
+  color: var(--text);
+  font-family: var(--font-text);
+  font-size: var(--size-body);
+  line-height: 1.5;
+  caret-color: var(--teal-hi);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--teal);
+  color: var(--on-teal);
+}
+
+:focus-visible {
+  outline: 2px solid var(--teal-hi);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--teal);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+a:hover {
+  color: var(--teal-hi);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  text-wrap: balance;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ink-0);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border: 2px solid var(--ink-0);
+}
+
+/* Terminal labels: monospace caps for data, counts, times and state names. */
+.label {
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  font-weight: 500;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Touch screens: every control reaches 44px. */
+@media (pointer: coarse) {
+  button,
+  select,
+  input,
+  summary {
+    min-height: 44px;
+  }
+}

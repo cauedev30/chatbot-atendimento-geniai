@@ -87,7 +87,7 @@ async def test_passes_the_conversation_status_through_so_a_reopened_conversation
 
 
 async def test_closes_the_card_when_the_conversation_is_resolved_in_chatwoot(api: Api) -> None:
-    assert (await incoming(api, 46, "socorro", "+5511988887777")).json() == {"outcome": "unidentified_ticket"}
+    assert (await incoming(api, 46, "socorro", "+5511900000099")).json() == {"outcome": "unidentified_ticket"}
     res = await api.client.post(URL, json={"event": "conversation_status_changed", "id": 46, "status": "resolved"})
     assert res.json() == {"moved": True}
     async with api.h.begin() as conn:

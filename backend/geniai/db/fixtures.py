@@ -46,8 +46,8 @@ FICTITIOUS: Final[Fictitious] = {
     "attendants": {
         "ana": {"name": "Ana Exemplo", "phone": "+5511900000001", "unit": "centro", "active": True},
         "bruno": {"name": "Bruno Exemplo", "phone": "+5511900000002", "unit": "centro", "active": True},
-        "carla": {"name": "Carla Exemplo", "phone": "+5521900000003", "unit": "norte", "active": True},
-        "inactive": {"name": "Davi Exemplo", "phone": "+5521900000004", "unit": "norte", "active": False},
+        "carla": {"name": "Carla Exemplo", "phone": "+5511900000003", "unit": "norte", "active": True},
+        "inactive": {"name": "Davi Exemplo", "phone": "+5511900000004", "unit": "norte", "active": False},
     },
     "categories": {
         "login": {"system": "Painel", "name": "Não consegue entrar"},

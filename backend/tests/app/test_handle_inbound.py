@@ -44,14 +44,14 @@ async def tickets_of(h: Harness, conversation_id: int) -> list[TicketRow]:
 async def test_sends_an_unknown_number_straight_to_a_human_with_no_faq(
     h: Harness, scheduler: RecordingScheduler
 ) -> None:
-    outcome = await handle_inbound_message(h.deps, scheduler, inbound(h, phone="+5511988887777", text="socorro"))
+    outcome = await handle_inbound_message(h.deps, scheduler, inbound(h, phone="+5511900000099", text="socorro"))
     assert outcome == "unidentified_ticket"
     [t] = await tickets_of(h, 50)
     assert t.column == "awaiting_human"
     assert t.handoff_reason == "unidentified"
     assert t.category_id == h.seed.categories["unidentified"]
     assert t.attendant_id is None
-    assert t.phone_e164 == "+5511988887777"
+    assert t.phone_e164 == "+5511900000099"
     assert t.summary == "socorro"
     assert t.handed_off_at == h.now
     assert h.chatwoot.sent == [Sent(50, TEXT.unidentified_ack)]

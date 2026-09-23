@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Fictitious data only: an unknown number (+5511988887777) goes straight to "Aguardando humano".
+// Fictitious data only: an unknown number (+5511900000099) goes straight to "Aguardando humano".
 const backend = process.env.E2E_BACKEND_URL!;
 const user = process.env.BOARD_USER ?? "suporte";
 const password = process.env.BOARD_PASSWORD!;
@@ -16,7 +16,7 @@ test.beforeAll(async ({ request }) => {
       content: summary,
       message_type: "incoming",
       conversation: { id: (stamp % 1_000_000_000) + 1 },
-      sender: { phone_number: "+5511988887777" },
+      sender: { phone_number: "+5511900000099" },
     },
   });
   expect(await res.json()).toEqual({ outcome: "unidentified_ticket" });

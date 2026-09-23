@@ -48,7 +48,7 @@ async def test_finds_active_attendants_by_phone_with_their_unit(h: Harness) -> N
             unit_name="Unidade Exemplo Centro",
         )
         assert await find_attendant_by_phone(conn, h.seed.attendants["inactive"].phone) is None
-        assert await find_attendant_by_phone(conn, "+5511999999999") is None
+        assert await find_attendant_by_phone(conn, "+5511900000098") is None
 
 
 async def test_creates_a_ticket_with_its_first_move(h: Harness) -> None:

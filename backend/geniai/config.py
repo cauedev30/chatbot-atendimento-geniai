@@ -63,6 +63,11 @@ class AppConfig:
     """Serve /docs, /redoc and /openapi.json. Off by default: the schema is exported at build time."""
 
 
+def _reject_non_finite(constant: str) -> object:
+    """NaN and Infinity are not JSON; a provider would reject the request body."""
+    raise ValueError(f"{constant} is not valid JSON")
+
+
 def _invalid(names: list[str]) -> ConfigError:
     return ConfigError(f"Invalid or missing environment variables: {', '.join(names)}")
 
@@ -79,8 +84,8 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
     extra_body: dict[str, object] | None = None
     if e.LLM_EXTRA_BODY_JSON is not None:
         try:
-            parsed = json.loads(e.LLM_EXTRA_BODY_JSON)
-        except json.JSONDecodeError:
+            parsed = json.loads(e.LLM_EXTRA_BODY_JSON, parse_constant=_reject_non_finite)
+        except (json.JSONDecodeError, ValueError):
             raise _invalid(["LLM_EXTRA_BODY_JSON"]) from None
         if not isinstance(parsed, dict):
             raise _invalid(["LLM_EXTRA_BODY_JSON"])

@@ -74,6 +74,9 @@ def test_rejects_a_short_cookie_secret() -> None:
         ("BURST_WINDOW_MS", "-5"),
         ("LLM_EXTRA_BODY_JSON", "[1, 2]"),
         ("LLM_EXTRA_BODY_JSON", "{not json"),
+        ("LLM_EXTRA_BODY_JSON", '{"temperature": NaN}'),
+        ("LLM_EXTRA_BODY_JSON", '{"max_tokens": Infinity}'),
+        ("LLM_EXTRA_BODY_JSON", '{"x": {"y": -Infinity}}'),
     ],
 )
 def test_names_an_invalid_variable_and_never_its_value(name: str, value: str) -> None:

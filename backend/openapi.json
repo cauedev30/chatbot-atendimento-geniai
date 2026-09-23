@@ -883,20 +883,11 @@
     },
     "/api/auth/logout": {
       "post": {
+        "description": "Always clears the cookie, with or without a valid session.",
         "operationId": "logout_api_auth_logout_post",
         "responses": {
           "204": {
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "Unauthorized"
           }
         },
         "summary": "Logout",

@@ -4,7 +4,7 @@ from dataclasses import replace
 import httpx
 import itsdangerous
 
-from geniai.api.auth import SESSION_COOKIE, safe_equal
+from geniai.api.auth import SESSION_COOKIE, safe_equal, session_value
 from geniai.app.turn_scheduler import RecordingScheduler
 from geniai.main import create_app
 from tests.api.conftest import TEST_CONFIG, Api
@@ -50,8 +50,9 @@ async def test_lets_a_logged_in_user_through(logged_in: Api) -> None:
 async def test_rejects_an_unsigned_or_forged_cookie(api: Api) -> None:
     api.client.cookies.set(SESSION_COOKIE, "ok")
     assert (await api.client.get("/api/auth/me")).status_code == 401
-    forged = itsdangerous.TimestampSigner("outro-segredo-com-mais-de-32-caracteres").sign(b"ok").decode()
-    api.client.cookies.set(SESSION_COOKIE, forged)
+    forged = itsdangerous.TimestampSigner("outro-segredo-com-mais-de-32-caracteres")
+    forged_cookie = forged.sign(session_value(TEST_CONFIG.auth)).decode()
+    api.client.cookies.set(SESSION_COOKIE, forged_cookie)
     assert (await api.client.get("/api/auth/me")).status_code == 401
 
 
@@ -66,9 +67,9 @@ class _SignedHoursAgo(itsdangerous.TimestampSigner):
 
 async def test_accepts_a_session_up_to_12_h_old_and_rejects_an_older_one(api: Api) -> None:
     secret = TEST_CONFIG.auth.cookie_secret
-    api.client.cookies.set(SESSION_COOKIE, _SignedHoursAgo(secret, 11).sign(b"ok").decode())
+    api.client.cookies.set(SESSION_COOKIE, _SignedHoursAgo(secret, 11).sign(session_value(TEST_CONFIG.auth)).decode())
     assert (await api.client.get("/api/auth/me")).status_code == 200
-    api.client.cookies.set(SESSION_COOKIE, _SignedHoursAgo(secret, 13).sign(b"ok").decode())
+    api.client.cookies.set(SESSION_COOKIE, _SignedHoursAgo(secret, 13).sign(session_value(TEST_CONFIG.auth)).decode())
     assert (await api.client.get("/api/auth/me")).status_code == 401
 
 
@@ -106,3 +107,25 @@ async def test_api_docs_can_be_turned_on(h: Harness) -> None:
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         for path in ("/docs", "/redoc", "/openapi.json"):
             assert (await client.get(path)).status_code == 200, path
+
+
+async def test_logout_clears_the_cookie_even_without_a_valid_session(api: Api) -> None:
+    api.client.cookies.set(SESSION_COOKIE, "forged")
+    res = await api.client.post("/api/auth/logout", json={})
+    assert res.status_code == 204
+    assert f"{SESSION_COOKIE}=" in res.headers["set-cookie"]
+    assert "Max-Age=0" in res.headers["set-cookie"] or "expires=Thu, 01 Jan 1970" in res.headers["set-cookie"]
+    assert (await api.client.post("/api/auth/logout", json={})).status_code == 204
+
+
+async def test_changing_the_password_ends_open_sessions(h: Harness) -> None:
+    old = Api(h)
+    await old.login()
+    cookie = old.client.cookies.get(SESSION_COOKIE)
+    assert cookie
+    await old.client.aclose()
+    new_config = replace(TEST_CONFIG, auth=replace(TEST_CONFIG.auth, password="outra-senha-de-teste"))
+    app = create_app(new_config, deps=h.deps, scheduler=RecordingScheduler())
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set(SESSION_COOKIE, cookie)
+        assert (await client.get("/api/auth/me")).status_code == 401

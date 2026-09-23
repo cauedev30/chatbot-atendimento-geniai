@@ -12,7 +12,6 @@ from geniai.api.deps import app_config, require_json
 from geniai.api.schemas import ErrorOut, LoginIn, MeOut
 
 SESSION_COOKIE: Final = "geniai_board"
-_SESSION_VALUE: Final = b"ok"
 TWELVE_HOURS_S: Final = 12 * 60 * 60
 
 
@@ -35,10 +34,16 @@ def _signer(cfg: AuthConfig) -> itsdangerous.TimestampSigner:
     return itsdangerous.TimestampSigner(cfg.cookie_secret)
 
 
+def session_value(cfg: AuthConfig) -> bytes:
+    """What the cookie signs: a digest of the current password, so changing BOARD_PASSWORD ends every
+    open session."""
+    return b"v1:" + hashlib.sha256(f"geniai-session:{cfg.password}".encode()).hexdigest()[:32].encode()
+
+
 def issue_session(response: Response, cfg: AuthConfig) -> None:
     response.set_cookie(
         SESSION_COOKIE,
-        _signer(cfg).sign(_SESSION_VALUE).decode(),
+        _signer(cfg).sign(session_value(cfg)).decode(),
         max_age=TWELVE_HOURS_S,
         path="/",
         secure=cfg.secure_cookie,
@@ -52,7 +57,7 @@ def has_session(request: Request, cfg: AuthConfig) -> bool:
     if not cookie:
         return False
     try:
-        return _signer(cfg).unsign(cookie, max_age=TWELVE_HOURS_S) == _SESSION_VALUE
+        return hmac.compare_digest(_signer(cfg).unsign(cookie, max_age=TWELVE_HOURS_S), session_value(cfg))
     except itsdangerous.BadSignature:
         return False
 
@@ -82,8 +87,9 @@ async def login(body: LoginIn, request: Request, response: Response) -> None:
     issue_session(response, cfg)
 
 
-@router.post("/logout", status_code=204, responses=UNAUTHORIZED, dependencies=[Depends(require_login)])
+@router.post("/logout", status_code=204)
 async def logout(response: Response) -> None:
+    """Always clears the cookie, with or without a valid session."""
     response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="lax")
 
 

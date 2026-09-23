@@ -157,7 +157,7 @@ schema is `backend/openapi.json`.
 |---|---|---|
 | `GET /api/health` | — | `200 {"ok": true}` |
 | `POST /api/auth/login` | `{"user", "password"}` | `204` and the session cookie, or `401` |
-| `POST /api/auth/logout` | — | `204`, cookie cleared |
+| `POST /api/auth/logout` | — | `204`, cookie cleared (with or without a valid session) |
 | `GET /api/auth/me` | — | `200 {"user"}` |
 | `GET /api/board` | — | `200` the board: `generatedAt`, `triageCount`, `columns` (all five, in order), `teamMembers`, `categories`, `requireResponsible` |
 | `POST /api/board/tickets/{id}/move` | `{"to": column}` | `204`, or `400` with the reason |
@@ -167,7 +167,7 @@ schema is `backend/openapi.json`.
 | `GET /api/indicators?from=&to=&unit=&norm=0\|1` | — | `200` the query, the units and the six indicator blocks; `400 "Período inválido."` |
 | `POST /webhooks/chatwoot/{token}` (not under `/api`) | a Chatwoot event | `200` `{"outcome"}`, `{"moved"}` or `{"ignored"}`; `404` on a wrong token |
 
-Every `/api` route except health and login needs the session cookie and answers
+Every `/api` route except health, login and logout needs the session cookie and answers
 `401 "Faça login para continuar."` without it. A malformed body or path answers
 `400 "Pedido inválido."`. The indicators period is `[from, to]` in São Paulo days, the last 30 days
 by default.
@@ -190,7 +190,8 @@ by default.
 
 - **Session:** one shared login from the backend's environment; credentials are compared in
   constant time. The session is an `itsdangerous`-signed cookie, httpOnly, `SameSite=Lax`, `Secure`
-  in production, valid for 12 h.
+  in production, valid for 12 h. The signed value carries a digest of the password, so changing
+  `BOARD_PASSWORD` ends every open session.
 - **Same origin:** the browser reaches the API only through the frontend's `/api` proxy, so the cookie
   is first-party and never needs CORS.
 - **Mutations** accept `application/json` only; with the `SameSite=Lax` cookie a cross-site form

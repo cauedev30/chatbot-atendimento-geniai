@@ -75,6 +75,31 @@ async def test_groups_cards_by_column_and_counts_conversations_still_with_the_bo
     assert board.require_responsible is True
 
 
+async def test_lists_open_columns_by_longest_wait_and_cuts_the_newest(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    oldest = await awaiting(h, "primeiro")
+    h.advance(60_000)
+    middle = await awaiting(h, "segundo")
+    h.advance(60_000)
+    await awaiting(h, "terceiro")
+    board = await load_board(h.deps)
+    assert [c.summary for c in board.columns["awaiting_human"]] == ["primeiro", "segundo", "terceiro"]
+    monkeypatch.setattr("geniai.app.board.OPEN_COLUMN_LIMIT", 2)
+    board = await load_board(h.deps)
+    assert [c.id for c in board.columns["awaiting_human"]] == [oldest, middle]
+
+
+async def test_lists_closed_columns_most_recent_first(h: Harness) -> None:
+    first = await awaiting(h)
+    await move_card(h.deps, first, "resolved_by_human")
+    h.advance(60_000)
+    second = await awaiting(h)
+    await move_card(h.deps, second, "resolved_by_human")
+    board = await load_board(h.deps)
+    assert [c.id for c in board.columns["resolved_by_human"]] == [second, first]
+
+
 # take_card
 
 

@@ -1,6 +1,6 @@
 from typing import Final
 
-from sqlalchemy import func, select
+from sqlalchemy import UnaryExpression, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -46,6 +46,14 @@ def _is_unique_violation(err: BaseException) -> bool:
     return False
 
 
+def _column_order(column: BoardColumn) -> tuple[UnaryExpression[object], ...]:
+    """Open columns: longest wait first, so the limit drops the newest cards, never the ones waiting
+    longest. Closed columns: most recent first."""
+    if is_closed(column):
+        return (ticket.c.last_moved_at.desc(), ticket.c.id.desc())
+    return (ticket.c.last_moved_at.asc(), ticket.c.id.asc())
+
+
 async def load_board(deps: Deps) -> Board:
     async with deps.engine.connect() as conn:
         columns: dict[BoardColumn, list[BoardCard]] = {}
@@ -68,7 +76,7 @@ async def load_board(deps: Deps) -> Board:
                     .outerjoin(team_member, ticket.c.responsible_id == team_member.c.id)
                 )
                 .where(ticket.c.column == column)
-                .order_by(ticket.c.last_moved_at.desc(), ticket.c.id.desc())
+                .order_by(*_column_order(column))
                 .limit(CLOSED_COLUMN_LIMIT if is_closed(column) else OPEN_COLUMN_LIMIT)
             )
             columns[column] = [

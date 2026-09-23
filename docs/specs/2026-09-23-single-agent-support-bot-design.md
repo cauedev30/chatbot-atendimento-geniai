@@ -216,6 +216,9 @@ chatwoot_conversation_id, opened_at, handed_off_at, taken_at, closed_at.
 
 - **Columns:** Resolved by bot · Awaiting human · In progress · Resolved by human · No response,
   plus the "conversations with the bot now" counter.
+- **Order:** open columns (Awaiting human, In progress) list the longest wait first, by the time of
+  the last move; the board shows at most 500 of them, so the cut drops the newest cards, never the
+  ones waiting longest. Closed columns show their 50 most recent cards, newest first.
 - **Card:** unit, category, summary, responsible, time since the last move, link to the Chatwoot
   conversation.
 - **Actions:** drag between columns; **take** (pick who is taking it — the login is shared — which

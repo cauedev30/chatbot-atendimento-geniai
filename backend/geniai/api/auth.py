@@ -36,8 +36,8 @@ def _signer(cfg: AuthConfig) -> itsdangerous.TimestampSigner:
 
 def session_value(cfg: AuthConfig) -> bytes:
     """What the cookie signs: a digest of the current password, so changing BOARD_PASSWORD ends every
-    open session."""
-    return b"v1:" + hashlib.sha256(f"geniai-session:{cfg.password}".encode()).hexdigest()[:32].encode()
+    open session. Letters and digits only, so URL-encoding the cookie never alters it."""
+    return b"v1" + hashlib.sha256(f"geniai-session:{cfg.password}".encode()).hexdigest()[:32].encode()
 
 
 def issue_session(response: Response, cfg: AuthConfig) -> None:

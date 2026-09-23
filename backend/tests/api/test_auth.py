@@ -1,3 +1,4 @@
+import re
 import time
 from dataclasses import replace
 
@@ -129,3 +130,9 @@ async def test_changing_the_password_ends_open_sessions(h: Harness) -> None:
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set(SESSION_COOKIE, cookie)
         assert (await client.get("/api/auth/me")).status_code == 401
+
+
+def test_the_session_value_survives_url_encoding() -> None:
+    # The frontend forwards cookies URL-encoded; the signed value must not change under encoding.
+    value = session_value(TEST_CONFIG.auth).decode()
+    assert re.fullmatch(r"[A-Za-z0-9]+", value)

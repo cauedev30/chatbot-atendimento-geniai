@@ -16,6 +16,9 @@ SAO_PAULO: Final = timezone(timedelta(hours=-3))
 
 _DATE: Final = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 _POSITIVE_INT: Final = re.compile(r"^[0-9]+$")
+MIN_YEAR: Final = 2000
+MAX_YEAR: Final = 2100
+"""Periods outside these years are refused: they are typos, and far dates overflow the calendar."""
 
 
 @dataclass(frozen=True)
@@ -32,13 +35,13 @@ def today_in_sao_paulo(now: datetime) -> str:
 
 
 def _calendar_date(text: str) -> date | None:
-    """A YYYY-MM-DD date: month 1-12 and day 1-31, where an impossible day rolls over into the next
-    month ("2026-02-30" is March 2)."""
+    """A YYYY-MM-DD date between MIN_YEAR and MAX_YEAR: month 1-12 and day 1-31, where an impossible
+    day rolls over into the next month ("2026-02-30" is March 2)."""
     match = _DATE.match(text)
     if match is None:
         return None
     year, month, day = (int(g) for g in match.groups())
-    if year < 1 or not 1 <= month <= 12 or not 1 <= day <= 31:
+    if not MIN_YEAR <= year <= MAX_YEAR or not 1 <= month <= 12 or not 1 <= day <= 31:
         return None
     return date(year, month, 1) + timedelta(days=day - 1)
 

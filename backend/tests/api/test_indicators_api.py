@@ -56,6 +56,24 @@ def test_rolls_an_impossible_day_over_into_the_next_month() -> None:
     assert q.filter.from_ == datetime(2026, 3, 2, 3, 0, tzinfo=UTC)
 
 
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"from": "1999-12-31", "to": "2000-01-10"},
+        {"from": "2026-09-01", "to": "2101-01-01"},
+        {"from": "0001-01-01", "to": "2026-09-01"},
+        {"from": "2026-09-01", "to": "9999-12-31"},
+    ],
+)
+def test_rejects_years_outside_2000_to_2100(params: dict[str, str]) -> None:
+    assert parse_indicators_query(params, NOW) is None
+
+
+async def test_an_absurd_date_is_a_400_not_a_500(logged_in: Api) -> None:
+    res = await logged_in.client.get("/api/indicators?from=2026-09-01&to=9999-12-31")
+    assert (res.status_code, res.json()) == (400, {"detail": "Período inválido."})
+
+
 async def two_tickets(api: Api) -> None:
     h = api.h
     ana = h.seed.attendants["ana"]

@@ -1,0 +1,1313 @@
+{
+  "components": {
+    "schemas": {
+      "AgentHealth": {
+        "properties": {
+          "classified": {
+            "title": "Classified",
+            "type": "integer"
+          },
+          "corrected": {
+            "title": "Corrected",
+            "type": "integer"
+          },
+          "correctedShare": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correctedshare"
+          },
+          "otherShare": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Othershare"
+          }
+        },
+        "required": [
+          "classified",
+          "corrected",
+          "correctedShare",
+          "otherShare"
+        ],
+        "title": "AgentHealth",
+        "type": "object"
+      },
+      "Board": {
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/IdLabel"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "columns": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/BoardCard"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "enum": [
+                "resolved_by_bot",
+                "awaiting_human",
+                "in_progress",
+                "resolved_by_human",
+                "no_response"
+              ]
+            },
+            "title": "Columns",
+            "type": "object"
+          },
+          "generatedAt": {
+            "format": "date-time",
+            "title": "Generatedat",
+            "type": "string"
+          },
+          "requireResponsible": {
+            "title": "Requireresponsible",
+            "type": "boolean"
+          },
+          "teamMembers": {
+            "items": {
+              "$ref": "#/components/schemas/IdName"
+            },
+            "title": "Teammembers",
+            "type": "array"
+          },
+          "triageCount": {
+            "title": "Triagecount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "generatedAt",
+          "triageCount",
+          "columns",
+          "teamMembers",
+          "categories",
+          "requireResponsible"
+        ],
+        "title": "Board",
+        "type": "object"
+      },
+      "BoardCard": {
+        "properties": {
+          "categoryId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoryid"
+          },
+          "categoryLabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categorylabel"
+          },
+          "column": {
+            "enum": [
+              "resolved_by_bot",
+              "awaiting_human",
+              "in_progress",
+              "resolved_by_human",
+              "no_response"
+            ],
+            "title": "Column",
+            "type": "string"
+          },
+          "conversationId": {
+            "title": "Conversationid",
+            "type": "integer"
+          },
+          "conversationUrl": {
+            "title": "Conversationurl",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "lastMovedAt": {
+            "format": "date-time",
+            "title": "Lastmovedat",
+            "type": "string"
+          },
+          "responsibleName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsiblename"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "unitName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unitname"
+          }
+        },
+        "required": [
+          "id",
+          "column",
+          "unitName",
+          "categoryId",
+          "categoryLabel",
+          "summary",
+          "responsibleName",
+          "lastMovedAt",
+          "conversationId",
+          "conversationUrl"
+        ],
+        "title": "BoardCard",
+        "type": "object"
+      },
+      "CategoryCount": {
+        "properties": {
+          "categoryId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoryid"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "categoryId",
+          "label",
+          "count"
+        ],
+        "title": "CategoryCount",
+        "type": "object"
+      },
+      "CategoryIn": {
+        "properties": {
+          "categoryId": {
+            "title": "Categoryid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "categoryId"
+        ],
+        "title": "CategoryIn",
+        "type": "object"
+      },
+      "ErrorOut": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorOut",
+        "type": "object"
+      },
+      "FaqHealth": {
+        "properties": {
+          "faqItemId": {
+            "title": "Faqitemid",
+            "type": "integer"
+          },
+          "resolved": {
+            "title": "Resolved",
+            "type": "integer"
+          },
+          "resolvedShare": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolvedshare"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "used": {
+            "title": "Used",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "faqItemId",
+          "title",
+          "used",
+          "resolved",
+          "resolvedShare"
+        ],
+        "title": "FaqHealth",
+        "type": "object"
+      },
+      "HealthOut": {
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "HealthOut",
+        "type": "object"
+      },
+      "Heatmap": {
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/IdLabel"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/HeatmapCell"
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "units": {
+            "items": {
+              "$ref": "#/components/schemas/HeatmapUnit"
+            },
+            "title": "Units",
+            "type": "array"
+          }
+        },
+        "required": [
+          "units",
+          "categories",
+          "cells"
+        ],
+        "title": "Heatmap",
+        "type": "object"
+      },
+      "HeatmapCell": {
+        "properties": {
+          "categoryId": {
+            "title": "Categoryid",
+            "type": "integer"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "unitId": {
+            "title": "Unitid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unitId",
+          "categoryId",
+          "count"
+        ],
+        "title": "HeatmapCell",
+        "type": "object"
+      },
+      "HeatmapUnit": {
+        "properties": {
+          "attendants": {
+            "title": "Attendants",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "attendants"
+        ],
+        "title": "HeatmapUnit",
+        "type": "object"
+      },
+      "IdLabel": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "IdLabel",
+        "type": "object"
+      },
+      "IdName": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "IdName",
+        "type": "object"
+      },
+      "Indicators": {
+        "properties": {
+          "agentHealth": {
+            "$ref": "#/components/schemas/AgentHealth"
+          },
+          "faqHealth": {
+            "items": {
+              "$ref": "#/components/schemas/FaqHealth"
+            },
+            "title": "Faqhealth",
+            "type": "array"
+          },
+          "heatmap": {
+            "$ref": "#/components/schemas/Heatmap"
+          },
+          "outcomes": {
+            "$ref": "#/components/schemas/Outcomes"
+          },
+          "time": {
+            "$ref": "#/components/schemas/TimeStats"
+          },
+          "volume": {
+            "$ref": "#/components/schemas/Volume"
+          }
+        },
+        "required": [
+          "volume",
+          "outcomes",
+          "heatmap",
+          "time",
+          "faqHealth",
+          "agentHealth"
+        ],
+        "title": "Indicators",
+        "type": "object"
+      },
+      "IndicatorsQueryOut": {
+        "properties": {
+          "fromDate": {
+            "title": "Fromdate",
+            "type": "string"
+          },
+          "normalize": {
+            "title": "Normalize",
+            "type": "boolean"
+          },
+          "toDate": {
+            "title": "Todate",
+            "type": "string"
+          },
+          "unitId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unitid"
+          }
+        },
+        "required": [
+          "fromDate",
+          "toDate",
+          "unitId",
+          "normalize"
+        ],
+        "title": "IndicatorsQueryOut",
+        "type": "object"
+      },
+      "IndicatorsResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Indicators"
+          },
+          "query": {
+            "$ref": "#/components/schemas/IndicatorsQueryOut"
+          },
+          "units": {
+            "items": {
+              "$ref": "#/components/schemas/IdName"
+            },
+            "title": "Units",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query",
+          "units",
+          "data"
+        ],
+        "title": "IndicatorsResponse",
+        "type": "object"
+      },
+      "LoginIn": {
+        "properties": {
+          "password": {
+            "title": "Password",
+            "type": "string"
+          },
+          "user": {
+            "title": "User",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user",
+          "password"
+        ],
+        "title": "LoginIn",
+        "type": "object"
+      },
+      "MeOut": {
+        "properties": {
+          "user": {
+            "title": "User",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user"
+        ],
+        "title": "MeOut",
+        "type": "object"
+      },
+      "MoveIn": {
+        "properties": {
+          "to": {
+            "enum": [
+              "resolved_by_bot",
+              "awaiting_human",
+              "in_progress",
+              "resolved_by_human",
+              "no_response"
+            ],
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "title": "MoveIn",
+        "type": "object"
+      },
+      "Outcomes": {
+        "properties": {
+          "botResolutionRate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Botresolutionrate"
+          },
+          "byColumn": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "enum": [
+                "resolved_by_bot",
+                "awaiting_human",
+                "in_progress",
+                "resolved_by_human",
+                "no_response"
+              ]
+            },
+            "title": "Bycolumn",
+            "type": "object"
+          },
+          "byHandoffReason": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonCount"
+            },
+            "title": "Byhandoffreason",
+            "type": "array"
+          },
+          "identifiedReached": {
+            "title": "Identifiedreached",
+            "type": "integer"
+          },
+          "noResponseShare": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noresponseshare"
+          }
+        },
+        "required": [
+          "byColumn",
+          "byHandoffReason",
+          "identifiedReached",
+          "botResolutionRate",
+          "noResponseShare"
+        ],
+        "title": "Outcomes",
+        "type": "object"
+      },
+      "PeriodCount": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          }
+        },
+        "required": [
+          "period",
+          "count"
+        ],
+        "title": "PeriodCount",
+        "type": "object"
+      },
+      "ReasonCount": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "reason": {
+            "enum": [
+              "human_requested",
+              "faq_not_resolved",
+              "no_faq_match",
+              "unidentified",
+              "registration_mismatch",
+              "off_topic",
+              "media",
+              "llm_failure"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "count"
+        ],
+        "title": "ReasonCount",
+        "type": "object"
+      },
+      "TakeIn": {
+        "properties": {
+          "responsibleId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsibleid"
+          }
+        },
+        "required": [
+          "responsibleId"
+        ],
+        "title": "TakeIn",
+        "type": "object"
+      },
+      "TimeStats": {
+        "properties": {
+          "timeToCloseAvgMin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timetocloseavgmin"
+          },
+          "timeToCloseMedianMin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timetoclosemedianmin"
+          },
+          "waitToTakeAvgMin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waittotakeavgmin"
+          },
+          "waitToTakeMedianMin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waittotakemedianmin"
+          }
+        },
+        "required": [
+          "waitToTakeMedianMin",
+          "waitToTakeAvgMin",
+          "timeToCloseMedianMin",
+          "timeToCloseAvgMin"
+        ],
+        "title": "TimeStats",
+        "type": "object"
+      },
+      "UnitCount": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "unitId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unitid"
+          },
+          "unitName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unitname"
+          }
+        },
+        "required": [
+          "unitId",
+          "unitName",
+          "count"
+        ],
+        "title": "UnitCount",
+        "type": "object"
+      },
+      "Volume": {
+        "properties": {
+          "byCategory": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryCount"
+            },
+            "title": "Bycategory",
+            "type": "array"
+          },
+          "byMonth": {
+            "items": {
+              "$ref": "#/components/schemas/PeriodCount"
+            },
+            "title": "Bymonth",
+            "type": "array"
+          },
+          "byUnit": {
+            "items": {
+              "$ref": "#/components/schemas/UnitCount"
+            },
+            "title": "Byunit",
+            "type": "array"
+          },
+          "byWeek": {
+            "items": {
+              "$ref": "#/components/schemas/PeriodCount"
+            },
+            "title": "Byweek",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "byWeek",
+          "byMonth",
+          "byUnit",
+          "byCategory"
+        ],
+        "title": "Volume",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "GeniAI support bot",
+    "version": "0.2.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "logout_api_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "operationId": "me_api_auth_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/board": {
+      "get": {
+        "operationId": "get_board_api_board_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Board"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Get Board",
+        "tags": [
+          "board"
+        ]
+      }
+    },
+    "/api/board/tickets/{ticket_id}/category": {
+      "post": {
+        "operationId": "set_category_api_board_tickets__ticket_id__category_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Set Category",
+        "tags": [
+          "board"
+        ]
+      }
+    },
+    "/api/board/tickets/{ticket_id}/close": {
+      "post": {
+        "operationId": "close_api_board_tickets__ticket_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Close",
+        "tags": [
+          "board"
+        ]
+      }
+    },
+    "/api/board/tickets/{ticket_id}/move": {
+      "post": {
+        "operationId": "move_api_board_tickets__ticket_id__move_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Move",
+        "tags": [
+          "board"
+        ]
+      }
+    },
+    "/api/board/tickets/{ticket_id}/take": {
+      "post": {
+        "operationId": "take_api_board_tickets__ticket_id__take_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Take",
+        "tags": [
+          "board"
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/indicators": {
+      "get": {
+        "operationId": "get_indicators_api_indicators_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "unit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Unit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "norm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Norm"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndicatorsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Get Indicators",
+        "tags": [
+          "indicators"
+        ]
+      }
+    }
+  }
+}

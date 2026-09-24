@@ -258,7 +258,9 @@ One page, filtered by period and unit. Everything is computed from the tables in
   to **Awaiting human** (`llm_failure`) and the customer is told the team will take over. The customer
   never goes unanswered.
 - **Chatwoot send failure:** the ticket is written **before** any outbound message, so nothing is lost.
-  Sends are retried a few times and logged.
+  A send is repeated only when it surely was not processed (connection failure, or a 502/503/504
+  answer); never after a read timeout or another answer, so the customer never gets a message twice.
+  Failures are logged.
 - **Duplicate webhooks:** ignored by Chatwoot message id.
 - **Message bursts:** grouped by the ~5 s silence window (§5.1).
 - **Media:** handled as in §5.1, step 10.

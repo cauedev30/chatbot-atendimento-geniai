@@ -184,8 +184,11 @@ by default.
 - **LLM:** about 8 s timeout, one retry, then the ticket goes to a person (`llm_failure`) and the
   customer is told the team will take over. The LLM output is validated: an unknown category rejects
   it, an unknown FAQ id becomes none, extra fields are dropped.
-- **Chatwoot:** the ticket and the bot's message are stored before any send. Sends retry twice with a
-  growing delay and a 10 s timeout; a final failure is logged, never raised into the flow.
+- **Chatwoot:** the ticket and the bot's message are stored before any send. A call is repeated (twice,
+  with a growing delay) only when it surely was not processed: a connection failure or a 502, 503 or
+  504 answer. A read timeout (30 s) or any other answer ends it at once, because repeating a POST that
+  Chatwoot did process would send the customer the same message twice. A final failure is logged,
+  never raised into the flow.
 - **Duplicates:** a Chatwoot message id is stored once; a repeated delivery answers `duplicate`.
 - **Races:** the webhooks of a conversation run one at a time in its webhook lane and its turns in its
   turn lane; both lock the ticket row when they write, and the database allows one open ticket per

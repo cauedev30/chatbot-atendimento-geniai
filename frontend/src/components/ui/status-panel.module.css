@@ -1,5 +1,5 @@
-/* Error and empty-state pages: the same terminal panel as the login, with the state as a label
-   plate and the recovery as the one primary action. */
+/* Error and empty-state pages: the login's panel, with the state as a small tag and the recovery
+   as the one primary action. */
 
 .screen {
   min-height: 100dvh;
@@ -11,16 +11,15 @@
 .stack {
   width: min(100%, 460px);
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
 .wordmark {
   justify-self: start;
-  padding-bottom: var(--space-1);
-  font-family: var(--font-mono);
+  padding-bottom: 2px;
+  font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
   background-image: var(--brand-gradient);
   background-size: 100% 2px;
   background-position: 0 100%;
@@ -31,29 +30,26 @@
   width: min(100%, 460px);
   display: grid;
   gap: var(--space-3);
-  padding: var(--space-5);
-  border: 1px solid var(--rule-strong);
-  background: var(--ink-1);
+  padding: var(--space-6);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
 }
 
 .code {
   justify-self: start;
   margin: 0;
   padding: 2px var(--space-2);
-  background: var(--teal);
-  color: var(--on-teal);
-  font-family: var(--font-mono);
-  font-size: var(--size-label);
+  border-radius: 6px;
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: var(--size-small);
   font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
 }
 
 .title {
-  font-family: var(--font-mono);
-  font-size: 1rem;
+  font-size: 1.125rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
   color: var(--text);
 }
 

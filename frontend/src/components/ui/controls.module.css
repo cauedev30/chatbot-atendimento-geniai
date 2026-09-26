@@ -1,4 +1,4 @@
-/* Terminal controls: square, 1px rules, mono caps labels. Inverse video is the only "primary". */
+/* Controls: soft 8px corners, sentence case, one teal primary per group. */
 
 .button {
   display: inline-flex;
@@ -7,25 +7,22 @@
   gap: var(--space-2);
   min-height: 36px;
   padding: 0 var(--space-3);
-  border: 1px solid var(--rule-strong);
-  border-radius: 0;
-  background: var(--ink-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
   color: var(--text);
-  font-family: var(--font-mono);
-  font-size: var(--size-label);
+  font-size: 0.875rem;
   font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
+  white-space: nowrap;
   cursor: pointer;
   transition:
-    background-color 120ms var(--ease-settle),
-    border-color 120ms var(--ease-settle),
-    color 120ms var(--ease-settle);
+    background-color 140ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    color 140ms var(--ease-out);
 }
 
 .button:hover:not(:disabled) {
   border-color: var(--teal);
-  color: var(--teal-hi);
 }
 
 .button:disabled {
@@ -43,7 +40,6 @@
 .primary:hover:not(:disabled) {
   background: var(--teal-hi);
   border-color: var(--teal-hi);
-  color: var(--on-teal);
 }
 
 .quiet {
@@ -53,29 +49,29 @@
   color: var(--text-2);
 }
 
+.quiet:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
 .select,
 .input {
   min-height: 36px;
   min-width: 0;
   padding: 0 var(--space-3);
-  border: 1px solid var(--rule-strong);
-  border-radius: 0;
-  background: var(--ink-0);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg);
   color: var(--text);
+  transition: border-color 140ms var(--ease-out);
 }
 
 .select {
   appearance: none;
-  padding-right: 28px;
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--teal) 50%),
-    linear-gradient(135deg, var(--teal) 50%, transparent 50%);
-  background-position:
-    calc(100% - 15px) 50%,
-    calc(100% - 10px) 50%;
-  background-size:
-    5px 5px,
-    5px 5px;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%2386a09c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: calc(100% - 12px) 50%;
   background-repeat: no-repeat;
   text-overflow: ellipsis;
 }
@@ -86,7 +82,7 @@
 }
 
 .select option {
-  background: var(--ink-1);
+  background: var(--surface-2);
   color: var(--text);
 }
 
@@ -94,21 +90,29 @@
   color: var(--text-3);
 }
 
+.input::-webkit-calendar-picker-indicator {
+  filter: invert(0.75);
+  cursor: pointer;
+}
+
 .field {
   display: grid;
-  gap: var(--space-1);
+  gap: 6px;
 }
 
 .error {
   margin: 0;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--danger);
-  background: var(--danger-ground);
+  border: 1px solid rgb(255 138 122 / 0.45);
+  border-radius: var(--radius-control);
+  background: var(--danger-soft);
   color: var(--danger);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .button {
+  .button,
+  .select,
+  .input {
     transition: none;
   }
 }

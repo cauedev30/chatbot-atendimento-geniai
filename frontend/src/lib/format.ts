@@ -54,3 +54,31 @@ export function minutesLabel(n: number | null): string {
 export function decimal(n: number): string {
   return n.toFixed(2).replace(".", ",");
 }
+
+const TIME_ZONE = "America/Sao_Paulo";
+const DAY = new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" });
+const HOUR = new Intl.DateTimeFormat("pt-BR", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+const DAY_MONTH = new Intl.DateTimeFormat("pt-BR", { timeZone: TIME_ZONE, day: "2-digit", month: "2-digit" });
+const FULL_DATE = new Intl.DateTimeFormat("pt-BR", { timeZone: TIME_ZONE, day: "2-digit", month: "2-digit", year: "numeric" });
+
+/** "23/09/2026 às 14:32", in São Paulo time. */
+export function formatDateTime(iso: string): string {
+  const at = new Date(iso);
+  return `${FULL_DATE.format(at)} às ${HOUR.format(at)}`;
+}
+
+/**
+ * "hoje, 14:32", "ontem, 09:05", "23/09, 14:32" or "23/09/2025, 14:32": when a ticket was opened,
+ * in São Paulo time, relative to the server "now" so the server and the browser print the same.
+ */
+export function formatOpened(openedAt: string, now: string): string {
+  const opened = new Date(openedAt);
+  const today = new Date(now);
+  const yesterday = new Date(today.getTime() - 86_400_000);
+  const day = DAY.format(opened);
+  const time = HOUR.format(opened);
+  if (day === DAY.format(today)) return `hoje, ${time}`;
+  if (day === DAY.format(yesterday)) return `ontem, ${time}`;
+  const sameYear = day.slice(0, 4) === DAY.format(today).slice(0, 4);
+  return `${(sameYear ? DAY_MONTH : FULL_DATE).format(opened)}, ${time}`;
+}

@@ -33,7 +33,9 @@ class BoardCard(ApiModel):
     category_id: int | None
     category_label: str | None
     summary: str
+    responsible_id: int | None
     responsible_name: str | None
+    opened_at: datetime
     last_moved_at: datetime
     conversation_id: int
     conversation_url: str

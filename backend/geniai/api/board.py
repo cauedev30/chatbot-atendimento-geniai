@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Path, Request
 from geniai.api.auth import require_login
 from geniai.api.deps import app_deps, require_json
 from geniai.api.schemas import Board, CategoryIn, ErrorOut, MoveIn, TakeIn
-from geniai.app.board import load_board, move_card, recategorize, take_card
+from geniai.app.board import load_board, move_card, recategorize, release_card, take_card
 
 router = APIRouter(prefix="/api/board", tags=["board"], dependencies=[Depends(require_login)])
 
@@ -26,6 +26,11 @@ async def move(ticket_id: TicketId, body: MoveIn, request: Request) -> None:
 @router.post("/tickets/{ticket_id}/take", status_code=204, responses=REFUSED, dependencies=[Depends(require_json)])
 async def take(ticket_id: TicketId, body: TakeIn, request: Request) -> None:
     await take_card(app_deps(request), ticket_id, body.responsible_id)
+
+
+@router.post("/tickets/{ticket_id}/release", status_code=204, responses=REFUSED, dependencies=[Depends(require_json)])
+async def release(ticket_id: TicketId, request: Request) -> None:
+    await release_card(app_deps(request), ticket_id)
 
 
 @router.post("/tickets/{ticket_id}/category", status_code=204, responses=REFUSED, dependencies=[Depends(require_json)])

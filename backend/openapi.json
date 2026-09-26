@@ -155,6 +155,22 @@
             "title": "Lastmovedat",
             "type": "string"
           },
+          "openedAt": {
+            "format": "date-time",
+            "title": "Openedat",
+            "type": "string"
+          },
+          "responsibleId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsibleid"
+          },
           "responsibleName": {
             "anyOf": [
               {
@@ -189,7 +205,9 @@
           "categoryId",
           "categoryLabel",
           "summary",
+          "responsibleId",
           "responsibleName",
+          "openedAt",
           "lastMovedAt",
           "conversationId",
           "conversationUrl"
@@ -1133,6 +1151,52 @@
           }
         },
         "summary": "Move",
+        "tags": [
+          "board"
+        ]
+      }
+    },
+    "/api/board/tickets/{ticket_id}/release": {
+      "post": {
+        "operationId": "release_api_board_tickets__ticket_id__release_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Release",
         "tags": [
           "board"
         ]

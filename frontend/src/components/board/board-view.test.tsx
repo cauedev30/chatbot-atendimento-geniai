@@ -22,7 +22,9 @@ function card(overrides: Partial<BoardCard> & Pick<BoardCard, "id" | "column">):
     categoryId: 3,
     categoryLabel: "Painel / Não consegue entrar",
     summary: "Não consegue entrar no painel.",
+    responsibleId: null,
     responsibleName: null,
+    openedAt: "2026-09-23T14:40:00Z",
     lastMovedAt: "2026-09-23T14:48:00Z",
     conversationId: 100 + overrides.id,
     conversationUrl: `https://chatwoot.example/app/accounts/1/conversations/${100 + overrides.id}`,
@@ -47,7 +49,7 @@ function board(overrides: Partial<Board> = {}): Board {
           lastMovedAt: "2026-09-23T14:13:00Z",
         }),
       ],
-      in_progress: [card({ id: 3, column: "in_progress", responsibleName: "Pessoa Suporte 1" })],
+      in_progress: [card({ id: 3, column: "in_progress", responsibleId: 1, responsibleName: "Pessoa Suporte 1" })],
       resolved_by_human: [],
       no_response: [],
     },
@@ -75,7 +77,7 @@ function ticket(id: number) {
 async function openActions(id: number) {
   const u = userEvent.setup();
   const article = ticket(id);
-  await u.click(within(article).getByText("Ações"));
+  await u.click(within(article).getByRole("button", { name: "Exibir ações" }));
   return { u, article };
 }
 
@@ -101,12 +103,22 @@ describe("BoardView", () => {
     expect(within(column(/^Aguardando humano/)).getAllByRole("article")).toHaveLength(2);
   });
 
-  it("puts the longest wait first in Aguardando humano, with its wait time", () => {
+  it("puts the longest wait first in Aguardando humano, marked, with its wait in the name", () => {
     render(<BoardView board={board()} />);
     const [first, second] = within(column(/^Aguardando humano/)).getAllByRole("article");
-    expect(first).toHaveAccessibleName(/^Ticket 2\b/);
-    expect(first).toHaveTextContent("47 min");
-    expect(second).toHaveTextContent("12 min");
+    expect(first).toHaveAccessibleName(/^Ticket 2, esperando há 47 min\b/);
+    expect(first).toHaveTextContent("Espera mais longa");
+    expect(second).toHaveAccessibleName(/esperando há 12 min\b/);
+    expect(second).not.toHaveTextContent("Espera mais longa");
+  });
+
+  it("shows when each ticket was opened, in São Paulo time", () => {
+    const yesterday = card({ id: 7, column: "in_progress", openedAt: "2026-09-22T12:05:00Z" });
+    const lastYear = card({ id: 8, column: "in_progress", openedAt: "2025-12-31T13:00:00Z" });
+    render(<BoardView board={board({ columns: { ...board().columns, in_progress: [yesterday, lastYear] } })} />);
+    expect(ticket(1)).toHaveTextContent("Aberto hoje, 11:40");
+    expect(ticket(7)).toHaveTextContent("Aberto ontem, 09:05");
+    expect(ticket(8)).toHaveTextContent("Aberto 31/12/2025, 10:00");
   });
 
   it("shows the fallbacks, keeps the summary as text and links to Chatwoot in a new tab", () => {
@@ -134,7 +146,7 @@ describe("BoardView", () => {
   it("refuses to take without choosing a person, next to the card, and focuses the field", async () => {
     render(<BoardView board={board()} />);
     const { u, article } = await openActions(1);
-    const who = within(article).getByLabelText("Quem assume");
+    const who = within(article).getByLabelText("Responsável");
     expect(who).toBeRequired();
     expect(who).not.toHaveAttribute("aria-invalid");
     await u.click(within(article).getByRole("button", { name: "Assumir" }));
@@ -147,11 +159,62 @@ describe("BoardView", () => {
     expect(who).not.toHaveAttribute("aria-invalid");
   });
 
+  it("shows who has the ticket, refuses the same person again and releases it back to Aguardando", async () => {
+    apiPost.mockResolvedValue(undefined);
+    render(<BoardView board={board()} />);
+    const { u, article } = await openActions(3);
+    const who = within(article).getByLabelText("Responsável");
+    expect(who).toHaveDisplayValue("Pessoa Suporte 1");
+    await u.click(within(article).getByRole("button", { name: "Trocar" }));
+    expect(who).toHaveAccessibleDescription("Pessoa Suporte 1 já é o responsável.");
+    expect(apiPost).not.toHaveBeenCalled();
+    await u.click(within(article).getByRole("button", { name: /^Tirar responsável/ }));
+    expect(apiPost).toHaveBeenCalledWith("/api/board/tickets/3/release", {});
+    expect(within(column(/^Aguardando humano/)).getByRole("article", { name: /^Ticket 3\b/ })).toHaveTextContent("Sem responsável");
+  });
+
+  it("says why Corrigir and Mover cannot apply, under their own field", async () => {
+    render(<BoardView board={board()} />);
+    const { u, article } = await openActions(1);
+    const category = within(article).getByLabelText("Categoria");
+    await u.click(within(article).getByRole("button", { name: "Corrigir" }));
+    expect(category).toHaveAccessibleDescription("O ticket já está nessa categoria.");
+    expect(category).toHaveFocus();
+    const destination = within(article).getByLabelText("Mover para");
+    await u.click(within(article).getByRole("button", { name: "Mover" }));
+    expect(destination).toHaveAccessibleDescription("Escolha para onde mover o ticket.");
+    expect(destination).toHaveFocus();
+    expect(category).not.toHaveAttribute("aria-invalid");
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it("offers the same actions on a closed ticket, where Assumir reopens it", async () => {
+    apiPost.mockResolvedValue(undefined);
+    render(<BoardView board={board()} />);
+    const { u, article } = await openActions(5);
+    expect(within(article).queryByRole("button", { name: "Resolver ticket" })).toBeNull();
+    await u.selectOptions(within(article).getByLabelText("Responsável"), "2");
+    await u.click(within(article).getByRole("button", { name: "Assumir" }));
+    expect(apiPost).toHaveBeenCalledWith("/api/board/tickets/5/take", { responsibleId: 2 });
+    expect(within(column(/^Em atendimento/)).getByRole("article", { name: /^Ticket 5\b/ })).toHaveTextContent("Pessoa Suporte 2");
+  });
+
+  it("asks before resolving a ticket and does nothing when cancelled", async () => {
+    render(<BoardView board={board()} />);
+    const { u, article } = await openActions(3);
+    await u.click(within(article).getByRole("button", { name: "Resolver ticket" }));
+    const question = within(article).getByRole("group", { name: /^Resolver o ticket 3\?/ });
+    expect(within(question).getByRole("button", { name: "Sim, resolver" })).toHaveFocus();
+    await u.click(within(question).getByRole("button", { name: "Cancelar" }));
+    expect(apiPost).not.toHaveBeenCalled();
+    expect(within(article).getByRole("button", { name: "Resolver ticket" })).toBeInTheDocument();
+  });
+
   it("takes the ticket for the chosen person and refreshes", async () => {
     apiPost.mockResolvedValue(undefined);
     render(<BoardView board={board()} />);
     const { u, article } = await openActions(1);
-    await u.selectOptions(within(article).getByLabelText("Quem assume"), "2");
+    await u.selectOptions(within(article).getByLabelText("Responsável"), "2");
     await u.click(within(article).getByRole("button", { name: "Assumir" }));
     expect(apiPost).toHaveBeenCalledWith("/api/board/tickets/1/take", { responsibleId: 2 });
     expect(refresh).toHaveBeenCalled();
@@ -199,22 +262,55 @@ describe("BoardView", () => {
     apiPost.mockRejectedValue(new ApiError(400, "Não foi possível mover este ticket."));
     render(<BoardView board={board()} />);
     const { u, article } = await openActions(3);
-    await u.click(within(article).getByRole("button", { name: "Fechar" }));
+    await u.click(within(article).getByRole("button", { name: "Resolver ticket" }));
+    await u.click(within(article).getByRole("button", { name: "Sim, resolver" }));
     await waitFor(() => expect(ticket(3)).toHaveFocus());
     expect(screen.getByRole("alert")).toHaveTextContent("Não foi possível mover este ticket.");
   });
 
-  it("describes the drag handle in Portuguese", () => {
+  it("shows the actions at the foot of the card and hides them again", async () => {
     render(<BoardView board={board()} />);
-    const handle = within(ticket(1)).getByRole("button", { name: "Arrastar ticket 1" });
-    expect(handle).toHaveAttribute("aria-roledescription", "ticket arrastável");
+    const { u, article } = await openActions(1);
+    expect(within(article).getByLabelText("Mover para")).toBeInTheDocument();
+    await u.click(within(article).getByRole("button", { name: "Ocultar ações" }));
+    expect(within(article).queryByLabelText("Mover para")).not.toBeInTheDocument();
   });
 
-  it("closes a ticket into Resolvido por humano", async () => {
+  it("opens the details of a ticket from its card, with the full summary and the actions", async () => {
+    const u = userEvent.setup();
+    const long = "Painel não abre desde ontem. ".repeat(12).trim();
+    render(<BoardView board={board({ columns: { ...board().columns, in_progress: [card({ id: 3, column: "in_progress", summary: long, responsibleId: 1, responsibleName: "Pessoa Suporte 1" })] } })} />);
+    await u.click(within(ticket(3)).getByRole("button", { name: /ver detalhes$/ }));
+    const sheet = screen.getByRole("dialog", { name: /^Ticket 3/ });
+    expect(sheet).toHaveTextContent(long);
+    expect(sheet).toHaveTextContent("Aberto em23/09/2026 às 11:40");
+    expect(sheet).toHaveTextContent("ResponsávelPessoa Suporte 1");
+    expect(within(sheet).getByRole("link", { name: /Abrir conversa no Chatwoot/ })).toHaveAttribute("target", "_blank");
+    expect(within(sheet).getByRole("button", { name: "Trocar" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Resolver ticket" })).toBeInTheDocument();
+    await u.click(within(sheet).getByRole("button", { name: "Fechar detalhes" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("moves a ticket from its details and keeps them open on the moved ticket", async () => {
+    apiPost.mockResolvedValue(undefined);
+    const u = userEvent.setup();
+    render(<BoardView board={board()} />);
+    await u.click(within(ticket(1)).getByRole("button", { name: /ver detalhes$/ }));
+    const sheet = screen.getByRole("dialog", { name: /^Ticket 1/ });
+    await u.selectOptions(within(sheet).getByLabelText("Mover para"), "in_progress");
+    await u.click(within(sheet).getByRole("button", { name: "Mover" }));
+    expect(apiPost).toHaveBeenCalledWith("/api/board/tickets/1/move", { to: "in_progress" });
+    await waitFor(() => expect(screen.getByRole("heading", { name: /^Ticket 1/ })).toHaveFocus());
+    expect(screen.getByRole("dialog")).toHaveTextContent("Em atendimento");
+  });
+
+  it("resolves a ticket into Resolvido por humano", async () => {
     apiPost.mockResolvedValue(undefined);
     render(<BoardView board={board()} />);
     const { u, article } = await openActions(3);
-    await u.click(within(article).getByRole("button", { name: "Fechar" }));
+    await u.click(within(article).getByRole("button", { name: "Resolver ticket" }));
+    await u.click(within(article).getByRole("button", { name: "Sim, resolver" }));
     expect(apiPost).toHaveBeenCalledWith("/api/board/tickets/3/close", undefined);
     expect(within(column(/^Resolvido por humano/)).getByRole("article", { name: /^Ticket 3\b/ })).toBeInTheDocument();
   });
@@ -246,17 +342,6 @@ describe("BoardView in a narrow window", () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
-  });
-
-  it("takes the drag handle out of the keyboard order under 1040 px and keeps it in wider windows", () => {
-    render(<BoardView board={board()} />);
-    act(() => report?.(1280));
-    expect(within(ticket(1)).getByRole("button", { name: "Arrastar ticket 1" })).toHaveAttribute("tabindex", "0");
-    act(() => report?.(800));
-    // "Mover para" covers keyboard moves here; the handle stays for touch and mouse.
-    const handle = within(ticket(1)).getByLabelText("Arrastar ticket 1");
-    expect(handle).toHaveAttribute("tabindex", "-1");
-    expect(handle).toHaveAttribute("aria-hidden", "true");
   });
 
   it("after a move to a hidden column, focuses the heading of the column on screen", async () => {

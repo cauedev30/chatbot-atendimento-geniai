@@ -86,6 +86,16 @@ async def test_refuses_to_take_without_choosing_who(logged_in: Api) -> None:
     assert (res.status_code, res.json()) == (400, {"detail": "Escolha quem vai assumir o ticket."})
 
 
+async def test_releases_a_ticket_back_to_awaiting(logged_in: Api) -> None:
+    ticket_id = await ticket_in(logged_in, "awaiting_human")
+    first = logged_in.h.seed.team["first"]
+    await logged_in.client.post(f"/api/board/tickets/{ticket_id}/take", json={"responsibleId": first})
+    res = await logged_in.client.post(f"/api/board/tickets/{ticket_id}/release", json={})
+    assert res.status_code == 204
+    t = await fetch(logged_in, ticket_id)
+    assert (t.column, t.responsible_id) == ("awaiting_human", None)
+
+
 async def test_moves_a_card_by_drag_and_drop_and_resolves_the_conversation_when_closed(logged_in: Api) -> None:
     ticket_id = await ticket_in(logged_in, "awaiting_human")
     res = await logged_in.client.post(f"/api/board/tickets/{ticket_id}/move", json={"to": "resolved_by_human"})

@@ -66,7 +66,9 @@ async def load_board(deps: Deps) -> Board:
                     category.c.system.label("category_system"),
                     category.c.name.label("category_name"),
                     ticket.c.summary,
+                    ticket.c.responsible_id,
                     team_member.c.name.label("responsible_name"),
+                    ticket.c.opened_at,
                     ticket.c.last_moved_at,
                     ticket.c.chatwoot_conversation_id,
                 )
@@ -91,7 +93,9 @@ async def load_board(deps: Deps) -> Board:
                         else None
                     ),
                     summary=r.summary,
+                    responsible_id=r.responsible_id,
                     responsible_name=r.responsible_name,
+                    opened_at=r.opened_at,
                     last_moved_at=r.last_moved_at,
                     conversation_id=r.chatwoot_conversation_id,
                     conversation_url=deps.chatwoot.conversation_url(r.chatwoot_conversation_id),
@@ -164,6 +168,18 @@ async def take_card(deps: Deps, ticket_id: int, responsible_id: int | None) -> N
             return
         result = await _move_in(deps, conn, ticket_id, "in_progress", {"responsible_id": responsible_id})
     await sync_chatwoot_status(deps, result.ticket.chatwoot_conversation_id, result.from_, "in_progress")
+
+
+async def release_card(deps: Deps, ticket_id: int) -> None:
+    """Nobody is on the ticket any more: it goes back to the queue waiting for a person."""
+    async with deps.engine.begin() as conn:
+        current = await get_ticket(conn, ticket_id)
+        if current is None:
+            raise BoardError("Ticket não encontrado.")
+        if current.column != "in_progress":
+            raise BoardError("Só dá para tirar o responsável de um ticket em atendimento.")
+        result = await _move_in(deps, conn, ticket_id, "awaiting_human", {"responsible_id": None})
+    await sync_chatwoot_status(deps, result.ticket.chatwoot_conversation_id, result.from_, "awaiting_human")
 
 
 async def recategorize(deps: Deps, ticket_id: int, category_id: int) -> None:

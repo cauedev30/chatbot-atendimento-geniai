@@ -1,38 +1,39 @@
-/* geniAI support desk: a service-counter terminal. Near-black ground, deep-teal panels, matte teal
-   type (no glow), 1px rules as the only chrome, square corners, inverse video for emphasis. */
+/* geniAI support desk: a calm handover sheet. Near-black ground, cards one tonal step up with a
+   hairline edge, one proportional face, teal kept for the primary action, active states and counts. */
 
 :root {
   color-scheme: dark;
 
-  /* Ground and panels, derived from the brand's near-black and deep-teal shadow. */
-  --ink-0: #030606;
-  --ink-1: #061110;
-  --ink-2: #0a2f2c;
-  --rule: #173a36;
-  /* Control borders: at least 3:1 on the ground and on the panels. */
-  --rule-strong: #2f6a63;
+  /* Ground and surfaces, from the brand's near-black. */
+  --bg: #030606;
+  --surface: #0b1413;
+  --surface-2: #111d1c;
+  --line: #182725;
+  /* Control borders: at least 3:1 on the ground and on every surface. */
+  --line-strong: #557470;
 
-  /* Signature teal and its highlight; white type. */
+  /* The signature teal; white type in three tones. */
   --teal: #14c8b4;
   --teal-hi: #3ff0da;
+  --teal-soft: rgb(20 200 180 / 0.1);
   --on-teal: #021a18;
-  --text: #f3f8f7;
-  --text-2: #b3ccc8;
-  --text-3: #7f9f9a;
+  --text: #eef4f3;
+  --text-2: #a9bcb9;
+  --text-3: #86a09c;
   --danger: #ff8a7a;
-  --danger-ground: #2a0f0c;
+  --danger-soft: rgb(255 138 122 / 0.1);
 
   /* The brand gradient, spent once: the rule under the wordmark. */
   --brand-gradient: linear-gradient(90deg, #1fd1a8 0%, #1fb8e0 50%, #2a8cf0 100%);
 
-  --font-mono: var(--font-red-hat-mono), ui-monospace, monospace;
   --font-text: var(--font-red-hat-text), system-ui, sans-serif;
+  --font-display: var(--font-red-hat-display), var(--font-text);
 
-  /* Type roles: one size per role family; rank by weight, case and inversion. */
-  --size-label: 0.75rem;
+  --size-small: 0.8125rem;
   --size-body: 0.9375rem;
-  --size-figure: 1.75rem;
-  --tracking-label: 0.06em;
+
+  --radius: 10px;
+  --radius-control: 8px;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -40,8 +41,10 @@
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
+  --space-7: 48px;
 
-  --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
+  --bar-height: 56px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 *,
@@ -52,15 +55,15 @@
 
 html {
   -webkit-text-size-adjust: 100%;
-  /* Anchors and focused elements stop below the sticky 48px top bar. */
-  scroll-padding-top: calc(48px + var(--space-4));
-  scrollbar-color: var(--rule-strong) var(--ink-0);
+  /* Anchors and focused elements stop below the sticky top bar. */
+  scroll-padding-top: calc(var(--bar-height) + var(--space-4));
+  scrollbar-color: var(--line-strong) transparent;
 }
 
 body {
   margin: 0;
   min-height: 100dvh;
-  background: var(--ink-0);
+  background: var(--bg);
   color: var(--text);
   font-family: var(--font-text);
   font-size: var(--size-body);
@@ -93,6 +96,7 @@ h1,
 h2,
 h3 {
   margin: 0;
+  font-family: var(--font-display);
   text-wrap: balance;
 }
 
@@ -109,26 +113,27 @@ select {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--ink-0);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--rule-strong);
-  border: 2px solid var(--ink-0);
+  background: var(--line);
+  border: 2px solid var(--bg);
+  border-radius: 999px;
 }
 
-/* Terminal labels: monospace caps for data, counts, times and state names. */
+::-webkit-scrollbar-thumb:hover {
+  background: var(--line-strong);
+}
+
+/* Field names, table heads, small facts. */
 .label {
-  font-family: var(--font-mono);
-  font-size: var(--size-label);
+  font-size: var(--size-small);
   font-weight: 500;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--text-3);
 }
 
 .figure {
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 

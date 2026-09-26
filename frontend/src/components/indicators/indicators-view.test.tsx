@@ -1,6 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { IndicatorsResponse } from "@/lib/types";
+import { monthColumns, weekColumns } from "./charts";
 import { IndicatorsView, InvalidPeriod, heatFill, unitIdOf } from "./indicators-view";
 
 function response(overrides: Partial<IndicatorsResponse["query"]> = {}): IndicatorsResponse {
@@ -53,30 +55,49 @@ function response(overrides: Partial<IndicatorsResponse["query"]> = {}): Indicat
 }
 
 describe("IndicatorsView", () => {
-  it("shows the six blocks in order", () => {
+  it("shows every block, always open, in order", () => {
     render(<IndicatorsView response={response()} />);
     expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
-      "1. Volume",
-      "2. Resultados",
-      "3. Unidade × categoria",
-      "4. Tempo",
-      "5. Saúde do FAQ",
-      "6. Saúde do agente",
+      "Resumo de 01/09 a 30/09/2026",
+      "Onde os tickets estão",
+      "Por que passaram para humano",
+      "Volume",
+      "Unidade × categoria",
+      "Tempo",
+      "Saúde do FAQ",
+      "Saúde do agente",
     ]);
+    expect(document.querySelector("details")).toBeNull();
   });
 
   it("shows the bot rate over identified tickets and a dash for missing shares", () => {
     render(<IndicatorsView response={response()} />);
-    const results = screen.getByRole("region", { name: "2. Resultados" });
-    expect(results).toHaveTextContent("Taxa de resolução pelo bot50%");
-    expect(results).toHaveTextContent("de 2 tickets identificados que saíram da triagem");
-    expect(results).toHaveTextContent("Sem resposta—");
-    expect(within(results).getByRole("row", { name: /Sem item no FAQ/ })).toHaveTextContent("1");
-    const faq = screen.getByRole("region", { name: "5. Saúde do FAQ" });
-    expect(within(faq).getByRole("row", { name: /Redefinir senha do painel/ })).toHaveTextContent("—");
-    const time = screen.getByRole("region", { name: "4. Tempo" });
+    const summary = screen.getByRole("region", { name: /^Resumo/ });
+    expect(summary).toHaveTextContent("Resolvidos pelo bot50%");
+    expect(summary).toHaveTextContent("de 2 identificados que saíram da triagem; — ficaram sem resposta");
+    const handoffs = screen.getByRole("region", { name: "Por que passaram para humano" });
+    expect(within(handoffs).getByRole("row", { name: /Sem item no FAQ/ })).toHaveTextContent("1");
+    const faq = screen.getByRole("region", { name: "Saúde do FAQ" });
+    expect(within(faq).getByRole("row", { name: /Redefinir senha do painel/ })).toHaveTextContent("não foi enviado—");
+    const time = screen.getByRole("region", { name: "Tempo" });
     expect(within(time).getByRole("row", { name: /Da abertura ao fechamento/ })).toHaveTextContent("1,5 h");
     expect(within(time).getByRole("row", { name: /Da abertura ao fechamento/ })).toHaveTextContent("12 min");
+  });
+
+  it("splits the board columns into parts of the whole, with a legend of counts and shares", () => {
+    render(<IndicatorsView response={response()} />);
+    const outcomes = screen.getByRole("region", { name: "Onde os tickets estão" });
+    expect(within(outcomes).getByRole("row", { name: /Resolvido pelo bot/ })).toHaveTextContent("150%");
+    expect(within(outcomes).getByRole("row", { name: /Em atendimento/ })).toHaveTextContent("00%");
+    // Only columns with tickets get a part of the bar.
+    expect(outcomes.querySelectorAll("[data-column]:not(th *)").length).toBe(2);
+  });
+
+  it("shows each agent share as a ring with its value", () => {
+    render(<IndicatorsView response={response()} />);
+    const agent = screen.getByRole("region", { name: "Saúde do agente" });
+    expect(agent).toHaveTextContent("Categorias corrigidas por humanos0%de 2 tickets classificados pelo bot");
+    expect(agent).toHaveTextContent('Classificados como "Outros"—');
   });
 
   it("builds the normalize toggle URL, keeping the period and unit", () => {
@@ -91,7 +112,7 @@ describe("IndicatorsView", () => {
 
   it("divides the heatmap by attendants, with a dash where a unit has none", () => {
     render(<IndicatorsView response={response({ normalize: true })} />);
-    const heatmap = screen.getByRole("region", { name: "3. Unidade × categoria" });
+    const heatmap = screen.getByRole("region", { name: "Unidade × categoria" });
     expect(within(heatmap).getByRole("row", { name: /Unidade Exemplo Centro/ })).toHaveTextContent("1,00");
     expect(within(heatmap).getByRole("row", { name: /Unidade Exemplo Norte/ })).toHaveTextContent("—");
     // Unknown numbers have no attendants to divide by.
@@ -101,7 +122,7 @@ describe("IndicatorsView", () => {
 
   it("gives tickets from unknown numbers their own heatmap row, last", () => {
     render(<IndicatorsView response={response()} />);
-    const heatmap = screen.getByRole("region", { name: "3. Unidade × categoria" });
+    const heatmap = screen.getByRole("region", { name: "Unidade × categoria" });
     const rows = within(heatmap).getAllByRole("row").slice(1);
     expect(rows.map((r) => r.firstChild?.textContent)).toEqual([
       "Unidade Exemplo Centro",
@@ -122,11 +143,17 @@ describe("IndicatorsView", () => {
     expect(form).toHaveAttribute("method", "get");
   });
 
-  it("names the missing unit and category rows", () => {
+  it("shows the volume one view at a time, by week first, and names the missing unit", async () => {
+    const u = userEvent.setup();
     render(<IndicatorsView response={response()} />);
-    const volume = screen.getByRole("region", { name: "1. Volume" });
+    const volume = screen.getByRole("region", { name: "Volume" });
+    expect(within(volume).getByRole("button", { name: "Por semana" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(volume).getByText("Semana de 07/09: 3 tickets")).toBeInTheDocument();
+    await u.click(within(volume).getByRole("button", { name: "Por unidade" }));
+    expect(within(volume).getByRole("button", { name: "Por semana" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(volume).queryByText(/^Semana de/)).toBeNull();
     expect(within(volume).getByRole("row", { name: /Sem unidade/ })).toHaveTextContent("1");
-    expect(volume).toHaveTextContent("Total de tickets no período3");
+    expect(screen.getByRole("region", { name: /^Resumo/ })).toHaveTextContent("Tickets no período3");
   });
 });
 
@@ -135,11 +162,11 @@ describe("IndicatorsView context lines", () => {
     const r = response();
     r.data.heatmap.uncategorized = 1;
     const { unmount } = render(<IndicatorsView response={r} />);
-    const heatmap = screen.getByRole("region", { name: "3. Unidade × categoria" });
+    const heatmap = screen.getByRole("region", { name: "Unidade × categoria" });
     expect(heatmap).toHaveTextContent("1 ticket sem categoria fica fora desta tabela.");
     unmount();
     render(<IndicatorsView response={response()} />);
-    expect(screen.getByRole("region", { name: "3. Unidade × categoria" })).not.toHaveTextContent("fora desta tabela");
+    expect(screen.getByRole("region", { name: "Unidade × categoria" })).not.toHaveTextContent("fora desta tabela");
   });
 
   it("shows the empty message instead of a grid of zeros", () => {
@@ -147,7 +174,7 @@ describe("IndicatorsView context lines", () => {
     r.data.heatmap.cells = [];
     r.data.heatmap.uncategorized = 3;
     render(<IndicatorsView response={r} />);
-    const heatmap = screen.getByRole("region", { name: "3. Unidade × categoria" });
+    const heatmap = screen.getByRole("region", { name: "Unidade × categoria" });
     expect(within(heatmap).queryByRole("table")).toBeNull();
     expect(heatmap).toHaveTextContent("Nenhum ticket com categoria no período.");
     expect(heatmap).toHaveTextContent("3 tickets sem categoria ficam fora desta tabela.");
@@ -155,7 +182,7 @@ describe("IndicatorsView context lines", () => {
 
   it("states which tickets the time figures cover", () => {
     render(<IndicatorsView response={response()} />);
-    expect(screen.getByRole("region", { name: "4. Tempo" })).toHaveTextContent("só os tickets que alguém já assumiu");
+    expect(screen.getByRole("region", { name: "Tempo" })).toHaveTextContent("só os tickets que alguém já assumiu");
   });
 });
 
@@ -193,5 +220,28 @@ describe("heatFill", () => {
     }
     expect(heatFill(0)).toEqual({ alpha: 0, dark: false });
     expect(heatFill(1).alpha).toBeCloseTo(0.85);
+  });
+});
+
+describe("volume periods", () => {
+  it("lists every week of the period from its Monday, with zero where nothing was opened", () => {
+    expect(weekColumns("2026-09-01", "2026-09-30", [{ period: "2026-09-07", count: 3 }]).map((c) => [c.label, c.count])).toEqual([
+      ["31/08", 0],
+      ["07/09", 3],
+      ["14/09", 0],
+      ["21/09", 0],
+      ["28/09", 0],
+    ]);
+  });
+
+  it("lists every month of the period, across a year", () => {
+    const months = monthColumns("2025-11-15", "2026-02-10", [{ period: "2026-01", count: 4 }]);
+    expect(months.map((m) => [m.label, m.count])).toEqual([
+      ["nov/25", 0],
+      ["dez/25", 0],
+      ["jan/26", 4],
+      ["fev/26", 0],
+    ]);
+    expect(months[2]?.spoken).toBe("jan de 2026");
   });
 });

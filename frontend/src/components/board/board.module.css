@@ -1,16 +1,21 @@
-/* The board as a service-counter terminal: 1px rules, square panels, the waiting queue widest,
-   the longest wait in inverse video. Narrow windows (beside Chatwoot) show one column at a time. */
+/* The board as a handover sheet: five categories side by side with no boxes around them, loose
+   cards under each heading, the same fields in the same place on every card. Each column scrolls on
+   its own. Narrow windows (beside Chatwoot) show one category at a time. */
 
 .board {
   container-type: inline-size;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-4);
+  /* The page itself does not scroll on a wide screen: the columns do. */
+  height: calc(100dvh - var(--bar-height) - 2 * var(--space-5));
+  min-height: 420px;
 }
 
 .status {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-2) var(--space-4);
 }
@@ -18,25 +23,21 @@
 .counter {
   margin: 0;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
-}
-
-.counterFigure {
-  font-size: var(--size-figure);
-  font-weight: 600;
-  line-height: 1;
-  color: var(--teal);
-}
-
-.counterText {
   color: var(--text-2);
+}
+
+.live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--teal);
 }
 
 .hint {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--size-label);
+  font-size: var(--size-small);
   color: var(--text-3);
 }
 
@@ -45,133 +46,168 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--danger);
-  background: var(--danger-ground);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border: 1px solid rgb(255 138 122 / 0.45);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
   color: var(--danger);
 }
 
 .dismiss {
   flex: none;
   min-height: 32px;
-  padding: 0 var(--space-2);
-  border: 1px solid currentColor;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
   background: transparent;
-  font-family: var(--font-mono);
-  font-size: var(--size-label);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
+  font-size: var(--size-small);
+  font-weight: 600;
   cursor: pointer;
 }
 
-/* Column switcher: only in narrow windows. */
+.dismiss:hover {
+  background: rgb(255 138 122 / 0.12);
+}
+
+/* Category switcher: only in narrow windows. */
 .switcher {
   display: none;
-  flex-wrap: wrap;
-  gap: 1px;
-  border: 1px solid var(--rule);
-  background: var(--rule);
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .switch {
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: 40px;
+  min-height: 36px;
   padding: 0 var(--space-3);
   border: 0;
-  background: var(--ink-1);
+  border-radius: var(--radius-control);
+  background: transparent;
   color: var(--text-2);
-  font-family: var(--font-mono);
-  font-size: var(--size-label);
-  font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
+  font-size: 0.875rem;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
 }
 
+.switch:hover {
+  color: var(--text);
+}
+
 .switch[aria-pressed="true"] {
-  background: var(--teal);
-  color: var(--on-teal);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.switchCount {
+  color: var(--text-3);
+}
+
+.switch[aria-pressed="true"] .switchCount {
+  color: var(--teal);
 }
 
 .columns {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-  /* Every column runs as tall as the longest, so a card can be dropped anywhere along it. */
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
 }
 
 .column {
+  min-height: 0;
   display: grid;
-  grid-template-rows: auto 1fr;
-  min-height: 280px;
-  border: 1px solid var(--rule);
-  background: var(--ink-1);
-  transition: border-color 120ms var(--ease-settle);
-}
-
-.lead {
-  border-color: var(--rule-strong);
-}
-
-.over {
-  border-color: var(--teal);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-3);
 }
 
 .columnHead {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--rule);
-  font-family: var(--font-mono);
-  font-size: var(--size-label);
+  padding: 0 var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
   font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--text-2);
 }
 
-.lead .columnHead {
-  background: var(--ink-2);
-  color: var(--text);
+.columnName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .columnCount {
-  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+/* Aguardando humano: the queue that needs a person. */
+.lead .columnHead {
+  color: var(--text);
+  border-bottom-color: var(--teal);
+}
+
+.lead .columnCount {
   color: var(--teal);
 }
 
 .cards {
-  display: grid;
-  align-content: start;
-  gap: var(--space-2);
-  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  /* Room for the focus ring and the landing outline inside the scroller. */
+  padding: 3px;
+  margin: -3px;
+  overflow-y: auto;
+  border-radius: calc(var(--radius) + 3px);
+  transition: background-color 140ms var(--ease-out);
+}
+
+/* While a card is dragged over a category, its area lights up faintly. */
+.over .cards {
+  background: var(--teal-soft);
 }
 
 .empty {
   margin: 0;
-  padding: var(--space-3) var(--space-2);
-  font-family: var(--font-mono);
-  font-size: var(--size-label);
+  padding: var(--space-4) var(--space-1);
+  font-size: var(--size-small);
   color: var(--text-3);
 }
 
 /* Card */
 
 .card {
+  container-type: inline-size;
   position: relative;
+  flex: none;
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--rule);
-  background: var(--ink-0);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color 140ms var(--ease-out);
+}
+
+.card:hover {
+  border-color: #243634;
 }
 
 .card p {
@@ -180,146 +216,189 @@
 
 .cardTop {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  min-height: 28px;
 }
 
-.wait {
-  display: grid;
-  gap: 2px;
+.opened {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+  font-size: var(--size-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
 }
 
-.waitFigure {
-  font-size: var(--size-figure);
-  font-weight: 600;
-  line-height: 1.05;
+.date {
+  white-space: nowrap;
+}
+
+.oldest {
   color: var(--teal);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.since {
-  padding-top: 6px;
-}
-
-.handle {
+.tool {
+  position: relative;
+  z-index: 1;
   flex: none;
+  margin-right: -4px;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  margin: -4px -6px 0 0;
-  border: 1px solid transparent;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-3);
-  cursor: grab;
-  touch-action: none;
+  transition:
+    background-color 140ms var(--ease-out),
+    color 140ms var(--ease-out);
 }
 
-.handle:hover {
-  border-color: var(--rule-strong);
-  color: var(--teal-hi);
+.tool:hover {
+  background: var(--surface-2);
+  color: var(--text);
 }
 
-.where {
-  display: grid;
-  gap: 2px;
-  font-size: 0.8125rem;
-  color: var(--text-2);
+/* The summary is a button whose hit area covers the card: a click anywhere on it opens the details. */
+.openDetails {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: inherit;
 }
 
-.category {
-  font-family: var(--font-mono);
-  font-size: var(--size-label);
-  letter-spacing: 0.02em;
-  color: var(--text-3);
+.openDetails::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
 }
 
+.openDetails:focus-visible {
+  outline: none;
+}
+
+.openDetails:focus-visible::after {
+  outline: 2px solid var(--teal-hi);
+  outline-offset: 2px;
+}
+
+/* Three lines at most on the card; the details show all of it. */
 .summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  font-size: var(--size-body);
+  font-weight: 500;
+  line-height: 1.45;
   color: var(--text);
   overflow-wrap: anywhere;
 }
 
-.responsible {
-  font-size: 0.8125rem;
+/* Unidade and Categoria on one line, the responsible person under it: always in this order. */
+.fields {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 0;
+  font-size: var(--size-small);
+  color: var(--text-2);
+}
+
+.fields div {
+  display: contents;
+}
+
+.fields dt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fields dd {
+  margin: 0;
+}
+
+
+/* Narrow cards: unit, category and person on their own lines. Wide cards: unit · category. */
+.fields dd {
+  flex-basis: 100%;
+}
+
+.fields div:nth-child(2) dd {
   color: var(--text-3);
 }
 
+@container (min-width: 320px) {
+  .fields div:nth-child(1) dd,
+  .fields div:nth-child(2) dd {
+    flex-basis: auto;
+  }
+
+  .fields div:nth-child(2) dd::before {
+    content: "·";
+    margin: 0 6px;
+  }
+}
+
+.fields .nobody {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+/* "Exibir ações" at the foot of the card, above the stretched details link. */
 .cardFoot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--rule);
-}
-
-.chatwoot {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  font-family: var(--font-mono);
-  font-size: var(--size-label);
-  font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  text-decoration: none;
-}
-
-.chatwoot:hover {
-  text-decoration: underline;
-}
-
-.actions {
-  flex: 1 0 100%;
+  position: relative;
+  z-index: 1;
+  cursor: auto;
 }
 
 .actionsToggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
-  font-family: var(--font-mono);
-  font-size: var(--size-label);
-  font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--text-2);
-  list-style: none;
+  min-height: 28px;
+  margin-left: calc(-1 * var(--space-2));
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: var(--size-small);
+  font-weight: 500;
+  color: var(--text-3);
   cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-out),
+    color 140ms var(--ease-out);
 }
 
-.actionsToggle::-webkit-details-marker {
-  display: none;
-}
-
-.actionsToggle::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(-45deg);
-  transition: transform 120ms var(--ease-settle);
-}
-
-.actions[open] > .actionsToggle::before {
-  transform: rotate(45deg);
-}
-
-.actionsToggle:hover {
-  color: var(--teal-hi);
+.actionsToggle:hover,
+.actionsToggle[aria-expanded="true"] {
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 .actionsPanel {
   display: grid;
   gap: var(--space-3);
-  margin-top: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--rule);
-  background: var(--ink-1);
-  color: var(--text);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
 }
 
 .actionRow {
@@ -329,8 +408,43 @@
   gap: var(--space-2);
 }
 
-.close {
+.release {
+  grid-column: 1 / -1;
   justify-self: start;
+  min-height: 32px;
+  margin-left: calc(-1 * var(--space-3));
+  font-size: var(--size-small);
+  font-weight: 500;
+  white-space: normal;
+  text-align: left;
+}
+
+.releaseHint {
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+/* Resolver sits apart from the other actions and asks before it closes the ticket. */
+.resolve {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.confirm {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.confirm p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.confirmButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .fieldError {
@@ -340,68 +454,42 @@
 /* A heading or card that takes the focus after an action (never tabbable) keeps the global ring. */
 .columnHead:focus-visible {
   outline-offset: -2px;
+  border-radius: 6px;
 }
 
-/* The longest wait: the one inverse card on the board. */
+/* The longest wait: first in its column, marked by a teal edge and its tag. */
 .longest {
-  background: var(--teal);
-  border-color: var(--teal);
-  color: var(--on-teal);
+  border-color: rgb(20 200 180 / 0.45);
 }
 
-.longest .waitFigure,
-.longest .summary,
-.longest .where,
-.longest .category,
-.longest .responsible,
-.longest .chatwoot,
-.longest .actionsToggle,
-.longest .handle,
-.longest :global(.label) {
-  color: var(--on-teal);
+.longest:hover {
+  border-color: rgb(20 200 180 / 0.7);
 }
 
-.longest .cardFoot {
-  border-top-color: rgb(2 26 24 / 0.35);
-}
-
-.longest .handle:hover {
-  border-color: var(--on-teal);
-}
-
-/* Inside the plate the ring is dark ink on teal (8.5:1). The action panel is back on the dark
-   panel, so its controls take the normal teal-hi ring; the card itself rings outside the plate. */
-.longest :focus-visible {
-  outline-color: var(--on-teal);
-}
-
-.longest .actionsPanel :focus-visible {
-  outline-color: var(--teal-hi);
-}
-
-.longest .actionsPanel :global(.label) {
-  color: var(--text-3);
+/* The card left behind while its copy follows the pointer. */
+.lifted {
+  opacity: 0.35;
 }
 
 .dragging {
-  z-index: 20;
   cursor: grabbing;
-  box-shadow: 0 12px 28px rgb(0 0 0 / 0.55);
+  border-color: var(--line-strong);
+  box-shadow: 0 16px 32px rgb(0 0 0 / 0.5);
 }
 
-/* One authored motion: a card that lands in a new column settles in one short step. */
+/* One authored motion: a card that lands in a new category is outlined in teal, which then fades. */
 .landed {
-  animation: settle 240ms var(--ease-settle);
+  animation: landed 1200ms var(--ease-out);
 }
 
-@keyframes settle {
+@keyframes landed {
   from {
-    transform: translateY(-6px);
     border-color: var(--teal-hi);
+    box-shadow: 0 0 0 2px rgb(63 240 218 / 0.35);
   }
 }
 
-/* Narrow windows (beside Chatwoot, phones): one column at a time, type never shrinks. */
+/* Narrow windows (beside Chatwoot, phones): one category at a time, the page scrolls. */
 @container (max-width: 1040px) {
   .switcher {
     display: flex;
@@ -415,31 +503,188 @@
     display: none;
   }
 
-  .column {
+  .cards {
+    overflow: visible;
+  }
+}
+
+@media (max-width: 1088px) {
+  .board {
+    height: auto;
     min-height: 0;
   }
 }
 
+/* Details: a side sheet over the dimmed board. */
+.sheet {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(460px, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: -24px 0 48px rgb(0 0 0 / 0.45);
+  animation: sheet-in 200ms var(--ease-out);
+}
+
+.sheet::backdrop {
+  background: rgb(0 0 0 / 0.55);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+.sheetBody {
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
+  min-height: 100%;
+  padding: var(--space-5);
+}
+
+.sheetHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.sheetTitle {
+  display: grid;
+  gap: 2px;
+  font-family: var(--font-text);
+  font-size: var(--size-small);
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.sheetTitle:focus-visible {
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.sheetColumn {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sheetClose {
+  composes: quiet from "../ui/controls.module.css";
+  width: 36px;
+  padding: 0;
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0 0;
+}
+
+.sheetSummary {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.sheetFields {
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+
+.sheetFields div {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.875rem;
+}
+
+.sheetFields div:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.sheetFields dt {
+  color: var(--text-3);
+}
+
+.sheetFields dd {
+  margin: 0;
+  color: var(--text);
+}
+
+.sheetLink {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--teal);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.sheetLink:hover {
+  color: var(--teal-hi);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sheetActions {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.sheetActions .actionsPanel {
+  margin-top: 0;
+}
+
+.sheetSection {
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
 @media (pointer: coarse) {
-  .handle {
+  .tool {
     width: 44px;
     height: 44px;
   }
 
-  .chatwoot {
+  .actionsToggle {
+    min-height: 44px;
+  }
+
+  .sheetClose {
+    width: 44px;
     min-height: 44px;
   }
 }
 
-/* Reduced motion keeps the state change (the teal edge) and drops the movement. */
+/* Reduced motion keeps the teal edge of a landed card and drops the fade. */
 @media (prefers-reduced-motion: reduce) {
   .landed {
     animation: none;
     border-color: var(--teal-hi);
   }
 
-  .column,
-  .actionsToggle::before {
+  .sheet {
+    animation: none;
+  }
+
+  .card,
+  .actionsToggle,
+  .cards,
+  .tool {
     transition: none;
   }
 }

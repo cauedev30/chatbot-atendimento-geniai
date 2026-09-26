@@ -10,33 +10,25 @@
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: var(--space-5);
-  padding: 0 var(--space-4);
-  min-height: 48px;
-  background: var(--ink-0);
-  border-bottom: 1px solid var(--rule);
+  gap: var(--space-6);
+  padding: 0 var(--space-5);
+  min-height: var(--bar-height);
+  background: rgb(3 6 6 / 0.92);
+  border-bottom: 1px solid var(--line);
 }
 
 .wordmark {
-  position: relative;
-  padding: var(--space-1) 0;
-  font-family: var(--font-mono);
-  font-size: 1rem;
+  padding: 2px 0;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
   color: var(--text);
   text-decoration: none;
-}
-
-/* The brand gradient, spent once in the whole app. */
-.wordmark::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: var(--brand-gradient);
+  /* The brand gradient, spent once in the whole app. */
+  background-image: var(--brand-gradient);
+  background-size: 100% 2px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
 }
 
 .wordmark:hover {
@@ -45,32 +37,33 @@
 
 .nav {
   display: flex;
-  align-items: stretch;
-  align-self: stretch;
+  align-items: center;
   gap: var(--space-1);
 }
 
 .link {
   display: flex;
   align-items: center;
+  min-height: 34px;
   padding: 0 var(--space-3);
-  font-family: var(--font-mono);
-  font-size: var(--size-label);
-  font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
+  border-radius: var(--radius-control);
+  font-size: 0.9375rem;
+  font-weight: 500;
   color: var(--text-2);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
+  transition:
+    background-color 140ms var(--ease-out),
+    color 140ms var(--ease-out);
 }
 
 .link:hover {
-  color: var(--teal-hi);
+  color: var(--text);
+  background: var(--surface);
 }
 
 .link[aria-current="page"] {
-  color: var(--teal);
-  border-bottom-color: var(--teal);
+  color: var(--text);
+  background: var(--surface-2);
 }
 
 .end {
@@ -79,7 +72,7 @@
 
 .main {
   min-width: 0;
-  padding: var(--space-4);
+  padding: var(--space-5);
 }
 
 @media (max-width: 520px) {
@@ -93,6 +86,12 @@
   }
 
   .main {
-    padding: var(--space-3);
+    padding: var(--space-4) var(--space-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link {
+    transition: none;
   }
 }

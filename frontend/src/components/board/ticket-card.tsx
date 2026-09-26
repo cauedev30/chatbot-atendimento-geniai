@@ -1,74 +1,63 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
-import { useEffect, useId, useRef, useState } from "react";
-import controls from "@/components/ui/controls.module.css";
-import { ExternalIcon, GripIcon } from "@/components/ui/icons";
-import { BOARD_COLUMNS, COLUMN_LABELS, formatElapsed } from "@/lib/format";
-import type { BoardCard, BoardColumn, IdLabel, IdName } from "@/lib/types";
+import { useEffect, useId, useRef, useState, type PointerEvent } from "react";
+import { ExternalIcon, MoreIcon } from "@/components/ui/icons";
+import { COLUMN_LABELS, formatElapsed, formatOpened } from "@/lib/format";
+import type { BoardCard, IdLabel, IdName } from "@/lib/types";
 import styles from "./board.module.css";
-
-export interface CardActions {
-  take(card: BoardCard, responsibleId: number | null): void;
-  clearTakeError(card: BoardCard): void;
-  recategorize(card: BoardCard, categoryId: number): void;
-  move(card: BoardCard, to: BoardColumn): void;
-  close(card: BoardCard): void;
-}
+import { TicketActions, type CardActions } from "./ticket-actions";
 
 interface TicketCardProps {
   card: BoardCard;
-  /** Server "now" of the loaded board; waits are measured from it. */
+  /** Server "now" of the loaded board; waits and "hoje"/"ontem" are measured from it. */
   generatedAt: string;
   longestWait: boolean;
   landed: boolean;
   busy: boolean;
-  /** False in the one-column layout: the handle then serves only mouse and touch. */
-  keyboardDrag: boolean;
-  /** "Assumir" was pressed without choosing who takes the ticket. */
-  takeError: boolean;
   requireResponsible: boolean;
   teamMembers: IdName[];
   categories: IdLabel[];
   actions: CardActions;
+  onOpen(card: BoardCard): void;
 }
 
-const OPEN: readonly BoardColumn[] = ["awaiting_human", "in_progress"];
-const TAKE_NEEDS_PERSON = "Escolha quem vai assumir o ticket.";
+/** Controls inside the card (links, the actions toggle, the actions) never start a drag. */
+function fromControl(event: PointerEvent): boolean {
+  return event.target instanceof Element && event.target.closest("[data-no-drag]") !== null;
+}
 
 export function TicketCard(props: TicketCardProps) {
-  const { card, generatedAt, longestWait, landed, busy, keyboardDrag, takeError, requireResponsible } = props;
-  const { teamMembers, categories, actions } = props;
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } = useDraggable({
+  const { card, generatedAt, longestWait, landed, busy, onOpen } = props;
+  const { listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
     data: { column: card.column },
     disabled: busy,
-    attributes: { roleDescription: "ticket arrastável" },
   });
   const ids = useId();
-  const whoRef = useRef<HTMLSelectElement>(null);
+  const [showActions, setShowActions] = useState(false);
+  const footRef = useRef<HTMLDivElement>(null);
+  // The actions open under the card, often below the column's fold: bring them into view.
   useEffect(() => {
-    if (takeError) whoRef.current?.focus();
-  }, [takeError]);
-  const [responsibleId, setResponsibleId] = useState("");
-  const [categoryId, setCategoryId] = useState(card.categoryId === null ? "" : String(card.categoryId));
-  const [destination, setDestination] = useState("");
+    if (!showActions) return;
+    const smooth = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    footRef.current?.scrollIntoView?.({ block: "nearest", behavior: smooth ? "smooth" : "auto" });
+  }, [showActions]);
 
   const elapsed = formatElapsed(Date.parse(generatedAt) - Date.parse(card.lastMovedAt));
-  const waiting = card.column === "awaiting_human";
-  const open = OPEN.includes(card.column);
+  const opened = formatOpened(card.openedAt, generatedAt);
   const unit = card.unitName ?? "Sem unidade";
   const category = card.categoryLabel ?? "Sem categoria";
-  const responsible = card.responsibleName ? `Responsável: ${card.responsibleName}` : "Sem responsável";
-  const name = waiting
-    ? `Ticket ${card.id}, esperando há ${elapsed}, ${unit}`
-    : `Ticket ${card.id}, ${COLUMN_LABELS[card.column]}, ${unit}`;
+  const name =
+    card.column === "awaiting_human"
+      ? `Ticket ${card.id}, esperando há ${elapsed}, ${unit}`
+      : `Ticket ${card.id}, ${COLUMN_LABELS[card.column]}, ${unit}`;
 
   const className = [
     styles.card,
     longestWait ? styles.longest : "",
     landed ? styles.landed : "",
-    isDragging ? styles.dragging : "",
+    isDragging ? styles.lifted : "",
   ].join(" ");
 
   return (
@@ -79,152 +68,77 @@ export function TicketCard(props: TicketCardProps) {
       aria-busy={busy || undefined}
       data-card-id={card.id}
       tabIndex={-1}
-      style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
+      onPointerDown={(event) => {
+        if (!fromControl(event)) listeners?.onPointerDown?.(event);
+      }}
     >
       <div className={styles.cardTop}>
-        {waiting ? (
-          <p className={styles.wait}>
-            <span className="label">{longestWait ? "Espera mais longa" : "Esperando"}</span>
-            <span className={`figure ${styles.waitFigure}`}>{elapsed}</span>
-          </p>
-        ) : (
-          <p className={`label ${styles.since}`}>há {elapsed}</p>
-        )}
+        <p className={styles.opened}>
+          <span className={styles.date}>Aberto {opened}</span>
+          {longestWait ? <span className={styles.oldest}>Espera mais longa</span> : null}
+        </p>
+        <a
+          className={styles.tool}
+          href={card.conversationUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Abrir no Chatwoot"
+          data-no-drag
+        >
+          <ExternalIcon />
+          <span className="visually-hidden">Abrir no Chatwoot (abre em nova aba)</span>
+        </a>
+      </div>
+
+      {/* The summary is the card's one link to its details; its hit area stretches over the whole card. */}
+      <button type="button" className={styles.openDetails} onClick={() => onOpen(card)}>
+        <span className={styles.summary}>{card.summary || "(sem resumo)"}</span>
+        <span className="visually-hidden">, ver detalhes</span>
+      </button>
+
+      <dl className={styles.fields}>
+        <div>
+          <dt>Unidade</dt>
+          <dd>{unit}</dd>
+        </div>
+        <div>
+          <dt>Categoria</dt>
+          <dd>{category}</dd>
+        </div>
+        <div>
+          <dt>Responsável</dt>
+          <dd className={card.responsibleName ? undefined : styles.nobody}>{card.responsibleName ?? "Sem responsável"}</dd>
+        </div>
+      </dl>
+
+      <div ref={footRef} className={styles.cardFoot} data-no-drag>
         <button
           type="button"
-          ref={setActivatorNodeRef}
-          className={styles.handle}
-          aria-label={`Arrastar ticket ${card.id}`}
-          {...attributes}
-          {...listeners}
-          {...(keyboardDrag ? {} : { tabIndex: -1, "aria-hidden": true })}
+          className={styles.actionsToggle}
+          aria-expanded={showActions}
+          aria-controls={showActions ? `${ids}-actions` : undefined}
+          onClick={() => setShowActions((shown) => !shown)}
         >
-          <GripIcon />
+          <MoreIcon />
+          {showActions ? "Ocultar ações" : "Exibir ações"}
         </button>
-      </div>
-
-      <p className={styles.where}>
-        <span>{unit}</span>
-        <span className={styles.category}>{category}</span>
-      </p>
-      <p className={styles.summary}>{card.summary || "(sem resumo)"}</p>
-      <p className={styles.responsible}>{responsible}</p>
-
-      <div className={styles.cardFoot}>
-        <a className={styles.chatwoot} href={card.conversationUrl} target="_blank" rel="noopener noreferrer">
-          Abrir no Chatwoot
-          <ExternalIcon />
-          <span className="visually-hidden"> (abre em nova aba)</span>
-        </a>
-        <details className={styles.actions}>
-          <summary className={styles.actionsToggle}>Ações</summary>
-          <div className={styles.actionsPanel}>
-            {open ? (
-              <div className={styles.actionRow}>
-                <label className={controls.field}>
-                  <span className="label">Quem assume</span>
-                  <select
-                    ref={whoRef}
-                    className={controls.select}
-                    value={responsibleId}
-                    onChange={(e) => {
-                      setResponsibleId(e.target.value);
-                      actions.clearTakeError(card);
-                    }}
-                    disabled={busy}
-                    required={requireResponsible}
-                    aria-invalid={takeError || undefined}
-                    aria-describedby={takeError ? `${ids}-take-error` : undefined}
-                  >
-                    <option value="">Escolha…</option>
-                    {teamMembers.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  className={controls.primary}
-                  disabled={busy}
-                  onClick={() => actions.take(card, responsibleId === "" ? null : Number(responsibleId))}
-                >
-                  Assumir
-                </button>
-                {takeError ? (
-                  <p id={`${ids}-take-error`} className={`${controls.error} ${styles.fieldError}`}>
-                    {TAKE_NEEDS_PERSON}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className={styles.actionRow}>
-              <label className={controls.field}>
-                <span className="label" id={`${ids}-category`}>
-                  Categoria
-                </span>
-                <select
-                  className={controls.select}
-                  aria-labelledby={`${ids}-category`}
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  disabled={busy}
-                >
-                  {card.categoryId === null ? <option value="">Sem categoria</option> : null}
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className={controls.button}
-                disabled={busy || categoryId === ""}
-                onClick={() => actions.recategorize(card, Number(categoryId))}
-              >
-                Corrigir
-              </button>
-            </div>
-
-            <div className={styles.actionRow}>
-              <label className={controls.field}>
-                <span className="label">Mover para</span>
-                <select
-                  className={controls.select}
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  disabled={busy}
-                >
-                  <option value="">Escolha…</option>
-                  {BOARD_COLUMNS.filter((c) => c !== card.column).map((c) => (
-                    <option key={c} value={c}>
-                      {COLUMN_LABELS[c]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className={controls.button}
-                disabled={busy || destination === ""}
-                onClick={() => actions.move(card, destination as BoardColumn)}
-              >
-                Mover
-              </button>
-            </div>
-
-            {open ? (
-              <button type="button" className={`${controls.button} ${styles.close}`} disabled={busy} onClick={() => actions.close(card)}>
-                Fechar
-              </button>
-            ) : null}
-          </div>
-        </details>
+        {showActions ? <TicketActions {...props} id={`${ids}-actions`} /> : null}
       </div>
     </article>
+  );
+}
+
+/** What follows the pointer during a drag: the card's face, without its controls. */
+export function CardPreview({ card, generatedAt }: { card: BoardCard; generatedAt: string }) {
+  return (
+    <div className={`${styles.card} ${styles.dragging}`} aria-hidden="true">
+      <p className={styles.opened}>
+        <span className={styles.date}>Aberto {formatOpened(card.openedAt, generatedAt)}</span>
+      </p>
+      <p className={styles.summary}>{card.summary || "(sem resumo)"}</p>
+      <p className={styles.fields}>
+        {card.unitName ?? "Sem unidade"} · {card.categoryLabel ?? "Sem categoria"}
+      </p>
+    </div>
   );
 }

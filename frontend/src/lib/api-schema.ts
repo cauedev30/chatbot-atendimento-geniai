@@ -126,6 +126,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/board/tickets/{ticket_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release */
+        post: operations["release_api_board_tickets__ticket_id__release_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/board/tickets/{ticket_id}/take": {
         parameters: {
             query?: never;
@@ -234,6 +251,13 @@ export interface components {
              * Format: date-time
              */
             lastMovedAt: string;
+            /**
+             * Openedat
+             * Format: date-time
+             */
+            openedAt: string;
+            /** Responsibleid */
+            responsibleId: number | null;
             /** Responsiblename */
             responsibleName: string | null;
             /** Summary */
@@ -658,6 +682,44 @@ export interface operations {
                 "application/json": components["schemas"]["MoveIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    release_api_board_tickets__ticket_id__release_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticket_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             204: {

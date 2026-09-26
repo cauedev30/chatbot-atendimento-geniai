@@ -3,7 +3,15 @@ import itertools
 import pytest
 from sqlalchemy import select
 
-from geniai.app.board import BoardError, load_board, move_card, on_conversation_resolved, recategorize, take_card
+from geniai.app.board import (
+    BoardError,
+    load_board,
+    move_card,
+    on_conversation_resolved,
+    recategorize,
+    release_card,
+    take_card,
+)
 from geniai.app.tickets_repo import NewTicket, TicketRow, create_ticket, get_ticket, move_ticket, update_ticket
 from geniai.db.schema import ticket_move
 from tests.conftest import Harness
@@ -67,6 +75,7 @@ async def test_groups_cards_by_column_and_counts_conversations_still_with_the_bo
     assert card.category_label == "Painel / Não consegue entrar"
     assert card.summary == "Painel não abre"
     assert card.responsible_name is None
+    assert card.opened_at == (await fetch(h, waiting)).opened_at
     assert card.conversation_url == h.chatwoot.conversation_url(card.conversation_id)
     assert board.columns["in_progress"] == []
     assert [m.name for m in board.team_members] == ["Pessoa Suporte 1", "Pessoa Suporte 2"]
@@ -141,6 +150,43 @@ async def test_refuses_an_unknown_person_or_ticket(h: Harness) -> None:
         await take_card(h.deps, ticket_id, 9999)
     with pytest.raises(BoardError, match=r"Ticket não encontrado\."):
         await take_card(h.deps, 9999, h.seed.team["first"])
+
+
+async def test_takes_a_closed_ticket_back_into_in_progress(h: Harness) -> None:
+    ticket_id = await awaiting(h)
+    await move_card(h.deps, ticket_id, "resolved_by_human")
+    await take_card(h.deps, ticket_id, h.seed.team["first"])
+    t = await fetch(h, ticket_id)
+    assert (t.column, t.responsible_id, t.closed_at) == ("in_progress", h.seed.team["first"], None)
+
+
+async def test_shows_the_responsible_person_on_the_card(h: Harness) -> None:
+    ticket_id = await awaiting(h)
+    await take_card(h.deps, ticket_id, h.seed.team["first"])
+    [card] = (await load_board(h.deps)).columns["in_progress"]
+    assert (card.id, card.responsible_id) == (ticket_id, h.seed.team["first"])
+
+
+# release_card
+
+
+async def test_releasing_clears_the_responsible_person_and_goes_back_to_awaiting(h: Harness) -> None:
+    ticket_id = await awaiting(h)
+    await take_card(h.deps, ticket_id, h.seed.team["first"])
+    await release_card(h.deps, ticket_id)
+    t = await fetch(h, ticket_id)
+    assert (t.column, t.responsible_id) == ("awaiting_human", None)
+    async with h.begin() as conn:
+        moves = (await conn.execute(select(ticket_move).where(ticket_move.c.ticket_id == ticket_id))).all()
+    assert (moves[-1].from_column, moves[-1].to_column, moves[-1].actor) == ("in_progress", "awaiting_human", "human")
+
+
+async def test_refuses_to_release_a_ticket_nobody_took(h: Harness) -> None:
+    ticket_id = await awaiting(h)
+    with pytest.raises(BoardError, match=r"Só dá para tirar o responsável de um ticket em atendimento\."):
+        await release_card(h.deps, ticket_id)
+    with pytest.raises(BoardError, match=r"Ticket não encontrado\."):
+        await release_card(h.deps, 9999)
 
 
 # move_card

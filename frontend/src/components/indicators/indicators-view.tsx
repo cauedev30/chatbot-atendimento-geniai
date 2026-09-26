@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import controls from "@/components/ui/controls.module.css";
 import { FocusedAlert } from "@/components/ui/focused-alert";
 import { BOARD_COLUMNS, COLUMN_LABELS, HANDOFF_REASON_LABELS, decimal, minutesLabel, percent } from "@/lib/format";
-import type { IdName, Indicators, IndicatorsQuery, IndicatorsResponse } from "@/lib/types";
+import type { BoardColumn, IdName, Indicators, IndicatorsQuery, IndicatorsResponse } from "@/lib/types";
+import { CountTable } from "./charts";
 import styles from "./indicators.module.css";
+import { VolumeView } from "./volume-view";
 
 /** URL of this page with the same period and unit and the given normalization. */
 export function indicatorsHref(q: IndicatorsQuery, normalize: boolean): string {
@@ -16,13 +18,20 @@ export function indicatorsHref(q: IndicatorsQuery, normalize: boolean): string {
   return `/indicators?${params.toString()}`;
 }
 
+/**
+ * Every indicator, always open, one subject per row: the four key numbers, then each subject under its own
+ * heading, with a one-line explanation under it. Each subject gets the chart form its data asks for: parts
+ * of a whole, ranked bars, columns over time, a heatmap, paired bars, progress bars and rings.
+ */
 export function IndicatorsView({ response }: { response: IndicatorsResponse }) {
   const { query, units, data } = response;
   return (
     <div className={styles.page}>
       <Filters query={query} units={units} />
-      <Volume data={data} />
+      <Summary data={data} query={query} />
       <Outcomes data={data} />
+      <Handoffs data={data} />
+      <Volume data={data} query={query} />
       <Heatmap data={data} query={query} />
       <Time data={data} />
       <FaqHealth data={data} />
@@ -78,155 +87,129 @@ export function Filters({ query, units }: { query: FilterQuery; units: IdName[] 
   );
 }
 
-function Block({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+/** "26/08 a 24/09/2026" from two ISO dates. */
+function periodLabel(from: string, to: string): string {
+  const [fy, fm, fd] = from.split("-");
+  const [ty, tm, td] = to.split("-");
+  return fy === ty ? `${fd}/${fm} a ${td}/${tm}/${ty}` : `${fd}/${fm}/${fy} a ${td}/${tm}/${ty}`;
+}
+
+/** One subject of the page: its heading, a one-line explanation, then the content. */
+function Block({ id, title, note, children }: { id: string; title: string; note?: string; children: ReactNode }) {
   return (
-    <section className={styles.block} aria-labelledby={id}>
-      <h2 id={id} className={styles.heading}>
-        {title}
-      </h2>
+    <section className={styles.panel} aria-labelledby={id}>
+      <header className={styles.panelHead}>
+        <h2 id={id} className={styles.heading}>
+          {title}
+        </h2>
+        {note ? <p className={styles.panelNote}>{note}</p> : null}
+      </header>
       {children}
     </section>
   );
 }
 
-function Stats({ children }: { children: ReactNode }) {
-  return <dl className={styles.stats}>{children}</dl>;
-}
-
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div className={styles.stat}>
-      <dt className="label">{label}</dt>
+      <dt className={styles.statLabel}>{label}</dt>
       <dd className={`figure ${styles.statValue}`}>{value}</dd>
       {note ? <dd className={styles.statNote}>{note}</dd> : null}
     </div>
   );
 }
 
-interface Row {
-  key: string | number;
-  label: string;
-  count: number;
-  extra?: string[];
-}
-
-/** A table whose count column carries a thin single-hue bar, scaled to the table's largest count. */
-function CountTable({ caption, headers, rows, empty }: { caption: string; headers: string[]; rows: Row[]; empty: string }) {
-  const max = Math.max(0, ...rows.map((r) => r.count));
-  const stacked = headers.length > 2;
+function Summary({ data, query }: { data: Indicators; query: IndicatorsQuery }) {
+  const { volume, outcomes, time } = data;
   return (
-    <div className={styles.scroll}>
-    <table className={`${styles.table} ${stacked ? styles.stack : ""}`}>
-      <caption className={styles.caption}>{caption}</caption>
-      <thead>
-        <tr>
-          {headers.map((h, i) => (
-            <th key={h} scope="col" className={i > 0 ? styles.num : undefined}>
-              {h}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.length === 0 ? (
-          <tr>
-            <td colSpan={headers.length} className={styles.none}>
-              {empty}
-            </td>
-          </tr>
-        ) : (
-          rows.map((r) => (
-            <tr key={r.key}>
-              <th scope="row">{r.label}</th>
-              <td className={`${styles.num} ${styles.countCell}`} data-label={headers[1]}>
-                <span className={styles.bar} aria-hidden="true">
-                  <span style={{ width: `${max === 0 ? 0 : (r.count / max) * 100}%` }} />
-                </span>
-                <span className="figure">{r.count}</span>
-              </td>
-              {(r.extra ?? []).map((cell, i) => (
-                <td key={i} className={`${styles.num} figure`} data-label={headers[i + 2]}>
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))
-        )}
-      </tbody>
-    </table>
-    </div>
+    <section className={styles.summaryBlock} aria-labelledby="block-summary">
+      <h2 id="block-summary" className={styles.summaryTitle}>
+        Resumo de {periodLabel(query.fromDate, query.toDate)}
+      </h2>
+      <dl className={styles.stats}>
+        <Stat label="Tickets no período" value={String(volume.total)} />
+        <Stat
+          label="Resolvidos pelo bot"
+          value={percent(outcomes.botResolutionRate)}
+          note={`de ${outcomes.identifiedReached} identificados que saíram da triagem; ${percent(outcomes.noResponseShare)} ficaram sem resposta`}
+        />
+        <Stat label="Espera até alguém assumir" value={minutesLabel(time.waitToTakeMedianMin)} note="mediana" />
+        <Stat label="Da abertura ao fechamento" value={minutesLabel(time.timeToCloseMedianMin)} note="mediana" />
+      </dl>
+    </section>
   );
 }
 
-function Volume({ data }: { data: Indicators }) {
-  const v = data.volume;
+/** The board's five columns as one bar split into parts of the whole, a legend table under it. */
+function Outcomes({ data }: { data: Indicators }) {
+  const o = data.outcomes;
+  const reached = BOARD_COLUMNS.reduce((sum, c) => sum + o.byColumn[c], 0);
+  const shareOf = (c: BoardColumn) => (reached === 0 ? null : o.byColumn[c] / reached);
   return (
-    <Block id="block-volume" title="1. Volume">
-      <Stats>
-        <Stat label="Total de tickets no período" value={String(v.total)} />
-      </Stats>
-      <div className={styles.grid}>
-        <CountTable
-          caption="Por semana"
-          headers={["Semana (início)", "Tickets"]}
-          rows={v.byWeek.map((r) => ({ key: r.period, label: r.period, count: r.count }))}
-          empty="Nenhum ticket no período."
-        />
-        <CountTable
-          caption="Por mês"
-          headers={["Mês", "Tickets"]}
-          rows={v.byMonth.map((r) => ({ key: r.period, label: r.period, count: r.count }))}
-          empty="Nenhum ticket no período."
-        />
-        <CountTable
-          caption="Por unidade"
-          headers={["Unidade", "Tickets"]}
-          rows={v.byUnit.map((r) => ({ key: r.unitId ?? "none", label: r.unitName ?? "Sem unidade", count: r.count }))}
-          empty="Nenhum ticket no período."
-        />
-        <CountTable
-          caption="Por categoria"
-          headers={["Categoria", "Tickets"]}
-          rows={v.byCategory.map((r) => ({ key: r.categoryId ?? "none", label: r.label ?? "Sem categoria", count: r.count }))}
-          empty="Nenhum ticket no período."
-        />
-      </div>
+    <Block id="block-outcomes" title="Onde os tickets estão" note="Todos os tickets que saíram da triagem, inclusive de números não identificados.">
+      {reached === 0 ? (
+        <p className={styles.none}>Nenhum ticket saiu da triagem.</p>
+      ) : (
+        <div className={styles.split} aria-hidden="true">
+          {BOARD_COLUMNS.filter((c) => o.byColumn[c] > 0).map((c) => (
+            <span
+              key={c}
+              className={styles.part}
+              data-column={c}
+              style={{ flexGrow: o.byColumn[c] }}
+              title={`${COLUMN_LABELS[c]}: ${o.byColumn[c]} (${percent(shareOf(c))})`}
+            />
+          ))}
+        </div>
+      )}
+      <table className={`${styles.table} ${styles.legend}`}>
+        <caption className="visually-hidden">Tickets por coluna do quadro</caption>
+        <thead>
+          <tr>
+            <th scope="col">Coluna</th>
+            <th scope="col" className={styles.num}>
+              Tickets
+            </th>
+            <th scope="col" className={styles.num}>
+              Parcela
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {BOARD_COLUMNS.map((c) => (
+            <tr key={c}>
+              <th scope="row">
+                <span className={styles.swatch} data-column={c} aria-hidden="true" />
+                {COLUMN_LABELS[c]}
+              </th>
+              <td className={`${styles.num} figure`}>{o.byColumn[c]}</td>
+              <td className={`${styles.num} figure`}>{percent(shareOf(c))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </Block>
   );
 }
 
-function Outcomes({ data }: { data: Indicators }) {
+function Handoffs({ data }: { data: Indicators }) {
   const o = data.outcomes;
-  const reached = BOARD_COLUMNS.reduce((sum, c) => sum + o.byColumn[c], 0);
   return (
-    <Block id="block-outcomes" title="2. Resultados">
-      <Stats>
-        <Stat
-          label="Taxa de resolução pelo bot"
-          value={percent(o.botResolutionRate)}
-          note={`de ${o.identifiedReached} tickets identificados que saíram da triagem`}
-        />
-        <Stat label="Sem resposta" value={percent(o.noResponseShare)} note="não conta como resolvido pelo bot" />
-      </Stats>
-      <div className={styles.grid}>
-        <CountTable
-          caption="Onde os tickets estão"
-          headers={["Coluna", "Tickets", "Parcela"]}
-          rows={BOARD_COLUMNS.map((c) => ({
-            key: c,
-            label: COLUMN_LABELS[c],
-            count: o.byColumn[c],
-            extra: [percent(reached === 0 ? null : o.byColumn[c] / reached)],
-          }))}
-          empty="Nenhum ticket saiu da triagem."
-        />
-        <CountTable
-          caption="Por que passaram para humano"
-          headers={["Motivo da passagem para humano", "Tickets"]}
-          rows={o.byHandoffReason.map((r) => ({ key: r.reason, label: HANDOFF_REASON_LABELS[r.reason], count: r.count }))}
-          empty="Nenhuma passagem para humano no período."
-        />
-      </div>
+    <Block id="block-handoffs" title="Por que passaram para humano" note="O motivo de cada ticket que o bot passou para uma pessoa.">
+      <CountTable
+        caption="Motivos da passagem para humano"
+        headers={["Motivo", "Tickets"]}
+        rows={o.byHandoffReason.map((r) => ({ key: r.reason, label: HANDOFF_REASON_LABELS[r.reason], count: r.count }))}
+        empty="Nenhuma passagem para humano no período."
+      />
+    </Block>
+  );
+}
+
+function Volume({ data, query }: { data: Indicators; query: IndicatorsQuery }) {
+  return (
+    <Block id="block-volume" title="Volume" note={`${data.volume.total} tickets abertos no período. Escolha como ver.`}>
+      <VolumeView volume={data.volume} fromDate={query.fromDate} toDate={query.toDate} />
     </Block>
   );
 }
@@ -254,13 +237,13 @@ function Heatmap({ data, query }: { data: Indicators; query: IndicatorsQuery }) 
   const max = Math.max(0, ...rows.flatMap((r) => categories.map((c) => valueOf(r, c.id) ?? 0)));
   const inGrid = cells.reduce((sum, c) => sum + c.count, 0);
   return (
-    <Block id="block-heatmap" title="3. Unidade × categoria">
+    <Block id="block-heatmap" title="Unidade × categoria" note="Quais unidades sofrem com cada problema.">
       <div className={styles.heatHead}>
         <p className={styles.explain}>
           {query.normalize
             ? "Tickets divididos pelo número de atendentes ativos de cada unidade."
             : "Quantidade de tickets por unidade e categoria."}{" "}
-          Quanto mais forte o teal, maior o valor.
+          Quanto mais forte a cor, maior o valor.
           {query.normalize && unknownRow ? " A linha Sem unidade não tem atendentes para dividir." : null}
           {uncategorized > 0 ? (
             <>
@@ -326,76 +309,145 @@ export function heatFill(level: number): { alpha: number; dark: boolean } {
   return { alpha: 0.75 + ((level - 0.7) / 0.3) * 0.1, dark: true };
 }
 
+/** Median and mean side by side for each measure, on one shared scale. */
 function Time({ data }: { data: Indicators }) {
   const t = data.time;
   const rows = [
     ["Aguardando até alguém assumir", t.waitToTakeMedianMin, t.waitToTakeAvgMin],
     ["Da abertura ao fechamento", t.timeToCloseMedianMin, t.timeToCloseAvgMin],
   ] as const;
+  const max = Math.max(0, ...rows.flatMap(([, median, avg]) => [median ?? 0, avg ?? 0]));
+  const width = (n: number | null) => `${max === 0 || n === null ? 0 : (n / max) * 100}%`;
   return (
-    <Block id="block-time" title="4. Tempo">
-      <p className={styles.explain}>
-        A espera conta só os tickets que alguém já assumiu no período; o fechamento, só os já fechados. Tickets
-        ainda abertos não entram.
+    <Block
+      id="block-time"
+      title="Tempo"
+      note="A espera conta só os tickets que alguém já assumiu no período; o fechamento, só os já fechados. Tickets ainda abertos não entram."
+    >
+      <p className={styles.keys} aria-hidden="true">
+        <span className={styles.key}>
+          <span className={styles.keyMedian} />
+          Mediana: o tempo típico
+        </span>
+        <span className={styles.key}>
+          <span className={styles.keyMean} />
+          Média: puxada pelos casos mais longos
+        </span>
       </p>
-      <div className={styles.scroll}>
-      <table className={styles.table}>
-        <thead>
+      <table className={`${styles.table} ${styles.pairs}`}>
+        <thead className="visually-hidden">
           <tr>
             <th scope="col">Medida</th>
-            <th scope="col" className={styles.num}>
-              Mediana
-            </th>
-            <th scope="col" className={styles.num}>
-              Média
-            </th>
+            <th scope="col">Mediana</th>
+            <th scope="col">Média</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(([label, median, avg]) => (
             <tr key={label}>
               <th scope="row">{label}</th>
-              <td className={`${styles.num} figure`}>{minutesLabel(median)}</td>
-              <td className={`${styles.num} figure`}>{minutesLabel(avg)}</td>
+              <td>
+                <span className={styles.pairBar} aria-hidden="true">
+                  <span className={styles.median} style={{ width: width(median) }} />
+                </span>
+                <span className="figure">{minutesLabel(median)}</span>
+              </td>
+              <td>
+                <span className={styles.pairBar} aria-hidden="true">
+                  <span className={styles.mean} style={{ width: width(avg) }} />
+                </span>
+                <span className="figure">{minutesLabel(avg)}</span>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
-      </div>
     </Block>
   );
 }
 
+/** Each FAQ item: how often it was sent, and a progress bar of how many of those sends solved the case. */
 function FaqHealth({ data }: { data: Indicators }) {
+  const used = data.faqHealth.reduce((sum, f) => sum + f.used, 0);
+  const items = data.faqHealth.length;
   return (
-    <Block id="block-faq" title="5. Saúde do FAQ">
-      <CountTable
-        caption="Cada item do FAQ: quantas vezes foi enviado e quantas resolveu"
-        headers={["Item do FAQ", "Vezes usado", "Resolveu", "Parcela resolvida"]}
-        rows={data.faqHealth.map((f) => ({
-          key: f.faqItemId,
-          label: f.title,
-          count: f.used,
-          extra: [String(f.resolved), percent(f.resolvedShare)],
-        }))}
-        empty="Nenhum item ativo no FAQ."
-      />
+    <Block
+      id="block-faq"
+      title="Saúde do FAQ"
+      note={`${items} ${items === 1 ? "item" : "itens"}, ${used} ${used === 1 ? "envio" : "envios"} no período. A barra mostra quantos envios resolveram.`}
+    >
+      {items === 0 ? (
+        <p className={styles.none}>Nenhum item ativo no FAQ.</p>
+      ) : (
+        <table className={`${styles.table} ${styles.progressTable}`}>
+          <caption className="visually-hidden">Cada item do FAQ: quantas vezes foi enviado e quantas resolveu</caption>
+          <thead>
+            <tr>
+              <th scope="col">Item do FAQ</th>
+              <th scope="col">Resolveu</th>
+              <th scope="col" className={styles.num}>
+                Parcela resolvida
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.faqHealth.map((f) => (
+              <tr key={f.faqItemId}>
+                <th scope="row">{f.title}</th>
+                <td>
+                  <span className={styles.progress} aria-hidden="true">
+                    <span style={{ width: `${(f.resolvedShare ?? 0) * 100}%` }} />
+                  </span>
+                  <span className={`figure ${styles.progressText}`}>
+                    {f.used === 0 ? "não foi enviado" : `${f.resolved} de ${f.used} ${f.used === 1 ? "envio" : "envios"}`}
+                  </span>
+                </td>
+                <td className={`${styles.num} figure`}>{percent(f.resolvedShare)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </Block>
+  );
+}
+
+/** A percentage as a ring: the filled arc is the share, the value beside it. */
+function Ring({ label, share, note }: { label: string; share: number | null; note: string }) {
+  const r = 34;
+  const length = 2 * Math.PI * r;
+  return (
+    <figure className={styles.ring}>
+      <svg width="88" height="88" viewBox="0 0 88 88" aria-hidden="true" focusable="false">
+        <circle cx="44" cy="44" r={r} className={styles.ringTrack} />
+        {share ? (
+          <circle
+            cx="44"
+            cy="44"
+            r={r}
+            className={styles.ringFill}
+            strokeDasharray={`${share * length} ${length}`}
+            transform="rotate(-90 44 44)"
+          />
+        ) : null}
+      </svg>
+      <figcaption className={styles.ringText}>
+        <span className={styles.ringLabel}>{label}</span>
+        <span className={`figure ${styles.ringValue}`}>{percent(share)}</span>
+        <span className={styles.statNote}>{note}</span>
+      </figcaption>
+    </figure>
   );
 }
 
 function AgentHealth({ data }: { data: Indicators }) {
   const a = data.agentHealth;
   return (
-    <Block id="block-agent" title="6. Saúde do agente">
-      <Stats>
-        <Stat
-          label="Categorias corrigidas por humanos"
-          value={percent(a.correctedShare)}
-          note={`de ${a.classified} tickets classificados pelo bot`}
-        />
-        <Stat label='Classificados como "Outros"' value={percent(a.otherShare)} note="quando nenhuma categoria serviu" />
-      </Stats>
+    <Block id="block-agent" title="Saúde do agente" note="Quanto o bot erra ao classificar. Quanto menor, melhor.">
+      <div className={styles.rings}>
+        <Ring label="Categorias corrigidas por humanos" share={a.correctedShare} note={`de ${a.classified} tickets classificados pelo bot`} />
+        <Ring label='Classificados como "Outros"' share={a.otherShare} note="quando nenhuma categoria serviu" />
+      </div>
     </Block>
   );
 }

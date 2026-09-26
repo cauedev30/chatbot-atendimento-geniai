@@ -1,16 +1,14 @@
 "use client";
 
 import {
-  closestCenter,
   DndContext,
-  KeyboardSensor,
+  DragOverlay,
   PointerSensor,
   useDroppable,
   useSensor,
   useSensors,
   pointerWithin,
   type Announcements,
-  type CollisionDetection,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
@@ -19,8 +17,9 @@ import { ApiError, apiPost, NETWORK_ERROR } from "@/lib/api";
 import { BOARD_COLUMNS, COLUMN_LABELS, triageCounter } from "@/lib/format";
 import type { Board, BoardCard, BoardColumn } from "@/lib/types";
 import styles from "./board.module.css";
-import { columnKeyboardCoordinates } from "./column-keyboard";
-import { TicketCard, type CardActions } from "./ticket-card";
+import type { CardActions } from "./ticket-actions";
+import { CardPreview, TicketCard } from "./ticket-card";
+import { TicketDetails } from "./ticket-details";
 
 const REFRESH_MS = 60_000;
 /** Board width under which the columns become tabs (the container query in board.module.css). */
@@ -34,10 +33,10 @@ function ordered(column: BoardColumn, cards: BoardCard[]): BoardCard[] {
   return [...cards].sort((a, b) => Date.parse(a.lastMovedAt) - Date.parse(b.lastMovedAt));
 }
 
-function withMove(columns: Columns, cardId: number, to: BoardColumn): Columns {
+function withMove(columns: Columns, cardId: number, to: BoardColumn, patch: Partial<BoardCard> = {}): Columns {
   const next = Object.fromEntries(BOARD_COLUMNS.map((c) => [c, columns[c].filter((x) => x.id !== cardId)])) as Columns;
   const card = BOARD_COLUMNS.flatMap((c) => columns[c]).find((x) => x.id === cardId);
-  if (card) next[to] = [{ ...card, column: to }, ...next[to]];
+  if (card) next[to] = [{ ...card, ...patch, column: to }, ...next[to]];
   return next;
 }
 
@@ -54,11 +53,8 @@ const ANNOUNCEMENTS: Announcements = {
   onDragCancel: ({ active }) => `Movimento do ticket ${active.id} cancelado.`,
 };
 
-/** A pointer drops where the pointer is (cards are wider than the narrow columns); the keyboard, by center. */
-const collision: CollisionDetection = (args) => (args.pointerCoordinates ? pointerWithin(args) : closestCenter(args));
-
-const INSTRUCTIONS =
-  "Para mover um ticket: foque o botão de arrastar, aperte espaço, use as setas para a esquerda e para a direita e aperte espaço de novo para soltar. Esc cancela.";
+/** Dragging is for the mouse and touch; on the keyboard, "Mover para" in the card's actions moves a ticket. */
+const INSTRUCTIONS = "Para mover um ticket pelo teclado, use Exibir ações e depois Mover para.";
 
 /** True while the board is narrow enough to show one column at a time. */
 function useNarrow(ref: RefObject<HTMLElement | null>): boolean {
@@ -83,11 +79,12 @@ export function BoardView({ board }: { board: Board }) {
   const [columns, setColumns] = useState(board.columns);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState("");
-  const [takeError, setTakeError] = useState<number | null>(null);
   const focusCard = useRef<number | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<number>>(new Set());
   const [landed, setLanded] = useState<number | null>(null);
   const [shown, setShown] = useState<BoardColumn>("awaiting_human");
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const [draggedId, setDraggedId] = useState<number | null>(null);
 
   // A router.refresh() brings a new board from the server: it replaces local state.
   if (loaded !== board) {
@@ -107,6 +104,12 @@ export function BoardView({ board }: { board: Board }) {
     if (id === null) return;
     focusCard.current = null;
     const root = boardRef.current;
+    // With the details open, the focus stays in them.
+    const sheetTitle = root?.querySelector<HTMLElement>("#ticket-details-title");
+    if (sheetTitle) {
+      sheetTitle.focus();
+      return;
+    }
     const cardEl = root?.querySelector<HTMLElement>(`[data-card-id="${id}"]`);
     const target =
       cardEl && !(narrow && cardEl.closest('[data-shown="false"]'))
@@ -115,19 +118,23 @@ export function BoardView({ board }: { board: Board }) {
     target?.focus();
   }, [busy, columns, shown, narrow]);
 
+  // The whole card drags; a press that moves less than 6 px is a click, which opens the details.
   const pointer = useSensor(PointerSensor, { activationConstraint: { distance: 6 } });
-  const keyboard = useSensor(KeyboardSensor, { coordinateGetter: columnKeyboardCoordinates });
-  // One column at a time: a keyboard drag has nowhere visible to go, and "Mover para" covers it.
-  const sensors = useSensors(pointer, narrow ? null : keyboard);
+  const sensors = useSensors(pointer);
 
-  async function run(card: BoardCard, request: () => Promise<void>, done: string, optimistic?: BoardColumn) {
+  async function run(
+    card: BoardCard,
+    request: () => Promise<void>,
+    done: string,
+    optimistic?: BoardColumn,
+    patch?: Partial<BoardCard>,
+  ) {
     const before = columns;
     setError(null);
     setStatus("");
-    setTakeError(null);
     setBusy((s) => new Set(s).add(card.id));
     if (optimistic) {
-      setColumns(withMove(columns, card.id, optimistic));
+      setColumns(withMove(columns, card.id, optimistic, patch));
       setLanded(card.id);
     }
     try {
@@ -150,27 +157,26 @@ export function BoardView({ board }: { board: Board }) {
 
   const actions: CardActions = {
     take(card, responsibleId) {
-      if (responsibleId === null && board.requireResponsible) {
-        setTakeError(card.id);
-        return;
-      }
       const who = board.teamMembers.find((m) => m.id === responsibleId)?.name;
       void run(
         card,
         () => apiPost(`/api/board/tickets/${card.id}/take`, { responsibleId }),
         who ? `Ticket ${card.id} assumido por ${who}.` : `Ticket ${card.id} assumido.`,
         card.column === "in_progress" ? undefined : "in_progress",
+        { responsibleId, responsibleName: who ?? null },
       );
     },
-    clearTakeError(card) {
-      if (takeError === card.id) setTakeError(null);
+    release(card) {
+      void run(
+        card,
+        () => apiPost(`/api/board/tickets/${card.id}/release`, {}),
+        `Ticket ${card.id} sem responsável, de volta em ${COLUMN_LABELS.awaiting_human}.`,
+        "awaiting_human",
+        { responsibleId: null, responsibleName: null },
+      );
     },
     recategorize(card, categoryId) {
       const label = board.categories.find((c) => c.id === categoryId)?.label ?? "a categoria escolhida";
-      if (categoryId === card.categoryId) {
-        setStatus(`O ticket ${card.id} já está em ${label}.`);
-        return;
-      }
       void run(
         card,
         () => apiPost(`/api/board/tickets/${card.id}/category`, { categoryId }),
@@ -189,13 +195,14 @@ export function BoardView({ board }: { board: Board }) {
       void run(
         card,
         () => apiPost(`/api/board/tickets/${card.id}/close`),
-        `Ticket ${card.id} fechado, em ${COLUMN_LABELS.resolved_by_human}.`,
+        `Ticket ${card.id} resolvido, em ${COLUMN_LABELS.resolved_by_human}.`,
         "resolved_by_human",
       );
     },
   };
 
   function onDragEnd({ active, over }: DragEndEvent) {
+    setDraggedId(null);
     if (!over) return;
     const card = findCard(columns, Number(active.id));
     const to = over.id as BoardColumn;
@@ -204,20 +211,17 @@ export function BoardView({ board }: { board: Board }) {
 
   const waitingIds = ordered("awaiting_human", columns.awaiting_human).map((c) => c.id);
   const longestWait = waitingIds[0];
+  const detail = detailId === null ? undefined : findCard(columns, detailId);
+  const dragged = draggedId === null ? undefined : findCard(columns, draggedId);
 
   return (
     <div className={styles.board} ref={boardRef}>
       <div className={styles.status}>
         <p className={styles.counter}>
-          <span aria-hidden="true" className={`figure ${styles.counterFigure}`}>
-            {board.triageCount}
-          </span>
-          <span aria-hidden="true" className={styles.counterText}>
-            {triageCounter(board.triageCount).replace(/^\d+ /, "")}
-          </span>
-          <span className="visually-hidden">{triageCounter(board.triageCount)}</span>
+          <span className={styles.live} aria-hidden="true" />
+          {triageCounter(board.triageCount)}
         </p>
-        <p className={styles.hint}>Atualiza sozinho a cada minuto.</p>
+        <p className={styles.hint}>Atualiza sozinho a cada minuto</p>
       </div>
 
       <p role="status" aria-label="Resultado da ação" className="visually-hidden">
@@ -240,10 +244,13 @@ export function BoardView({ board }: { board: Board }) {
             type="button"
             className={styles.switch}
             aria-pressed={shown === column}
-            onClick={() => setShown(column)}
+            onClick={(e) => {
+              setShown(column);
+              e.currentTarget.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+            }}
           >
             <span>{COLUMN_LABELS[column]}</span>
-            <span className="figure">{columns[column].length}</span>
+            <span className={`figure ${styles.switchCount}`}>{columns[column].length}</span>
           </button>
         ))}
       </nav>
@@ -251,8 +258,10 @@ export function BoardView({ board }: { board: Board }) {
       <DndContext
         id="board-dnd"
         sensors={sensors}
-        collisionDetection={collision}
+        collisionDetection={pointerWithin}
+        onDragStart={({ active }) => setDraggedId(Number(active.id))}
         onDragEnd={onDragEnd}
+        onDragCancel={() => setDraggedId(null)}
         accessibility={{ announcements: ANNOUNCEMENTS, screenReaderInstructions: { draggable: INSTRUCTIONS } }}
       >
         <div className={styles.columns}>
@@ -266,18 +275,35 @@ export function BoardView({ board }: { board: Board }) {
                   longestWait={card.id === longestWait}
                   landed={card.id === landed}
                   busy={busy.has(card.id)}
-                  keyboardDrag={!narrow}
-                  takeError={takeError === card.id}
                   requireResponsible={board.requireResponsible}
                   teamMembers={board.teamMembers}
                   categories={board.categories}
                   actions={actions}
+                  onOpen={(c) => setDetailId(c.id)}
                 />
               ))}
             </Column>
           ))}
         </div>
+        {/* The copy that follows the pointer: the columns scroll, so the card itself would be clipped. */}
+        <DragOverlay dropAnimation={null}>
+          {dragged ? <CardPreview card={dragged} generatedAt={board.generatedAt} /> : null}
+        </DragOverlay>
       </DndContext>
+
+      {detail ? (
+        <TicketDetails
+          key={detail.id}
+          card={detail}
+          generatedAt={board.generatedAt}
+          busy={busy.has(detail.id)}
+          requireResponsible={board.requireResponsible}
+          teamMembers={board.teamMembers}
+          categories={board.categories}
+          actions={actions}
+          onClose={() => setDetailId(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -294,7 +320,7 @@ function Column(props: { column: BoardColumn; count: number; shown: boolean; chi
       data-shown={shown}
     >
       <h2 id={headingId} className={styles.columnHead} tabIndex={-1}>
-        <span>{COLUMN_LABELS[column]}</span>
+        <span className={styles.columnName}>{COLUMN_LABELS[column]}</span>
         <span className={`figure ${styles.columnCount}`}>{count}</span>
       </h2>
       <div className={styles.cards}>

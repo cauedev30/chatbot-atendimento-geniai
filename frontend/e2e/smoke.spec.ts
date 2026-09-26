@@ -43,10 +43,9 @@ test("login, board, drag a card to Em atendimento, indicators", async ({ page })
   const card = waiting.getByRole("article").filter({ hasText: summary });
   await expect(card).toBeVisible();
 
-  // Drag by the handle and drop on Em atendimento, level with the card (every column is full height).
-  const handle = card.getByRole("button", { name: /^Arrastar ticket/ });
-  await handle.scrollIntoViewIfNeeded();
-  const from = (await handle.boundingBox())!;
+  // The whole card drags: drop it on Em atendimento, level with the card (every column is full height).
+  await card.scrollIntoViewIfNeeded();
+  const from = (await card.boundingBox())!;
   const to = (await inProgress.boundingBox())!;
   const y = from.y + from.height / 2;
   await page.mouse.move(from.x + from.width / 2, y);
@@ -58,6 +57,8 @@ test("login, board, drag a card to Em atendimento, indicators", async ({ page })
   await expect(inProgress.getByRole("article").filter({ hasText: summary })).toBeVisible();
   await expect(waiting.getByRole("article").filter({ hasText: summary })).toHaveCount(0);
   await expect(page.locator("main [role=alert]")).toHaveCount(0);
+  // A drag is not a click: the details stay closed.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   // The move is the server's truth, not only the screen's.
   await page.reload();
@@ -67,6 +68,6 @@ test("login, board, drag a card to Em atendimento, indicators", async ({ page })
 
   await page.getByRole("link", { name: "Indicadores" }).click();
   await expect(page).toHaveURL(/\/indicators/);
-  await expect(page.getByRole("heading", { level: 2, name: "1. Volume" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "6. Saúde do agente" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Onde os tickets estão" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Saúde do agente" })).toBeVisible();
 });

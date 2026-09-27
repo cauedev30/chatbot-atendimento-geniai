@@ -18,10 +18,8 @@ CTX = TurnContext(
             id=10, category_id=1, title="Redefinir senha do painel", applies_when="Não consegue entrar no painel."
         )
     ],
-    messages=[
-        PromptMessage(author="bot", text="Olá! Falo com Ana Exemplo?"),
-        PromptMessage(author="customer", text="sim, não consigo entrar no painel"),
-    ],
+    messages=[PromptMessage(author="bot", text="Olá! Falo com Ana Exemplo?")],
+    new_messages=[PromptMessage(author="customer", text="sim, não consigo entrar no painel")],
     state=TriageState(faq_attempted=False, clarifications_asked=0, unclear_feedback_reasks=0, media_prompts=0),
     max_clarifications=2,
 )
@@ -86,10 +84,8 @@ def test_the_user_payload_has_the_documented_shape() -> None:
             }
         ],
         "state": {"faq_attempted": False, "clarifications_asked": 0, "max_clarifications": 2},
-        "conversation": [
-            {"author": "bot", "text": "Olá! Falo com Ana Exemplo?"},
-            {"author": "customer", "text": "sim, não consigo entrar no painel"},
-        ],
+        "conversation": [{"author": "bot", "text": "Olá! Falo com Ana Exemplo?"}],
+        "new_messages": ["sim, não consigo entrar no painel"],
     }
     # Accents kept, two-space indent, no trailing spaces.
     assert '  "registered": {\n    "name": "Ana Exemplo",' in payload

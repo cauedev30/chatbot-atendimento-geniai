@@ -163,7 +163,12 @@ For each customer turn, the first rule that applies wins:
 
 **Input:** system prompt (role, tone, the rules above), the active category list, the active FAQ
 entries (id, category, title and "when it applies" description — the verbatim answer text stays in
-code), the customer's registered name and unit, the triage messages so far and the counters' state.
+code), the customer's registered name and unit, the counters' state, the triage conversation the bot
+has already answered (`conversation`) and, after it, the customer messages of this turn
+(`new_messages`: those after the last message a turn has read). The system prompt tells the model to
+decide the turn from `new_messages`. A message that arrives while the model is working on a turn is
+stored before that turn's reply, so in the plain conversation it would look answered; sending it in
+`new_messages` keeps it visibly pending for the next turn.
 
 **Output** (validated with Pydantic; categories and FAQ ids must come from the lists sent in the
 input):

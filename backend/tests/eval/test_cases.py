@@ -17,10 +17,10 @@ def test_only_uses_labels_that_exist_in_the_catalog() -> None:
             assert c.expected.faq in faqs, c.id
 
 
-def test_builds_a_context_that_starts_with_the_greeting() -> None:
+def test_builds_a_context_with_the_greeting_answered_and_the_customer_message_new() -> None:
     ctx = context_for(CASES[0], build_catalog())
-    assert ctx.messages[0].author == "bot"
-    assert ctx.messages[-1].text == CASES[0].customer[0]
+    assert [m.author for m in ctx.messages] == ["bot"]
+    assert [m.text for m in ctx.new_messages] == list(CASES[0].customer)
 
 
 def test_the_catalog_has_stable_ids() -> None:

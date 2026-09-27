@@ -29,13 +29,16 @@ class PromptMessage:
 
 @dataclass(frozen=True)
 class TurnContext:
-    """Everything the LLM sees for one customer turn (spec §6). FAQ answer texts are never included."""
+    """Everything the LLM sees for one customer turn (spec §6). FAQ answer texts are never included.
+    messages is the conversation the bot already answered; new_messages are the customer messages of
+    this turn, which may have been stored before the bot's last reply when they arrived during it."""
 
     attendant_name: str
     unit_name: str
     categories: list[PromptCategory]
     faq_items: list[PromptFaqItem]
     messages: list[PromptMessage]
+    new_messages: list[PromptMessage]
     state: TriageState
     max_clarifications: int
 
@@ -45,6 +48,8 @@ Code controls the conversation. Your only job is to read the conversation and re
 You never execute anything and never promise to execute anything.
 
 The customers are staff at client units. They were identified by phone number, and the bot asked them to confirm their registered name and unit.
+
+The input has "conversation", the triage so far, which the bot has already answered, and "new_messages", the customer's messages the bot has not answered yet, in the order they were sent. This turn is about new_messages: decide every field from them, reading them in the light of the conversation. A new message may have been sent while the bot was writing its last reply, so it can raise something the conversation does not show as answered.
 
 Return exactly this JSON object and nothing else:
 {"human_requested": boolean, "registration_mismatch": boolean, "off_topic": boolean, "category_id": number, "faq_item_id": number | null, "faq_feedback": "resolved" | "not_resolved" | "unclear" | null, "needs_clarification": boolean, "summary": string, "reply": string}
@@ -76,6 +81,7 @@ def build_user_payload(ctx: TurnContext) -> str:
                 "max_clarifications": ctx.max_clarifications,
             },
             "conversation": [{"author": m.author, "text": m.text} for m in ctx.messages],
+            "new_messages": [m.text for m in ctx.new_messages],
         },
         ensure_ascii=False,
         indent=2,

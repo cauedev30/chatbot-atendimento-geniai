@@ -1,5 +1,6 @@
 import asyncio
 import itertools
+import json
 
 import pytest
 from sqlalchemy import select
@@ -300,6 +301,29 @@ async def test_a_turn_that_would_close_the_ticket_yields_to_a_message_that_arriv
     assert await process_turn(h.deps, conversation_id) == "reask_feedback"
     assert "sim, resolveu" in h.llm.requests[-1].user
     assert "a impressora também parou" in h.llm.requests[-1].user
+
+
+async def test_a_message_that_arrived_during_a_turn_reaches_the_llm_as_new_in_the_next_turn(
+    h: Harness, chat: Chat
+) -> None:
+    conversation_id = await chat.greeted()
+    await chat.receive(conversation_id, "demora, o painel ficou vago")
+    llm = SlowLlm(h)
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], needs_clarification=True, reply="O que demora?"))
+    turn = asyncio.create_task(process_turn(h.deps, conversation_id))
+    await asyncio.sleep(0.05)
+    await chat.receive(conversation_id, "e mais uma coisa: esqueci a senha")
+    llm.release.set()
+    assert await turn == "ask_clarification"
+    await h.settle()
+    assert chat.last_sent() == "O que demora?"
+
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], faq_item_id=h.seed.faq["password"]))
+    assert await process_turn(h.deps, conversation_id) == "send_faq"
+    payload = json.loads(h.llm.requests[-1].user)
+    # Stored before the bot's question, but still what the customer is waiting an answer to.
+    assert payload["new_messages"] == ["e mais uma coisa: esqueci a senha"]
+    assert [m["text"] for m in payload["conversation"]][-2:] == ["demora, o painel ficou vago", "O que demora?"]
 
 
 async def test_a_turn_drops_its_answer_when_a_person_took_the_ticket_meanwhile(h: Harness, chat: Chat) -> None:

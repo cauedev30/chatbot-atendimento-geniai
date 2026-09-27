@@ -115,10 +115,8 @@ def context_for(c: EvalCase, catalog: EvalCatalog) -> TurnContext:
         unit_name=_UNIT,
         categories=[PromptCategory(id=x.id, system=x.system, name=x.name) for x in catalog.categories],
         faq_items=catalog.faq_items,
-        messages=[
-            PromptMessage(author="bot", text=TEXT.greeting(_ATTENDANT["name"], _UNIT)),
-            *(PromptMessage(author="customer", text=text) for text in c.customer),
-        ],
+        messages=[PromptMessage(author="bot", text=TEXT.greeting(_ATTENDANT["name"], _UNIT))],
+        new_messages=[PromptMessage(author="customer", text=text) for text in c.customer],
         state=TriageState(faq_attempted=False, clarifications_asked=0, unclear_feedback_reasks=0, media_prompts=0),
         max_clarifications=DEFAULT_RULES.max_clarifications,
     )

@@ -68,6 +68,8 @@ async def build_turn_context(
     who = await get_attendant_with_unit(conn, t.attendant_id)
     categories = [c for c in await list_active_categories(conn) if c.key != "unidentified"]
     faq_items = await list_active_faq_items(conn)
+    new = pending_customer_messages(messages, t.last_consumed_message_id)
+    new_ids = {m.id for m in new}
     return TurnContext(
         attendant_name=who.name,
         unit_name=who.unit_name,
@@ -76,7 +78,8 @@ async def build_turn_context(
             PromptFaqItem(id=f.id, category_id=f.category_id, title=f.title, applies_when=f.applies_when)
             for f in faq_items
         ],
-        messages=[PromptMessage(author=m.author, text=m.text) for m in messages],
+        messages=[PromptMessage(author=m.author, text=m.text) for m in messages if m.id not in new_ids],
+        new_messages=[PromptMessage(author=m.author, text=m.text) for m in new],
         state=_state_of(t),
         max_clarifications=deps.rules.max_clarifications,
     )

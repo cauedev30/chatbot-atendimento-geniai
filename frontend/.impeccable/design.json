@@ -1,50 +1,431 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-23T00:00:00Z",
+  "generatedAt": "2026-09-26T00:00:00Z",
   "title": "Design System: Suporte geniAI",
   "extensions": {
     "colorMeta": {
-      "ink-0": { "role": "neutral", "displayName": "Terminal Black", "canonical": "oklch(11.7% 0.008 196)", "tonalRamp": ["#070c0c", "#202525", "#3b4141", "#595f5f", "#787f7f", "#99a0a0", "#bec6c6", "#e9f0f0"] },
-      "ink-1": { "role": "neutral", "displayName": "Panel Teal-Black", "canonical": "oklch(16.6% 0.017 189)", "tonalRamp": ["#040d0d", "#1b2726", "#364341", "#53615f", "#72817f", "#93a2a0", "#b8c8c6", "#e2f2f1"] },
-      "ink-2": { "role": "neutral", "displayName": "Deep Teal Shadow", "canonical": "oklch(27.8% 0.041 187)", "tonalRamp": ["#00100e", "#052a27", "#244743", "#426562", "#618681", "#82a7a3", "#a7cdc9", "#d0f8f3"] },
-      "rule": { "role": "neutral", "displayName": "Rule", "canonical": "oklch(32.1% 0.041 185)", "tonalRamp": ["#00100e", "#052a27", "#244743", "#426561", "#618681", "#82a7a2", "#a7cdc8", "#d1f8f2"] },
-      "rule-strong": { "role": "neutral", "displayName": "Strong Rule", "canonical": "oklch(44.8% 0.057 186)", "tonalRamp": ["#00120f", "#002d28", "#114944", "#346862", "#548982", "#75aaa3", "#9ad1c9", "#c4fcf4"] },
-      "teal": { "role": "primary", "displayName": "Signal Teal", "canonical": "oklch(74.8% 0.132 182)", "tonalRamp": ["#00170f", "#003529", "#005445", "#007463", "#009583", "#00b8a5", "#42e0cb", "#87fff5"] },
-      "teal-hi": { "role": "primary", "displayName": "Lit Teal", "canonical": "oklch(86.4% 0.142 183)", "tonalRamp": ["#001710", "#00362a", "#005546", "#007564", "#009784", "#00baa6", "#23e1cc", "#87fff5"] },
-      "on-teal": { "role": "primary", "displayName": "Plate Ink", "canonical": "oklch(19.8% 0.032 188)", "tonalRamp": ["#000f0d", "#102927", "#2c4543", "#496461", "#688480", "#89a5a2", "#aecbc8", "#d8f6f2"] },
-      "text": { "role": "neutral", "displayName": "Paper White", "canonical": "oklch(97.5% 0.005 183)", "tonalRamp": ["#090c0b", "#212524", "#3d4140", "#5a5f5e", "#7a7e7d", "#9b9f9f", "#c0c5c4", "#ebf0ef"] },
-      "text-2": { "role": "neutral", "displayName": "Dim Teal-Grey", "canonical": "oklch(82.5% 0.028 185)", "tonalRamp": ["#000f0d", "#142826", "#2f4542", "#4c6360", "#6c837f", "#8ca4a1", "#b1cac6", "#dbf5f1"] },
-      "text-3": { "role": "neutral", "displayName": "Faint Teal-Grey", "canonical": "oklch(67.7% 0.036 185)", "tonalRamp": ["#00100d", "#0c2a26", "#294642", "#466560", "#658580", "#86a6a1", "#abccc7", "#d5f7f1"] },
-      "danger": { "role": "error", "displayName": "Warning Coral", "canonical": "oklch(75.8% 0.145 29)", "tonalRamp": ["#2d0000", "#570000", "#7b0906", "#9f3329", "#c45648", "#eb7869", "#ff9e8d", "#ffd0c0"] },
-      "danger-ground": { "role": "error", "displayName": "Oxide Ground", "canonical": "oklch(21.0% 0.046 28)", "tonalRamp": ["#1b0302", "#371b17", "#563632", "#75544f", "#97736e", "#b9948f", "#e0bab4", "#ffe4de"] }
+      "bg": {
+        "role": "neutral",
+        "displayName": "Terminal Black",
+        "canonical": "oklch(11.7% 0.008 196)",
+        "tonalRamp": [
+          "#070c0c",
+          "#212626",
+          "#3d4343",
+          "#5c6363",
+          "#7d8484",
+          "#9fa7a7",
+          "#c3cbcb",
+          "#e9f0f0"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Card Surface",
+        "canonical": "oklch(18.2% 0.014 187)",
+        "tonalRamp": [
+          "#050d0c",
+          "#1e2726",
+          "#3a4443",
+          "#596462",
+          "#7a8584",
+          "#9ca8a6",
+          "#c0cccb",
+          "#e5f2f0"
+        ]
+      },
+      "surface-2": {
+        "role": "neutral",
+        "displayName": "Raised Surface",
+        "canonical": "oklch(21.9% 0.017 189)",
+        "tonalRamp": [
+          "#040d0d",
+          "#1b2827",
+          "#384544",
+          "#576563",
+          "#778684",
+          "#9aa9a7",
+          "#bdcdcb",
+          "#e2f2f1"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(25.8% 0.021 186)",
+        "tonalRamp": [
+          "#020e0c",
+          "#192826",
+          "#364643",
+          "#556563",
+          "#758784",
+          "#97a9a7",
+          "#bbcecb",
+          "#e0f3f0"
+        ]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Control Edge",
+        "canonical": "oklch(53.4% 0.036 186)",
+        "tonalRamp": [
+          "#00100d",
+          "#0c2b28",
+          "#2b4845",
+          "#4a6864",
+          "#6a8a86",
+          "#8cada8",
+          "#b0d1cd",
+          "#d4f7f2"
+        ]
+      },
+      "track": {
+        "role": "neutral",
+        "displayName": "Track",
+        "canonical": "oklch(24.7% 0.020 185)",
+        "tonalRamp": [
+          "#030e0c",
+          "#1a2826",
+          "#374643",
+          "#556563",
+          "#768684",
+          "#98a9a6",
+          "#bccecb",
+          "#e1f3f0"
+        ]
+      },
+      "teal": {
+        "role": "primary",
+        "displayName": "Signal Teal",
+        "canonical": "oklch(74.8% 0.132 182)",
+        "tonalRamp": [
+          "#001710",
+          "#00362a",
+          "#005648",
+          "#007867",
+          "#009b89",
+          "#00bfac",
+          "#49e5d0",
+          "#77fff5"
+        ]
+      },
+      "teal-hi": {
+        "role": "primary",
+        "displayName": "Lit Teal",
+        "canonical": "oklch(86.4% 0.142 183)",
+        "tonalRamp": [
+          "#001810",
+          "#00372b",
+          "#005748",
+          "#007968",
+          "#009c89",
+          "#00c1ac",
+          "#34e6d1",
+          "#69fff6"
+        ]
+      },
+      "teal-soft": {
+        "role": "primary",
+        "displayName": "Teal Wash",
+        "canonical": "rgb(20 200 180 / 0.1)",
+        "tonalRamp": [
+          "#001710",
+          "#00362a",
+          "#005648",
+          "#007867",
+          "#009b89",
+          "#00bfac",
+          "#49e5d0",
+          "#77fff5"
+        ]
+      },
+      "on-teal": {
+        "role": "primary",
+        "displayName": "Plate Ink",
+        "canonical": "oklch(19.8% 0.032 188)",
+        "tonalRamp": [
+          "#000f0d",
+          "#112a28",
+          "#2e4845",
+          "#4d6764",
+          "#6d8986",
+          "#90aca8",
+          "#b3d0cd",
+          "#d8f6f2"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Paper White",
+        "canonical": "oklch(96.2% 0.007 185)",
+        "tonalRamp": [
+          "#080c0b",
+          "#222625",
+          "#3e4342",
+          "#5d6262",
+          "#7e8483",
+          "#a1a6a5",
+          "#c5caca",
+          "#eaf0ef"
+        ]
+      },
+      "text-2": {
+        "role": "neutral",
+        "displayName": "Soft Grey",
+        "canonical": "oklch(78.0% 0.021 185)",
+        "tonalRamp": [
+          "#020e0c",
+          "#192926",
+          "#354643",
+          "#546563",
+          "#758784",
+          "#97aaa7",
+          "#bbcecb",
+          "#e0f3f0"
+        ]
+      },
+      "text-3": {
+        "role": "neutral",
+        "displayName": "Faint Grey",
+        "canonical": "oklch(68.5% 0.030 185)",
+        "tonalRamp": [
+          "#000f0d",
+          "#132a27",
+          "#304744",
+          "#4f6763",
+          "#6f8885",
+          "#91aba7",
+          "#b5d0cc",
+          "#daf5f1"
+        ]
+      },
+      "danger": {
+        "role": "error",
+        "displayName": "Warning Coral",
+        "canonical": "oklch(75.8% 0.145 29)",
+        "tonalRamp": [
+          "#320000",
+          "#570000",
+          "#7c120d",
+          "#a23a2f",
+          "#c85d4f",
+          "#f08071",
+          "#ffa494",
+          "#ffcab8"
+        ]
+      },
+      "danger-soft": {
+        "role": "error",
+        "displayName": "Coral Wash",
+        "canonical": "rgb(255 138 122 / 0.1)",
+        "tonalRamp": [
+          "#320000",
+          "#570000",
+          "#7c120d",
+          "#a23a2f",
+          "#c85d4f",
+          "#f08071",
+          "#ffa494",
+          "#ffcab8"
+        ]
+      },
+      "data-bot": {
+        "role": "secondary",
+        "displayName": "Bot Green",
+        "canonical": "oklch(62.1% 0.128 163)",
+        "tonalRamp": [
+          "#001700",
+          "#003510",
+          "#00552d",
+          "#00774c",
+          "#0e9a6c",
+          "#47be8e",
+          "#70e3b1",
+          "#97ffd6"
+        ]
+      },
+      "data-waiting": {
+        "role": "secondary",
+        "displayName": "Queue Amber",
+        "canonical": "oklch(67.0% 0.143 73)",
+        "tonalRamp": [
+          "#280000",
+          "#4a0c00",
+          "#6c2f00",
+          "#8f5000",
+          "#b47200",
+          "#d9952b",
+          "#ffba56",
+          "#ffdf7d"
+        ]
+      },
+      "data-progress": {
+        "role": "secondary",
+        "displayName": "Work Blue",
+        "canonical": "oklch(62.2% 0.161 255)",
+        "tonalRamp": [
+          "#000044",
+          "#001d66",
+          "#003f89",
+          "#1e61ae",
+          "#4283d4",
+          "#65a7fb",
+          "#89ccff",
+          "#adf2ff"
+        ]
+      },
+      "data-human": {
+        "role": "secondary",
+        "displayName": "Human Rose",
+        "canonical": "oklch(62.2% 0.171 1)",
+        "tonalRamp": [
+          "#2f0008",
+          "#530021",
+          "#78103e",
+          "#9d375d",
+          "#c45a7e",
+          "#eb7da0",
+          "#ffa1c4",
+          "#ffc6e9"
+        ]
+      },
+      "data-silent": {
+        "role": "secondary",
+        "displayName": "Silent Violet",
+        "canonical": "oklch(67.0% 0.145 287)",
+        "tonalRamp": [
+          "#120041",
+          "#260863",
+          "#402f87",
+          "#5e50ab",
+          "#7e73d1",
+          "#a096f8",
+          "#c3baff",
+          "#e8e0ff"
+        ]
+      }
     },
     "typographyMeta": {
-      "figure": { "displayName": "Figure", "purpose": "Wait times, the bot-conversation counter and indicator totals; tabular numbers; the only large size." },
-      "wordmark": { "displayName": "Wordmark", "purpose": "\"geniAI\" only: 1rem in the top bar, 1.5rem on login, underlined by the brand gradient." },
-      "section-heading": { "displayName": "Section heading", "purpose": "Numbered indicator block headings in teal mono caps over a strong rule." },
-      "body": { "displayName": "Body", "purpose": "Card summaries and explanations, max 70ch." },
-      "table": { "displayName": "Table", "purpose": "Indicator table cells." },
-      "meta": { "displayName": "Meta", "purpose": "Unit, responsible person and stat notes." },
-      "label": { "displayName": "Label", "purpose": "Mono uppercase for field labels, column heads, buttons, nav, state names and relative times." }
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "The four summary numbers on the indicators page; tabular. Agent-ring values use 1.75rem."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Indicator section headings, in teal."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "\"geniAI\" in the top bar, over the brand-gradient rule."
+      },
+      "wordmark-login": {
+        "displayName": "Wordmark (login)",
+        "purpose": "\"geniAI\" above the login and status panels."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Board column heads."
+      },
+      "summary": {
+        "displayName": "Summary",
+        "purpose": "Card summaries, clamped to three lines."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Prose, explanations, nav links and field values."
+      },
+      "control": {
+        "displayName": "Control",
+        "purpose": "Buttons; segments and tabs at weight 500."
+      },
+      "table": {
+        "displayName": "Table",
+        "purpose": "Indicator tables and the details sheet's field list."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field names, table heads, dates and notes, in text-3."
+      }
     },
     "gradients": [
-      { "name": "brand-gradient", "value": "linear-gradient(90deg, #1fd1a8 0%, #1fb8e0 50%, #2a8cf0 100%)", "purpose": "The 2px rule under the wordmark, once per screen. Never a fill." }
+      {
+        "name": "brand-gradient",
+        "value": "linear-gradient(90deg, #1fd1a8 0%, #1fb8e0 50%, #2a8cf0 100%)",
+        "purpose": "The 2px rule under the wordmark, once per screen. Never a fill."
+      }
     ],
     "shadows": [
-      { "name": "drag-lift", "value": "0 12px 28px rgb(0 0 0 / 0.55)", "purpose": "Only on a ticket card while it is being dragged." }
+      {
+        "name": "drag-lift",
+        "value": "0 16px 32px rgb(0 0 0 / 0.5)",
+        "purpose": "The card preview that follows the pointer during a drag."
+      },
+      {
+        "name": "sheet-cast",
+        "value": "-24px 0 48px rgb(0 0 0 / 0.45)",
+        "purpose": "The details sheet; its backdrop is rgb(0 0 0 / 0.55)."
+      },
+      {
+        "name": "landed-ring",
+        "value": "0 0 0 2px rgb(63 240 218 / 0.35)",
+        "purpose": "Zero-blur start frame of the landing outline; fades out with the teal-hi border."
+      }
     ],
     "focus": [
-      { "name": "focus-ring", "value": "outline: 2px solid var(--teal-hi); outline-offset: 2px", "purpose": "Global focus-visible; on-teal inside the inverse card." }
+      {
+        "name": "focus-ring",
+        "value": "outline: 2px solid var(--teal-hi); outline-offset: 2px",
+        "purpose": "Global focus-visible; the card's stretched summary button draws it around the whole card."
+      }
     ],
     "motion": [
-      { "name": "ease-settle", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "The single easing curve for state transitions and the card settle." },
-      { "name": "state-transition", "value": "120ms", "purpose": "Color and border changes on controls and columns." },
-      { "name": "card-settle", "value": "240ms, from translateY(-6px) with teal-hi border", "purpose": "One-step settle when a card lands in a new column; reduced motion keeps only the teal-hi edge." }
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The single easing curve."
+      },
+      {
+        "name": "state-transition",
+        "value": "140ms",
+        "purpose": "Color, background and border changes on controls, cards and columns."
+      },
+      {
+        "name": "sheet-in",
+        "value": "200ms, from translateX(24px) and opacity 0",
+        "purpose": "Details sheet entrance; none under reduced motion."
+      },
+      {
+        "name": "card-landed",
+        "value": "1200ms fade from a teal-hi border and 2px ring",
+        "purpose": "A card landing in a new column; reduced motion keeps the teal edge only."
+      }
     ],
     "breakpoints": [
-      { "name": "narrow-container", "value": "520px", "purpose": "Container width: indicator bars hide, multi-value rows stack; page padding drops to 12px." },
-      { "name": "board-tabs", "value": "1040px", "purpose": "Board container width below which columns collapse to one with tabs." },
-      { "name": "coarse-pointer", "value": "(pointer: coarse)", "purpose": "Every control reaches 44px." }
+      {
+        "name": "card-inline",
+        "value": "320px",
+        "purpose": "Card container width above which unit and category share a line."
+      },
+      {
+        "name": "narrow-container",
+        "value": "520px",
+        "purpose": "Indicator bars hide, stats go two per row, multi-value rows stack; page padding drops."
+      },
+      {
+        "name": "board-switcher",
+        "value": "1040px",
+        "purpose": "Board container width below which columns collapse to one with the category switcher."
+      },
+      {
+        "name": "board-fixed-height",
+        "value": "1088px",
+        "purpose": "Viewport width below which the board drops its fixed height and the page scrolls."
+      },
+      {
+        "name": "coarse-pointer",
+        "value": "(pointer: coarse)",
+        "purpose": "Every control reaches 44px."
+      }
     ]
   },
   "components": [
@@ -52,110 +433,145 @@
       "name": "Button",
       "kind": "button",
       "refersTo": "button",
-      "description": "Default square bordered action in mono caps (Corrigir, Mover, Fechar).",
+      "description": "Default bordered action in sentence case (Corrigir, Mover, Resolver ticket).",
       "html": "<button class=\"ds-btn\">Corrigir</button>",
-      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 0 12px; border: 1px solid var(--rule-strong, #2f6a63); border-radius: 0; background: var(--ink-1, #061110); color: var(--text, #f3f8f7); font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), border-color 120ms cubic-bezier(0.16, 1, 0.3, 1), color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn:hover { border-color: var(--teal, #14c8b4); color: var(--teal-hi, #3ff0da); } .ds-btn:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; } .ds-btn:disabled { opacity: 0.55; cursor: not-allowed; }"
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line-strong, #557470); border-radius: 8px; font: 600 0.875rem \"Red Hat Text\", system-ui, sans-serif; white-space: nowrap; cursor: pointer; transition: background-color 140ms cubic-bezier(0.16, 1, 0.3, 1), border-color 140ms cubic-bezier(0.16, 1, 0.3, 1), color 140ms cubic-bezier(0.16, 1, 0.3, 1); background: var(--surface-2, #111d1c); color: var(--text, #eef4f3); } .ds-btn:hover { border-color: var(--teal, #14c8b4); } .ds-btn:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; } .ds-btn:disabled { opacity: 0.55; cursor: not-allowed; }"
     },
     {
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Inverse-video action; one per group (Filtrar, Assumir, Entrar).",
+      "description": "Solid teal action, one per group (Assumir, Sim, resolver, Entrar).",
       "html": "<button class=\"ds-btn-primary\">Assumir</button>",
-      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 12px; border: 1px solid var(--teal, #14c8b4); border-radius: 0; background: var(--teal, #14c8b4); color: var(--on-teal, #021a18); font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), border-color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-primary:hover { background: var(--teal-hi, #3ff0da); border-color: var(--teal-hi, #3ff0da); } .ds-btn-primary:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; }"
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line-strong, #557470); border-radius: 8px; font: 600 0.875rem \"Red Hat Text\", system-ui, sans-serif; white-space: nowrap; cursor: pointer; transition: background-color 140ms cubic-bezier(0.16, 1, 0.3, 1), border-color 140ms cubic-bezier(0.16, 1, 0.3, 1), color 140ms cubic-bezier(0.16, 1, 0.3, 1); background: var(--teal, #14c8b4); border-color: var(--teal, #14c8b4); color: var(--on-teal, #021a18); } .ds-btn-primary:hover { background: var(--teal-hi, #3ff0da); border-color: var(--teal-hi, #3ff0da); } .ds-btn-primary:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; }"
     },
     {
       "name": "Quiet Button",
       "kind": "button",
       "refersTo": "button-quiet",
-      "description": "Borderless mono caps action for low-stakes exits (Sair).",
-      "html": "<button class=\"ds-btn-quiet\">Sair</button>",
-      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border: 1px solid transparent; border-radius: 0; background: transparent; color: var(--text-2, #b3ccc8); font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; } .ds-btn-quiet:hover { border-color: var(--teal, #14c8b4); color: var(--teal-hi, #3ff0da); } .ds-btn-quiet:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; }"
+      "description": "Borderless action for exits and secondary choices (Sair, Cancelar, Tirar responsável).",
+      "html": "<button class=\"ds-btn-quiet\">Cancelar</button>",
+      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line-strong, #557470); border-radius: 8px; font: 600 0.875rem \"Red Hat Text\", system-ui, sans-serif; white-space: nowrap; cursor: pointer; transition: background-color 140ms cubic-bezier(0.16, 1, 0.3, 1), border-color 140ms cubic-bezier(0.16, 1, 0.3, 1), color 140ms cubic-bezier(0.16, 1, 0.3, 1); background: transparent; border-color: transparent; color: var(--text-2, #a9bcb9); } .ds-btn-quiet:hover { background: var(--surface-2, #111d1c); color: var(--text, #eef4f3); } .ds-btn-quiet:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; }"
     },
     {
-      "name": "Labeled Select",
+      "name": "Labeled Select with Inline Error",
       "kind": "input",
       "refersTo": "input",
-      "description": "Mono caps label above a square field with a CSS-drawn teal chevron.",
-      "html": "<label class=\"ds-field\"><span class=\"ds-label\">Unidade</span><select class=\"ds-select\"><option>Todas</option></select></label>",
-      "css": ".ds-field { display: grid; gap: 4px; } .ds-label { font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3, #7f9f9a); } .ds-select { appearance: none; min-height: 36px; padding: 0 28px 0 12px; border: 1px solid var(--rule-strong, #2f6a63); border-radius: 0; background-color: var(--ink-0, #030606); color: var(--text, #f3f8f7); font: 0.9375rem \"Red Hat Text\", system-ui, sans-serif; background-image: linear-gradient(45deg, transparent 50%, #14c8b4 50%), linear-gradient(135deg, #14c8b4 50%, transparent 50%); background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; } .ds-select:hover { border-color: var(--teal, #14c8b4); } .ds-select:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; }"
+      "description": "Label above a soft 8px field; a refused choice shows its message under the field, which is marked aria-invalid and takes focus.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-label\">Categoria</span><select class=\"ds-select\" aria-invalid=\"true\"><option>Acesso</option></select></label><p class=\"ds-error\">O ticket já está nessa categoria.</p>",
+      "css": ".ds-field { display: grid; gap: 6px; max-width: 280px; } .ds-label { font: 500 0.8125rem \"Red Hat Text\", system-ui, sans-serif; color: var(--text-3, #86a09c); } .ds-select { appearance: none; min-height: 36px; padding: 0 32px 0 12px; border: 1px solid var(--line-strong, #557470); border-radius: 8px; background-color: var(--bg, #030606); color: var(--text, #eef4f3); font: 0.9375rem \"Red Hat Text\", system-ui, sans-serif; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%2386a09c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\"); background-position: calc(100% - 12px) 50%; background-repeat: no-repeat; transition: border-color 140ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-select:hover { border-color: var(--teal, #14c8b4); } .ds-select:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; } .ds-error { margin: 8px 0 0; max-width: 280px; padding: 8px 12px; border: 1px solid rgb(255 138 122 / 0.45); border-radius: 8px; background: var(--danger-soft, rgb(255 138 122 / 0.1)); color: var(--danger, #ff8a7a); font: 0.9375rem \"Red Hat Text\", system-ui, sans-serif; }"
     },
     {
       "name": "Top Bar Navigation",
       "kind": "nav",
       "refersTo": "nav-link",
-      "description": "Sticky 48px bar: wordmark over the brand-gradient rule, mono caps links, active link teal with a 2px underline.",
-      "html": "<nav class=\"ds-bar\"><a class=\"ds-wordmark\" href=\"#\">geniAI</a><a class=\"ds-link\" aria-current=\"page\" href=\"#\">Quadro</a><a class=\"ds-link\" href=\"#\">Indicadores</a></nav>",
-      "css": ".ds-bar { display: flex; align-items: stretch; gap: 24px; min-height: 48px; padding: 0 16px; background: var(--ink-0, #030606); border-bottom: 1px solid var(--rule, #173a36); } .ds-wordmark { position: relative; align-self: center; padding: 4px 0; font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 1rem; font-weight: 700; letter-spacing: 0.02em; color: var(--text, #f3f8f7); text-decoration: none; } .ds-wordmark::after { content: \"\"; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, #1fd1a8 0%, #1fb8e0 50%, #2a8cf0 100%); } .ds-link { display: flex; align-items: center; padding: 0 12px; font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2, #b3ccc8); text-decoration: none; border-bottom: 2px solid transparent; } .ds-link:hover { color: var(--teal-hi, #3ff0da); } .ds-link[aria-current=\"page\"] { color: var(--teal, #14c8b4); border-bottom-color: var(--teal, #14c8b4); } .ds-link:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; }"
+      "description": "Sticky 56px bar: wordmark over the brand-gradient rule, soft text links, the current page on a raised fill.",
+      "html": "<nav class=\"ds-bar\"><a class=\"ds-wordmark\" href=\"#\">geniAI</a><span class=\"ds-links\"><a class=\"ds-link\" aria-current=\"page\" href=\"#\">Quadro</a><a class=\"ds-link\" href=\"#\">Indicadores</a></span></nav>",
+      "css": ".ds-bar { display: flex; align-items: center; gap: 32px; min-height: 56px; padding: 0 24px; background: rgb(3 6 6 / 0.92); border-bottom: 1px solid var(--line, #182725); } .ds-wordmark { padding: 2px 0; font: 700 1.125rem \"Red Hat Display\", \"Red Hat Text\", system-ui, sans-serif; color: var(--text, #eef4f3); text-decoration: none; background-image: linear-gradient(90deg, #1fd1a8 0%, #1fb8e0 50%, #2a8cf0 100%); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; } .ds-links { display: flex; gap: 4px; } .ds-link { display: flex; align-items: center; min-height: 34px; padding: 0 12px; border-radius: 8px; font: 500 0.9375rem \"Red Hat Text\", system-ui, sans-serif; color: var(--text-2, #a9bcb9); text-decoration: none; transition: background-color 140ms cubic-bezier(0.16, 1, 0.3, 1), color 140ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-link:hover { color: var(--text, #eef4f3); background: var(--surface, #0b1413); } .ds-link[aria-current=\"page\"] { color: var(--text, #eef4f3); background: var(--surface-2, #111d1c); } .ds-link:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; }"
     },
     {
       "name": "Ticket Card",
       "kind": "card",
-      "refersTo": "card",
-      "description": "Square ruled card: state label, large tabular wait, unit and category, summary, ruled footer.",
-      "html": "<article class=\"ds-card\"><p class=\"ds-wait\"><span class=\"ds-card-label\">Esperando</span><span class=\"ds-wait-figure\">8 min</span></p><p class=\"ds-where\">Unidade Exemplo Centro<br><span class=\"ds-cat\">Geral / Não identificado</span></p><p class=\"ds-summary\">Relatório mensal saindo em branco.</p><div class=\"ds-foot\"><a class=\"ds-open\" href=\"#\">Abrir no Chatwoot</a></div></article>",
-      "css": ".ds-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--rule, #173a36); border-radius: 0; background: var(--ink-0, #030606); color: var(--text, #f3f8f7); font: 0.9375rem/1.5 \"Red Hat Text\", system-ui, sans-serif; max-width: 320px; } .ds-card p { margin: 0; } .ds-wait { display: grid; gap: 2px; } .ds-card-label { font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3, #7f9f9a); } .ds-wait-figure { font-family: \"Red Hat Mono\", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 1.75rem; font-weight: 600; line-height: 1.05; color: var(--teal, #14c8b4); } .ds-where { font-size: 0.8125rem; color: var(--text-2, #b3ccc8); } .ds-cat { font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 0.75rem; letter-spacing: 0.02em; color: var(--text-3, #7f9f9a); } .ds-foot { padding-top: 8px; border-top: 1px solid var(--rule, #173a36); } .ds-open { font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--teal, #14c8b4); text-decoration: none; } .ds-open:hover { text-decoration: underline; color: var(--teal-hi, #3ff0da); } .ds-open:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; }"
+      "refersTo": "ticket-card",
+      "description": "Soft surface card: opened date, summary, unit · category, person, and the 'Exibir ações' toggle; the longest wait gets a teal edge and tag.",
+      "html": "<article class=\"ds-card ds-card-longest\"><p class=\"ds-opened\">Aberto hoje, 09:12 <span class=\"ds-oldest\">Espera mais longa</span></p><p class=\"ds-summary\">Relatório mensal saindo em branco.</p><p class=\"ds-fields\">Unidade Exemplo Centro <span class=\"ds-cat\">· Relatórios</span><br><i class=\"ds-nobody\">Sem responsável</i></p><button class=\"ds-toggle\" aria-expanded=\"false\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><g fill=\"currentColor\"><circle cx=\"3.5\" cy=\"8\" r=\"1.35\"/><circle cx=\"8\" cy=\"8\" r=\"1.35\"/><circle cx=\"12.5\" cy=\"8\" r=\"1.35\"/></g></svg>Exibir ações</button></article>",
+      "css": ".ds-card { display: grid; gap: 12px; max-width: 320px; padding: 12px 12px 12px 16px; border: 1px solid var(--line, #182725); border-radius: 10px; background: var(--surface, #0b1413); color: var(--text, #eef4f3); font: 0.9375rem/1.5 \"Red Hat Text\", system-ui, sans-serif; cursor: pointer; transition: border-color 140ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-card:hover { border-color: #243634; } .ds-card p { margin: 0; } .ds-card-longest { border-color: rgb(20 200 180 / 0.45); } .ds-card-longest:hover { border-color: rgb(20 200 180 / 0.7); } .ds-opened { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 0.8125rem; font-variant-numeric: tabular-nums; color: var(--text-3, #86a09c); } .ds-oldest { color: var(--teal, #14c8b4); font-weight: 600; } .ds-summary { font-weight: 500; line-height: 1.45; } .ds-fields { font-size: 0.8125rem; color: var(--text-2, #a9bcb9); } .ds-cat, .ds-nobody { color: var(--text-3, #86a09c); } .ds-toggle { justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 28px; margin-left: -8px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; font: 500 0.8125rem \"Red Hat Text\", system-ui, sans-serif; color: var(--text-3, #86a09c); cursor: pointer; } .ds-toggle:hover { background: var(--surface-2, #111d1c); color: var(--text, #eef4f3); } .ds-toggle:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; }"
     },
     {
-      "name": "Longest-Wait Card (inverse)",
-      "kind": "card",
-      "refersTo": "card-longest",
-      "description": "The one inverse-video card on the board: teal plate, dark ink throughout.",
-      "html": "<article class=\"ds-card-inv\"><span class=\"ds-inv-label\">Espera mais longa</span><span class=\"ds-inv-figure\">10 min</span><p class=\"ds-inv-summary\">O número da unidade caiu de novo.</p></article>",
-      "css": ".ds-card-inv { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--teal, #14c8b4); border-radius: 0; background: var(--teal, #14c8b4); color: var(--on-teal, #021a18); max-width: 320px; } .ds-inv-label { font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; } .ds-inv-figure { font-family: \"Red Hat Mono\", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 1.75rem; font-weight: 600; line-height: 1.05; } .ds-inv-summary { margin: 4px 0 0; font: 0.9375rem/1.5 \"Red Hat Text\", system-ui, sans-serif; } .ds-card-inv:focus-within { outline: 2px solid var(--on-teal, #021a18); outline-offset: -4px; }"
-    },
-    {
-      "name": "Board Column",
+      "name": "Board Column Head",
       "kind": "custom",
-      "refersTo": "column",
-      "description": "Ruled ink-1 panel with a mono caps head and teal count; the lead column gets a strong rule and an ink-2 head.",
-      "html": "<section class=\"ds-col ds-col-lead\"><header class=\"ds-col-head\"><span>Aguardando humano</span><span class=\"ds-col-count\">4</span></header><p class=\"ds-col-empty\">Nenhum ticket.</p></section>",
-      "css": ".ds-col { display: grid; grid-template-rows: auto 1fr; min-height: 160px; border: 1px solid var(--rule, #173a36); background: var(--ink-1, #061110); transition: border-color 120ms cubic-bezier(0.16, 1, 0.3, 1); max-width: 360px; } .ds-col:hover { border-color: var(--teal, #14c8b4); } .ds-col-lead { border-color: var(--rule-strong, #2f6a63); } .ds-col-head { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 12px; border-bottom: 1px solid var(--rule, #173a36); font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2, #b3ccc8); } .ds-col-lead .ds-col-head { background: var(--ink-2, #0a2f2c); color: var(--text, #f3f8f7); } .ds-col-count { font-size: 0.875rem; color: var(--teal, #14c8b4); } .ds-col-empty { margin: 0; padding: 12px 8px; font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 0.75rem; color: var(--text-3, #7f9f9a); }"
+      "refersTo": "title",
+      "description": "Unboxed column: a head over a hairline; the lead queue (Aguardando humano) gets a teal rule and count.",
+      "html": "<section class=\"ds-col\"><h2 class=\"ds-col-head\">Em atendimento <span class=\"ds-count\">3</span></h2></section><section class=\"ds-col ds-lead\"><h2 class=\"ds-col-head\">Aguardando humano <span class=\"ds-count\">4</span></h2></section>",
+      "css": ".ds-col { max-width: 280px; margin-bottom: 16px; } .ds-col-head { display: flex; gap: 8px; margin: 0; padding: 0 4px 12px; border-bottom: 1px solid var(--line, #182725); font: 600 0.9375rem \"Red Hat Text\", system-ui, sans-serif; color: var(--text-2, #a9bcb9); } .ds-count { font-weight: 500; color: var(--text-3, #86a09c); } .ds-lead .ds-col-head { color: var(--text, #eef4f3); border-bottom-color: var(--teal, #14c8b4); } .ds-lead .ds-count { color: var(--teal, #14c8b4); }"
     },
     {
-      "name": "Indicator Table Row with Bar",
+      "name": "Segmented Filter",
+      "kind": "chip",
+      "refersTo": "segment",
+      "description": "Volume's view picker and the narrow board's category switcher: a soft group with the pressed option raised.",
+      "html": "<div class=\"ds-seg\" role=\"group\"><button class=\"ds-segment\" aria-pressed=\"true\">Por semana</button><button class=\"ds-segment\" aria-pressed=\"false\">Por mês</button><button class=\"ds-segment\" aria-pressed=\"false\">Por unidade</button></div>",
+      "css": ".ds-seg { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line, #182725); border-radius: 12px; background: var(--surface, #0b1413); } .ds-segment { min-height: 34px; padding: 0 16px; border: 0; border-radius: 8px; background: transparent; color: var(--text-2, #a9bcb9); font: 500 0.875rem \"Red Hat Text\", system-ui, sans-serif; cursor: pointer; } .ds-segment:hover { color: var(--text, #eef4f3); } .ds-segment[aria-pressed=\"true\"] { background: var(--surface-2, #111d1c); color: var(--text, #eef4f3); } .ds-segment:focus-visible { outline: 2px solid var(--teal-hi, #3ff0da); outline-offset: 2px; }"
+    },
+    {
+      "name": "Indicator Section with Split Bar",
+      "kind": "custom",
+      "refersTo": "headline",
+      "description": "Unboxed subject: teal heading, grey note, then its chart; the column split uses the five data hues over a legend table.",
+      "html": "<section class=\"ds-sec\"><header class=\"ds-head\"><h2 class=\"ds-h\">Onde os tickets estão</h2><p class=\"ds-note\">Todos os tickets que saíram da triagem.</p></header><div class=\"ds-split\"><span style=\"flex-grow:5;background:#199e70\"></span><span style=\"flex-grow:3;background:#c98500\"></span><span style=\"flex-grow:2;background:#3987e5\"></span><span style=\"flex-grow:4;background:#d55181\"></span><span style=\"flex-grow:1;background:#9085e9\"></span></div><table class=\"ds-t\"><thead><tr><th>Coluna</th><th class=\"ds-n\">Tickets</th></tr></thead><tbody><tr><th><i class=\"ds-sw\" style=\"background:#199e70\"></i>Resolvido pelo bot</th><td class=\"ds-n\">5</td></tr><tr><th><i class=\"ds-sw\" style=\"background:#c98500\"></i>Aguardando humano</th><td class=\"ds-n\">3</td></tr></tbody></table></section>",
+      "css": ".ds-sec { display: grid; gap: 24px; max-width: 560px; font: 0.875rem \"Red Hat Text\", system-ui, sans-serif; color: var(--text, #eef4f3); } .ds-head { display: grid; gap: 8px; } .ds-h { margin: 0; font: 600 1.375rem \"Red Hat Display\", \"Red Hat Text\", system-ui, sans-serif; letter-spacing: 0.01em; color: var(--teal, #14c8b4); } .ds-note { margin: 0; font-size: 0.8125rem; color: var(--text-3, #86a09c); } .ds-split { display: flex; gap: 2px; height: 24px; } .ds-split > span { flex-basis: 0; min-width: 4px; } .ds-split > span:first-child { border-radius: 4px 0 0 4px; } .ds-split > span:last-child { border-radius: 0 4px 4px 0; } .ds-t { width: 100%; border-collapse: collapse; } .ds-t th, .ds-t td { padding: 8px; border-bottom: 1px solid var(--line, #182725); text-align: left; } .ds-t thead th { font-size: 0.8125rem; font-weight: 500; color: var(--text-3, #86a09c); } .ds-t tbody th { font-weight: 400; } .ds-t tbody tr:last-child > * { border-bottom: 0; } .ds-n { text-align: right !important; font-variant-numeric: tabular-nums; } .ds-sw { display: inline-block; width: 10px; height: 10px; margin-right: 12px; border-radius: 3px; vertical-align: -1px; }"
+    },
+    {
+      "name": "Count Table Row with Bar",
       "kind": "custom",
       "refersTo": "table",
-      "description": "Printout table: faint mono heads, 1px rules, 6px teal magnitude bar on an ink-2 track, tabular count.",
-      "html": "<table class=\"ds-table\"><thead><tr><th>Unidade</th><th class=\"ds-num\">Tickets</th></tr></thead><tbody><tr><th>Unidade Exemplo Centro</th><td class=\"ds-num\"><span class=\"ds-bar\"><span style=\"width:60%\"></span></span>3</td></tr></tbody></table>",
-      "css": ".ds-table { width: 100%; max-width: 420px; border-collapse: collapse; font: 0.875rem \"Red Hat Text\", system-ui, sans-serif; color: var(--text, #f3f8f7); } .ds-table th, .ds-table td { padding: 6px 8px; border-bottom: 1px solid var(--rule, #173a36); text-align: left; } .ds-table thead th { font-family: \"Red Hat Mono\", ui-monospace, monospace; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.02em; color: var(--text-3, #7f9f9a); border-bottom-color: var(--rule-strong, #2f6a63); } .ds-table tbody th { font-weight: 400; } .ds-table tbody tr:hover { background: var(--ink-1, #061110); } .ds-num { text-align: right !important; white-space: nowrap; font-family: \"Red Hat Mono\", ui-monospace, monospace; font-variant-numeric: tabular-nums; } .ds-bar { display: inline-block; width: 120px; height: 6px; margin-right: 8px; vertical-align: middle; background: var(--ink-2, #0a2f2c); } .ds-bar > span { display: block; height: 100%; background: var(--teal, #14c8b4); }"
+      "description": "Ranked count table: a 6px rounded teal bar on the track, scaled to the largest count, then the tabular number.",
+      "html": "<table class=\"ds-ct\"><thead><tr><th>Motivo</th><th class=\"ds-cn\">Tickets</th></tr></thead><tbody><tr><th>Pediu atendente</th><td class=\"ds-cn\"><span class=\"ds-bar\"><span style=\"width:100%\"></span></span>8</td></tr><tr><th>FAQ não resolveu</th><td class=\"ds-cn\"><span class=\"ds-bar\"><span style=\"width:50%\"></span></span>4</td></tr></tbody></table>",
+      "css": ".ds-ct { width: 100%; max-width: 520px; border-collapse: collapse; font: 0.875rem \"Red Hat Text\", system-ui, sans-serif; color: var(--text, #eef4f3); } .ds-ct th, .ds-ct td { padding: 8px; border-bottom: 1px solid var(--line, #182725); text-align: left; } .ds-ct thead th { font-size: 0.8125rem; font-weight: 500; color: var(--text-3, #86a09c); } .ds-ct tbody th { font-weight: 400; } .ds-cn { width: 50%; text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; } .ds-bar { display: inline-block; width: calc(100% - 5ch); height: 6px; margin-right: 12px; vertical-align: middle; border-radius: 999px; background: #162422; overflow: hidden; } .ds-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--teal, #14c8b4); }"
     }
   ],
   "narrative": {
-    "northStar": "The Service-Counter Terminal (matte phosphor)",
-    "overview": "The support desk reads like a terminal at a service counter: a character grid on a near-black ground, deep-teal panels, teal and white type with no glow or bloom. Chrome is limited to 1px rules. Corners are square throughout. Emphasis comes from inverse video, a solid teal plate with dark ink, and never from a new hue, a shadow or a bigger radius. Time and counts are the loudest things on screen, set in tabular monospace figures.\n\nThe system is dense but not cramped. It is built to stay open all day next to Chatwoot in a narrow window, so it ranks function and legibility over expression. The monospace carries every label, count, time and state name in small uppercase with wide tracking. A proportional face carries summaries, names and explanations. Indicators render as terminal printouts: tables are the primary view, thin teal bars show magnitude, and the heatmap runs from ground to teal in one hue.\n\nConfirmed rejections: neon, glow and bloom (owner, 2026-09-23); equal-weight columns of rounded, glowing cards.",
+    "northStar": "The Calm Handover Sheet",
+    "overview": "The support desk reads like a sheet handed from one shift to the next: a near-black ground, loose cards one tonal step up with a hairline edge, and the same facts in the same place on every card. Nothing is boxed that does not need to be. Board columns are headings over a hairline, not panels; indicator sections are headings over their content, not cards. Teal is spent on what the person should act on or read first: the primary action, the queue that needs a person, counts and chart marks.\n\nThe system is dense but quiet. It stays open all day next to Chatwoot in a narrow window, so it ranks legibility and predictable placement over expression. One proportional family carries everything: Red Hat Text for the interface and prose, its Display cut for the wordmark, section headings and big figures. Corners are gently rounded (8px controls, 10px cards). Depth is tonal; shadows exist only on things that float above the page (the dragged card and the details sheet).\n\nConfirmed rejections: neon, glow and bloom (owner, 2026-09-23).",
     "keyCharacteristics": [
-      "Near-black ground, two deep-teal panel steps, 1px teal-grey rules as the only chrome.",
-      "Square corners everywhere (0px).",
-      "Inverse video (teal plate, dark ink) is the single emphasis device.",
-      "Monospace uppercase labels plus tabular figures for data; a proportional face for prose.",
-      "The brand gradient appears once per screen, as the rule under the wordmark.",
-      "One authored motion: a one-step settle when a card lands in a new column."
+      "Near-black ground, two surface steps, 1px hairlines in `line`, control borders in `line-strong`.",
+      "Soft corners: 8px controls, 10px cards, 12px segmented groups, 14px standalone panels.",
+      "One proportional family (Red Hat Text and Red Hat Display), sentence case, tabular figures for numbers.",
+      "Teal marks the primary action, the lead queue, counts and single-hue charts; a five-hue palette is reserved for the board-column split.",
+      "The brand gradient appears once per screen, as the 2px rule under the wordmark.",
+      "Two authored motions: the details sheet slides in, and a card that lands in a new column is outlined in teal that fades."
     ],
     "rules": [
-      { "name": "The Inverse Video Rule", "body": "Emphasis is a solid teal plate with dark ink. On the board exactly one card is inverted: the longest wait. Primary buttons and the active narrow-window tab use the same plate.", "section": "colors" },
-      { "name": "The Gradient Spent Once Rule", "body": "The teal-cyan-blue brand gradient (`#1fd1a8` to `#1fb8e0` to `#2a8cf0`) appears once per screen, as the 2px rule under the \"geniAI\" wordmark. It never fills a surface, a button or text.", "section": "colors" },
-      { "name": "The No Glow Rule", "body": "Teal is matte. No text-shadow, bloom or colored box-shadow on any teal element.", "section": "colors" },
-      { "name": "The Rank Without Size Rule", "body": "Rank comes from weight, case, color and inversion. The app has one large size (figure); everything else sits between 0.75rem and 1rem.", "section": "typography" },
-      { "name": "The Type Never Shrinks Rule", "body": "Narrow windows and phones drop columns into tabs and hide magnitude bars. They never reduce type size.", "section": "typography" },
-      { "name": "The Rules Are the Chrome Rule", "body": "Panels, cards, tables and controls are separated by 1px borders in `rule` or `rule-strong`, never by shadows or background blur.", "section": "elevation" }
+      {
+        "name": "The Marks Carry the Color Rule",
+        "body": "Hue lives on chart marks, swatches and fills. Text stays in `text`, `text-2` and `text-3` (plus `teal` for links and counts), so no reading depends on a data hue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Gradient Spent Once Rule",
+        "body": "The teal-cyan-blue brand gradient (`gradient-teal` to `gradient-cyan` to `gradient-blue`) appears once per screen, as the 2px rule under the \"geniAI\" wordmark. It never fills a surface, a button or text.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Glow Rule",
+        "body": "Teal is matte. No text-shadow, bloom or blurred colored shadow. The landing outline is a zero-blur 2px ring that fades out, not a glow.",
+        "section": "colors"
+      },
+      {
+        "name": "The Sentence Case Rule",
+        "body": "Labels, buttons, nav and headings are written in sentence case with normal tracking. No uppercase, no monospace.",
+        "section": "typography"
+      },
+      {
+        "name": "The Type Holds Rule",
+        "body": "Narrow windows swap the board to one column and hide magnitude bars; body, label and table sizes never shrink. Only the indicator headline and summary figures step down under 520px.",
+        "section": "typography"
+      },
+      {
+        "name": "The Only Floaters Cast Rule",
+        "body": "A shadow means the element floats over the page: the dragged card and the details sheet. Cards, columns, panels and tables never cast one at rest.",
+        "section": "elevation"
+      }
     ],
     "dos": [
-      "Do keep every corner square (0px) and every separator a 1px rule in `rule` or `rule-strong`.",
-      "Do mark emphasis with inverse video (teal plate, `on-teal` ink), and invert only the longest wait on the board.",
-      "Do set times, counts and state names in Red Hat Mono, with tabular figures for numbers.",
-      "Do give every state a text label. Color never carries meaning alone.",
-      "Do make every count state what it counts, and show an honest empty message instead of zeros.",
-      "Do switch to one column with tabs when the board is under 1040px wide, and keep type sizes unchanged.",
+      "Do keep controls at 8px and cards at 10px radius, with 1px `line` hairlines and `line-strong` control borders.",
+      "Do reserve solid teal for the primary action and for single-hue chart marks; mark the lead queue with its teal rule and count.",
+      "Do keep the five data hues on chart marks and swatches only, in column order.",
+      "Do give every chart a table or text equivalent, and every count a note of what it counts.",
+      "Do keep the same card fields in the same order on every card, and the same actions in the same order on the card and in the sheet.",
+      "Do show field errors inline under the field, with `aria-invalid`, and move focus there.",
+      "Do keep \"Mover para\" on every ticket, so no move depends on dragging.",
+      "Do switch the board to one column with the category switcher under 1040px, and keep type sizes unchanged.",
       "Do give every control a 44px target on coarse pointers and a 2px `teal-hi` focus outline."
     ],
     "donts": [
-      "Don't add glow, bloom, neon text-shadow or colored shadows to teal.",
+      "Don't add glow, bloom, neon text-shadow or blurred colored shadows to teal.",
       "Don't use the brand gradient anywhere except the wordmark rule, once per screen.",
-      "Don't round corners on cards, controls or panels.",
-      "Don't use shadows at rest. The only shadow belongs to a card being dragged.",
-      "Don't invent time thresholds or color bands for waits. Each card shows its own number.",
-      "Don't add a second accent hue. Coral is for errors only.",
+      "Don't box board columns or indicator sections; headings and hairlines mark where they start.",
+      "Don't cast shadows at rest. Only the dragged card and the details sheet float.",
+      "Don't set text in a data hue, or use a data hue outside a chart.",
+      "Don't use uppercase labels or monospace type.",
+      "Don't invent time thresholds or color bands for waits.",
       "Don't show real customer phones, unit names or people; only the fictitious seed data."
     ]
   }

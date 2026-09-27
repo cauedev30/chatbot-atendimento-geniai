@@ -1,6 +1,6 @@
 import asyncio
 
-from geniai.app.notify import sync_chatwoot_status
+from geniai.app.notify import enqueue_status_after_move
 from geniai.app.ports import Deps
 from geniai.app.process_turn import pending_customer_messages
 from geniai.app.tickets_repo import (
@@ -35,11 +35,13 @@ async def sweep_silent_tickets(deps: Deps) -> list[int]:
                 ):
                     continue
                 result = await move_ticket(conn, t.id, "no_response", "bot", now)
+                await enqueue_status_after_move(conn, t.chatwoot_conversation_id, result.from_, "no_response")
         except InvalidMoveError:
             # The ticket moved in the meantime; nothing to do.
             continue
-        await sync_chatwoot_status(deps, t.chatwoot_conversation_id, result.from_, "no_response")
         moved.append(t.id)
+    if moved:
+        deps.outbox.wake()
     return moved
 
 

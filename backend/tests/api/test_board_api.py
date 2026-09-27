@@ -1,6 +1,8 @@
+import asyncio
 import itertools
 from typing import Literal
 
+from geniai.app.ports import ChatwootStatus
 from geniai.app.tickets_repo import NewTicket, TicketRow, create_ticket, get_ticket, move_ticket, update_ticket
 from tests.api.conftest import Api
 
@@ -101,7 +103,31 @@ async def test_moves_a_card_by_drag_and_drop_and_resolves_the_conversation_when_
     res = await logged_in.client.post(f"/api/board/tickets/{ticket_id}/move", json={"to": "resolved_by_human"})
     assert res.status_code == 204
     assert (await fetch(logged_in, ticket_id)).column == "resolved_by_human"
+    await logged_in.h.settle()
     assert logged_in.h.chatwoot.statuses[-1].status == "resolved"
+
+
+async def test_answers_at_once_when_chatwoot_hangs_and_syncs_the_status_later(logged_in: Api) -> None:
+    h = logged_in.h
+    ticket_id = await ticket_in(logged_in, "awaiting_human")
+    release = asyncio.Event()
+    set_status = h.chatwoot.set_status
+
+    async def hanging(conversation_id: int, status: ChatwootStatus) -> None:
+        await release.wait()
+        await set_status(conversation_id, status)
+
+    h.chatwoot.set_status = hanging  # type: ignore[method-assign]
+    move = logged_in.client.post(f"/api/board/tickets/{ticket_id}/move", json={"to": "resolved_by_human"})
+    res = await asyncio.wait_for(move, timeout=1)
+    assert res.status_code == 204
+    assert (await fetch(logged_in, ticket_id)).column == "resolved_by_human"
+    assert h.chatwoot.statuses == []
+
+    delivery = asyncio.create_task(h.settle())
+    release.set()
+    await delivery
+    assert h.chatwoot.statuses[-1].status == "resolved"
 
 
 async def test_rejects_a_move_into_triage(logged_in: Api) -> None:

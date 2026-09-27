@@ -11,6 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from sqlalchemy.pool import NullPool
 
+from geniai.app.outbox import deliver_pending
 from geniai.app.ports import Deps
 from geniai.db.engine import create_engine
 from geniai.db.fixtures import SeedResult, seed_fictitious
@@ -19,7 +20,8 @@ from geniai.domain.rules import DEFAULT_RULES
 from tests.support.fakes import FakeChatwoot, RecordingLogger, ScriptedLlm
 
 RESET_SQL = (
-    "TRUNCATE ticket_move, triage_message, ticket, faq_item, attendant, unit, team_member RESTART IDENTITY CASCADE"
+    "TRUNCATE outbox, ticket_move, triage_message, ticket, faq_item, attendant, unit, team_member "
+    "RESTART IDENTITY CASCADE"
 )
 
 
@@ -87,8 +89,8 @@ class Harness:
         )
 
     async def settle(self) -> None:
-        """Waits for the Chatwoot calls posted in the background."""
-        await self.deps.outbox.drain()
+        """Sends the pending outbox rows, as the worker would."""
+        await deliver_pending(self.deps)
 
     def advance(self, ms: int) -> None:
         self.now = self.now + timedelta(milliseconds=ms)

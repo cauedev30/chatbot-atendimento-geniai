@@ -222,7 +222,9 @@ chatwoot_conversation_id, opened_at, handed_off_at, taken_at, closed_at.
 - **Card:** unit, category, summary, responsible, time since the last move, link to the Chatwoot
   conversation.
 - **Actions:** drag between columns; **take** (pick who is taking it — the login is shared — which
-  sets the responsible person and moves the card to In progress); correct the category; close.
+  sets the responsible person and moves the card to In progress; on a closed card it reopens it);
+  **remove the responsible** (only in In progress; the card goes back to Awaiting human); correct the
+  category; resolve (asks for confirmation, since it also resolves the Chatwoot conversation).
 - **Moves are free for people** (owner, 2026-09-23): dragging a card, or "Mover para", into In
   progress moves it without a responsible person; only **take** sets one. A person may also move a
   card into Resolved by bot.
@@ -257,10 +259,14 @@ One page, filtered by period and unit. Everything is computed from the tables in
 - **LLM timeout (~8 s), provider error or invalid JSON:** one retry. If it fails again, the ticket goes
   to **Awaiting human** (`llm_failure`) and the customer is told the team will take over. The customer
   never goes unanswered.
-- **Chatwoot send failure:** the ticket is written **before** any outbound message, so nothing is lost.
+- **Chatwoot send failure:** every outbound message and status change is a row of a transactional
+  outbox, written in the same transaction as the ticket change; a worker sends the rows after the
+  commit, in order per conversation, and sends what a stopped process left pending when it starts
+  again. Nothing is sent before the commit and nothing is lost when the process stops. Board actions
+  answer without waiting for Chatwoot.
   A send is repeated only when it surely was not processed (connection failure, or a 502/503/504
   answer); never after a read timeout or another answer, so the customer never gets a message twice.
-  Failures are logged.
+  A call that still fails is marked failed in the outbox and logged; it is not tried again.
 - **Duplicate webhooks:** ignored by Chatwoot message id.
 - **Message bursts:** grouped by the ~5 s silence window (§5.1).
 - **Media:** handled as in §5.1, step 10.

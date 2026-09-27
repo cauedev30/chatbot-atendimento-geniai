@@ -195,6 +195,7 @@ async def test_refuses_to_release_a_ticket_nobody_took(h: Harness) -> None:
 async def test_closing_resolves_the_chatwoot_conversation_and_records_a_human_move(h: Harness) -> None:
     ticket_id = await awaiting(h)
     await move_card(h.deps, ticket_id, "resolved_by_human")
+    await h.settle()
     t = await fetch(h, ticket_id)
     assert (t.column, t.closed_at) == ("resolved_by_human", h.now)
     assert h.chatwoot.statuses == [StatusSet(t.chatwoot_conversation_id, "resolved")]
@@ -208,6 +209,7 @@ async def test_reopening_opens_the_conversation_again(h: Harness) -> None:
     ticket_id = await awaiting(h)
     await move_card(h.deps, ticket_id, "resolved_by_human")
     await move_card(h.deps, ticket_id, "awaiting_human")
+    await h.settle()
     assert (await fetch(h, ticket_id)).closed_at is None
     assert h.chatwoot.statuses[-1].status == "open"
 

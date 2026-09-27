@@ -196,6 +196,7 @@ async def test_does_not_wait_for_a_turn_to_close_the_card_from_chatwoot(api: Api
     release.set()
     # The card left triage while the model was thinking: the turn drops its answer.
     assert await turn is None
+    await h.settle()
     assert [s.text for s in h.chatwoot.sent][-1] != "Qual erro?"
 
 

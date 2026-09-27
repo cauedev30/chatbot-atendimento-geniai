@@ -81,7 +81,7 @@ async def scratch_engine(test_database_url: str) -> AsyncIterator[AsyncEngine]:
 
 
 async def test_applies_pending_migrations_once_and_seeds_system_categories(scratch_engine: AsyncEngine) -> None:
-    assert await migrate(scratch_engine) == ["0001_init.sql", "0002_last_consumed_message.sql"]
+    assert await migrate(scratch_engine) == ["0001_init.sql", "0002_last_consumed_message.sql", "0003_outbox.sql"]
     assert await migrate(scratch_engine) == []
     async with scratch_engine.connect() as conn:
         keys = sorted((await conn.execute(select(category.c.key))).scalars())
@@ -118,7 +118,7 @@ async def test_marks_what_existing_tickets_already_answered(scratch_engine: Asyn
             "(1, 1, 'customer', 'oi'), (2, 1, 'bot', 'olá'), (3, 1, 'customer', 'o painel caiu'), "
             "(4, 2, 'customer', 'oi')"
         )
-    assert await migrate(scratch_engine) == ["0002_last_consumed_message.sql"]
+    assert await migrate(scratch_engine) == ["0002_last_consumed_message.sql", "0003_outbox.sql"]
     async with scratch_engine.connect() as conn:
         rows = (await conn.exec_driver_sql("SELECT id, last_consumed_message_id FROM ticket ORDER BY id")).all()
     assert [tuple(r) for r in rows] == [(1, 1), (2, None)]

@@ -121,3 +121,19 @@ triage_message = sa.Table(
     sa.Column("at", _tz(), nullable=False, server_default=sa.func.now()),
     sa.Column("chatwoot_message_id", sa.Integer, unique=True),
 )
+
+outbox_kind_enum = sa.Enum("message", "status", name="outbox_kind", create_type=False)
+outbox_state_enum = sa.Enum("pending", "sent", "failed", name="outbox_state", create_type=False)
+
+outbox = sa.Table(
+    "outbox",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True),
+    sa.Column("conversation_id", sa.Integer, nullable=False),
+    sa.Column("kind", outbox_kind_enum, nullable=False),
+    sa.Column("payload", sa.Text, nullable=False),
+    sa.Column("state", outbox_state_enum, nullable=False, server_default="pending"),
+    sa.Column("created_at", _tz(), nullable=False, server_default=sa.func.now()),
+    sa.Column("done_at", _tz()),
+    sa.Column("error", sa.Text),
+)

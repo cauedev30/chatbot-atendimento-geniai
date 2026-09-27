@@ -22,6 +22,7 @@ from geniai.api.schemas import HealthOut
 from geniai.app.board import BoardError
 from geniai.app.keyed_queue import KeyedQueue
 from geniai.app.logging import ConsoleLogger
+from geniai.app.outbox import OutboxWorker
 from geniai.app.ports import Deps
 from geniai.app.process_turn import run_turn
 from geniai.app.silence_sweeper import resume_pending_turns, start_sweeper
@@ -74,13 +75,16 @@ def _lifespan(state: AppState) -> Callable[[FastAPI], AbstractAsyncContextManage
         resumed = await resume_pending_turns(deps, scheduler)
         if resumed:
             log.info({"resumed": resumed}, "pending turns rescheduled")
+        # Starts by sending what a previous run left pending.
+        outbox_worker = OutboxWorker(deps)
+        outbox_worker.start()
         sweeper = start_sweeper(deps, SWEEP_INTERVAL_S)
         try:
             yield
         finally:
             sweeper.cancel()
             await scheduler.stop()
-            await deps.outbox.drain()
+            await outbox_worker.stop()
             await engine.dispose()
 
     return lifespan

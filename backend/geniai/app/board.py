@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from geniai.api.schemas import Board, BoardCard, IdLabel, IdName
-from geniai.app.notify import sync_chatwoot_status
+from geniai.app.notify import enqueue_status_after_move
 from geniai.app.ports import Deps
 from geniai.app.tickets_repo import (
     InvalidMoveError,
@@ -145,10 +145,12 @@ async def _move_in(
 
 
 async def move_card(deps: Deps, ticket_id: int, to: BoardColumn, patch: TicketPatch | None = None) -> None:
-    """A human move (drag, close, reopen), mirrored to the Chatwoot conversation status (spec §8)."""
+    """A human move (drag, close, reopen), mirrored to the Chatwoot conversation status (spec §8). The
+    status change goes to the outbox in the same transaction: the answer never waits for Chatwoot."""
     async with deps.engine.begin() as conn:
         result = await _move_in(deps, conn, ticket_id, to, patch)
-    await sync_chatwoot_status(deps, result.ticket.chatwoot_conversation_id, result.from_, to)
+        await enqueue_status_after_move(conn, result.ticket.chatwoot_conversation_id, result.from_, to)
+    deps.outbox.wake()
 
 
 async def take_card(deps: Deps, ticket_id: int, responsible_id: int | None) -> None:
@@ -167,7 +169,8 @@ async def take_card(deps: Deps, ticket_id: int, responsible_id: int | None) -> N
             await update_ticket(conn, ticket_id, {"responsible_id": responsible_id})
             return
         result = await _move_in(deps, conn, ticket_id, "in_progress", {"responsible_id": responsible_id})
-    await sync_chatwoot_status(deps, result.ticket.chatwoot_conversation_id, result.from_, "in_progress")
+        await enqueue_status_after_move(conn, result.ticket.chatwoot_conversation_id, result.from_, "in_progress")
+    deps.outbox.wake()
 
 
 async def release_card(deps: Deps, ticket_id: int) -> None:
@@ -179,7 +182,8 @@ async def release_card(deps: Deps, ticket_id: int) -> None:
         if current.column != "in_progress":
             raise BoardError("Só dá para tirar o responsável de um ticket em atendimento.")
         result = await _move_in(deps, conn, ticket_id, "awaiting_human", {"responsible_id": None})
-    await sync_chatwoot_status(deps, result.ticket.chatwoot_conversation_id, result.from_, "awaiting_human")
+        await enqueue_status_after_move(conn, result.ticket.chatwoot_conversation_id, result.from_, "awaiting_human")
+    deps.outbox.wake()
 
 
 async def recategorize(deps: Deps, ticket_id: int, category_id: int) -> None:

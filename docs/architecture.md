@@ -20,7 +20,7 @@ flowchart LR
         SW["app/silence_sweeper.py<br/>(every 5 min)"]
         API["api/auth · board · indicators"] --> USE["app/board · app/indicators"]
         IN & TURN & SW & USE --> REPO["app/tickets_repo.py"] --> DB[("PostgreSQL")]
-        IN & TURN & SW & USE --> OB["app/outbox.py<br/>(Chatwoot calls in order)"] --> CWC["chatwoot/http.py"]
+        IN & TURN & SW & USE --> OB["app/outbox.py<br/>(outbox table + worker)"] --> CWC["chatwoot/http.py"]
     end
     CWC --> CW
     LLMA --> LLM["LLM provider"]
@@ -83,8 +83,8 @@ sequenceDiagram
    - **known** → a ticket *in triage*, with the unit copied onto it; if Chatwoot says the
      conversation is not `pending`, it is set back to `pending` so the bot keeps it.
 
-   The database writes commit first; the Chatwoot calls then go to the outbox, which runs them in the
-   background, in order per conversation. The webhook never waits for a turn or for Chatwoot.
+   Every Chatwoot call is written as a row of the `outbox` table in the same transaction as the ticket
+   change that causes it (see "Outbox" below). The webhook never waits for a turn or for Chatwoot.
 2. **Burst window** (`turn_scheduler.py`): each message restarts a timer per conversation; when it
    fires, the turn runs under the conversation's turn lane, one turn at a time.
 3. **Turn** (`process_turn.py`). The pending customer messages (those after the last one a turn has
@@ -99,7 +99,21 @@ sequenceDiagram
 4. **Silence** (`silence_sweeper.py`): every 5 minutes, triage tickets silent for 24 h move to
    *Sem resposta* and the conversation is resolved.
 5. **Restart**: timers live in memory, so on start the backend reschedules every triage conversation
-   that has unanswered customer messages.
+   that has unanswered customer messages. Chatwoot calls left pending in the outbox go out when the
+   worker starts.
+
+### Outbox
+
+`app/outbox.py` is a transactional outbox. A message or a status change for a conversation is a row
+(`kind` `message` or `status`, `state` `pending`), inserted in the transaction that changes the
+ticket, so nothing is sent before the commit and nothing is lost if the process stops. After the
+commit the use case wakes the worker (`OutboxWorker`, started and stopped with the app). The worker
+also looks for pending rows at start and every 5 s. It sends them in id order within each
+conversation, conversations in parallel, and marks each row `sent`, or `failed` with the error,
+which is logged; a failed row is not tried again (the Chatwoot adapter already repeats what is safe
+to repeat). On shutdown it waits up to 10 s for the current delivery; what is left stays pending for
+the next start. Board actions (move, take, release, close) answer as soon as the ticket is written,
+without waiting for Chatwoot.
 
 ## Ticket lifecycle and precedence
 
@@ -168,7 +182,8 @@ schema is `backend/openapi.json`.
 | `GET /api/auth/me` | — | `200 {"user"}` |
 | `GET /api/board` | — | `200` the board: `generatedAt`, `triageCount`, `columns` (all five, in order), `teamMembers`, `categories`, `requireResponsible` |
 | `POST /api/board/tickets/{id}/move` | `{"to": column}` | `204`, or `400` with the reason |
-| `POST /api/board/tickets/{id}/take` | `{"responsibleId": id \| null}` | `204` or `400` |
+| `POST /api/board/tickets/{id}/take` | `{"responsibleId": id \| null}` | `204` or `400`. On a closed ticket it reopens it into In progress |
+| `POST /api/board/tickets/{id}/release` | `{}` | `204` or `400`: clears the responsible of an In progress ticket and moves it back to Awaiting human |
 | `POST /api/board/tickets/{id}/category` | `{"categoryId": id}` | `204` or `400` |
 | `POST /api/board/tickets/{id}/close` | — | `204` or `400` |
 | `GET /api/indicators?from=&to=&unit=&norm=0\|1` | — | `200` the query, the units and the six indicator blocks; `400 "Período inválido."` |

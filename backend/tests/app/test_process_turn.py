@@ -39,10 +39,13 @@ class Chat:
             conversation_status=None,
         )
         await handle_inbound_message(self.h.deps, self.scheduler, msg)
+        await self.h.settle()
 
     async def customer(self, conversation_id: int, text: str, has_media: bool = False) -> TurnOutcome | None:
         await self.receive(conversation_id, text, has_media)
-        return await process_turn(self.h.deps, conversation_id)
+        outcome = await process_turn(self.h.deps, conversation_id)
+        await self.h.settle()
+        return outcome
 
     async def greeted(self) -> int:
         conversation_id = next(_conversations)

@@ -4,7 +4,7 @@ from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from geniai.app.keyed_queue import KeyedQueue, turn_key
-from geniai.app.notify import send_message, sync_chatwoot_status
+from geniai.app.notify import enqueue_message, enqueue_status_after_move
 from geniai.app.ports import Deps
 from geniai.app.tickets_repo import (
     MessageRow,
@@ -144,7 +144,8 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
             if not await _claim(conn, t, consumed_id, closes=False):
                 return None
             await add_message(conn, NewMessage(ticket_id=t.id, author="bot", text=greeting, at=deps.now()))
-        await send_message(deps, conversation_id, greeting)
+            await enqueue_message(conn, conversation_id, greeting)
+        deps.outbox.wake()
         return "greeting"
 
     if decision is not None:
@@ -220,10 +221,10 @@ async def _apply(
             await update_ticket(conn, t.id, patch)
         written = await _write_decision(deps, conn, t, decision, turn)
         await add_message(conn, NewMessage(ticket_id=t.id, author="bot", text=written.reply, at=deps.now()))
-
-    await send_message(deps, t.chatwoot_conversation_id, written.reply)
-    if written.move is not None:
-        await sync_chatwoot_status(deps, t.chatwoot_conversation_id, *written.move)
+        await enqueue_message(conn, t.chatwoot_conversation_id, written.reply)
+        if written.move is not None:
+            await enqueue_status_after_move(conn, t.chatwoot_conversation_id, *written.move)
+    deps.outbox.wake()
     summary = turn.summary if turn is not None else t.summary
     if written.handoff_reason is not None and summary == "":
         await _fill_missing_summary(deps, t, messages, written.handoff_reason)

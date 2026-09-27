@@ -15,7 +15,7 @@ VALID = {
     "LLM_API_KEY": "key",
     "LLM_MODEL": "model-x",
     "BOARD_USER": "suporte",
-    "BOARD_PASSWORD": "senha-longa",
+    "BOARD_PASSWORD": "senha-longa-de-teste",
     "COOKIE_SECRET": "c" * 32,
 }
 
@@ -70,7 +70,7 @@ def test_rejects_a_short_cookie_secret() -> None:
 @pytest.mark.parametrize(
     ("name", "value"),
     [
-        ("BOARD_PASSWORD", "curta"),
+        ("BOARD_PASSWORD", "quinze-letrasxx"),
         ("WEBHOOK_TOKEN", "curto"),
         ("CHATWOOT_BASE_URL", "not a url"),
         ("CHATWOOT_ACCOUNT_ID", "0"),

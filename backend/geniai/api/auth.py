@@ -1,5 +1,6 @@
 """Shared login for the support team: one user and password, a signed session cookie."""
 
+import asyncio
 import hashlib
 import hmac
 from dataclasses import dataclass
@@ -9,7 +10,7 @@ import itsdangerous
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from geniai.api.deps import app_config, app_state, require_json
-from geniai.api.login_limit import TOO_MANY_ATTEMPTS, client_ip
+from geniai.api.login_limit import TOO_MANY_ATTEMPTS, UNIDENTIFIED, client_ip
 from geniai.api.schemas import ErrorOut, LoginIn, MeOut
 
 SESSION_COOKIE: Final = "geniai_board"
@@ -88,14 +89,18 @@ async def login(body: LoginIn, request: Request, response: Response) -> None:
         request.headers.get("x-forwarded-for"),
         config.trusted_proxies,
     )
-    if limiter.blocked(who):
+    if who is None:
+        await asyncio.sleep(limiter.delay_s(UNIDENTIFIED))
+    elif limiter.blocked(who):
         raise HTTPException(429, TOO_MANY_ATTEMPTS)
     user_ok = safe_equal(body.user, cfg.user)
     password_ok = safe_equal(body.password, cfg.password)
     if not (user_ok and password_ok):
-        limiter.fail(who)
+        limiter.fail(who or UNIDENTIFIED)
         raise HTTPException(401, "Usuário ou senha incorretos.")
-    limiter.succeed(who)
+    if who is not None:
+        # The shared key is not cleared: a teammate's login says nothing about the stranger's attempts.
+        limiter.succeed(who)
     issue_session(response, cfg)
 
 

@@ -47,7 +47,8 @@ flowchart LR
 (`lib/backend.ts`, forwarding the visitor's cookie); Client Components handle drag and drop, forms
 and refresh, and post to `/api/*` (`lib/api.ts`). `next.config.ts` proxies `/api/*` to the backend.
 `proxy.ts` sends a visitor without a session cookie to `/login`; the backend stays the authority
-and answers 401. API types come from the backend's `openapi.json` (`npm run api:types`).
+and answers 401. On `/api/*` it drops the `X-Forwarded-For` and `X-Real-IP` a client sent, unless
+`TRUST_UPSTREAM_PROXY=true` says a reverse proxy in front sets them. API types come from the backend's `openapi.json` (`npm run api:types`).
 
 ## Conversation flow
 
@@ -179,7 +180,7 @@ schema is `backend/openapi.json`.
 | Method and path | Body | Answer |
 |---|---|---|
 | `GET /api/health` | — | `200 {"ok": true}` |
-| `POST /api/auth/login` | `{"user", "password"}` | `204` and the session cookie, `401`, or `429` after too many failures |
+| `POST /api/auth/login` | `{"user", "password"}` | `204` and the session cookie, `401`, or `429` after too many failures from one address |
 | `POST /api/auth/logout` | — | `204`, cookie cleared (with or without a valid session) |
 | `GET /api/auth/me` | — | `200 {"user"}` |
 | `GET /api/board` | — | `200` the board: `generatedAt`, `triageCount`, `columns` (all five, in order), `teamMembers`, `categories`, `requireResponsible` |
@@ -220,10 +221,12 @@ by default.
   constant time. The session is an `itsdangerous`-signed cookie, httpOnly, `SameSite=Lax`, `Secure`
   in production, valid for 12 h. The signed value carries a digest of the password, so changing
   `BOARD_PASSWORD` ends every open session.
-- **Login attempts:** 10 failures from one client address in 15 minutes answer `429` until the
-  window passes (`api/login_limit.py`, in memory). The client address is the rightmost
+- **Login attempts** (`api/login_limit.py`, in memory): 10 failures from one client address in 15
+  minutes answer `429` until the window passes. The client address is the rightmost
   `X-Forwarded-For` entry that is not a trusted proxy, read only when the peer is in
-  `TRUSTED_PROXY_IPS`; entries a client adds on the left are never believed.
+  `TRUSTED_PROXY_IPS`; entries a client adds on the left are never believed. A request from a trusted
+  proxy with no usable address (no reverse proxy in front of the frontend) is never refused: those
+  logins share one count and each waits 1 s per recent failure, up to 5 s.
 - **Same origin:** the browser reaches the API only through the frontend's `/api` proxy, so the cookie
   is first-party and never needs CORS.
 - **Mutations** accept `application/json` only; with the `SameSite=Lax` cookie a cross-site form

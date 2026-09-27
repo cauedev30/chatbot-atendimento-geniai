@@ -2,8 +2,9 @@ from dataclasses import replace
 from ipaddress import ip_network
 
 import httpx
+from pytest import MonkeyPatch
 
-from geniai.api.login_limit import LOGIN_MAX_FAILURES, TOO_MANY_ATTEMPTS, LoginLimiter, client_ip
+from geniai.api.login_limit import LOGIN_MAX_FAILURES, TOO_MANY_ATTEMPTS, UNIDENTIFIED, LoginLimiter, client_ip
 from geniai.app.turn_scheduler import RecordingScheduler
 from geniai.main import create_app
 from tests.api.conftest import TEST_CONFIG, Api
@@ -17,8 +18,8 @@ RIGHT = {"user": "suporte", "password": "senha-de-teste"}
 def test_the_client_is_the_peer_unless_the_peer_is_a_trusted_proxy() -> None:
     assert client_ip("198.51.100.4", "203.0.113.1", LOCAL) == "198.51.100.4"
     assert client_ip("127.0.0.1", "203.0.113.1", LOCAL) == "203.0.113.1"
-    assert client_ip("127.0.0.1", None, LOCAL) == "127.0.0.1"
-    assert client_ip(None, None, LOCAL) == "unknown"
+    assert client_ip("127.0.0.1", None, LOCAL) is None
+    assert client_ip(None, None, LOCAL) is None
 
 
 def test_takes_the_rightmost_forwarded_address_that_is_not_a_trusted_proxy() -> None:
@@ -27,7 +28,8 @@ def test_takes_the_rightmost_forwarded_address_that_is_not_a_trusted_proxy() -> 
     assert client_ip("127.0.0.1", "203.0.113.1, 127.0.0.1", LOCAL) == "203.0.113.1"
     proxies = (*LOCAL, ip_network("10.0.0.0/8"))
     assert client_ip("127.0.0.1", "203.0.113.1, 10.1.2.3", proxies) == "203.0.113.1"
-    assert client_ip("127.0.0.1", "lixo", LOCAL) == "lixo"
+    assert client_ip("127.0.0.1", "127.0.0.1", LOCAL) is None
+    assert client_ip("127.0.0.1", "lixo", LOCAL) is None
 
 
 def test_blocks_after_too_many_failures_within_the_window_then_forgets_them() -> None:
@@ -75,3 +77,33 @@ async def test_ignores_forwarded_addresses_from_an_untrusted_peer(h: Harness) ->
             await client.post("/api/auth/login", json=WRONG, headers={"x-forwarded-for": f"203.0.113.{i}"})
         res = await client.post("/api/auth/login", json=RIGHT, headers={"x-forwarded-for": "203.0.113.99"})
     assert res.status_code == 429
+
+
+def test_slows_down_by_a_second_per_recent_failure_up_to_five() -> None:
+    now = [0.0]
+    limiter = LoginLimiter(window_s=60, clock=lambda: now[0])
+    assert limiter.delay_s(UNIDENTIFIED) == 0
+    for expected in (1, 2, 3, 4, 5, 5):
+        limiter.fail(UNIDENTIFIED)
+        assert limiter.delay_s(UNIDENTIFIED) == expected
+    now[0] = 61
+    assert limiter.delay_s(UNIDENTIFIED) == 0
+
+
+async def test_without_a_client_address_it_slows_down_and_never_refuses(api: Api, monkeypatch: MonkeyPatch) -> None:
+    waits: list[float] = []
+
+    async def no_wait(seconds: float) -> None:
+        waits.append(seconds)
+
+    monkeypatch.setattr("geniai.api.auth.asyncio.sleep", no_wait)
+    # The trusted frontend with no reverse proxy in front: no X-Forwarded-For at all.
+    for _ in range(LOGIN_MAX_FAILURES + 2):
+        assert (await api.client.post("/api/auth/login", json=WRONG)).status_code == 401
+    assert (await api.client.post("/api/auth/login", json=RIGHT)).status_code == 204
+    assert waits[:6] == [0, 1, 2, 3, 4, 5]
+    assert waits[-1] == 5
+    # An identified address is not slowed down by those failures.
+    waits.clear()
+    assert (await login(api, RIGHT, "203.0.113.5")).status_code == 204
+    assert waits == []

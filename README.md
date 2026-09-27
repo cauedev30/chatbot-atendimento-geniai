@@ -173,7 +173,7 @@ A test also checks that the committed `backend/openapi.json` matches the API.
 | `CHATWOOT_API_TOKEN` | Chatwoot access token for API calls |
 | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | Any OpenAI-compatible chat completions endpoint |
 | `LLM_EXTRA_BODY_JSON` | Optional JSON object merged into each LLM request (e.g. to turn reasoning off) |
-| `BOARD_USER`, `BOARD_PASSWORD` | The team's shared login; the password needs at least 8 characters |
+| `BOARD_USER`, `BOARD_PASSWORD` | The team's shared login; the password needs at least 16 characters |
 | `COOKIE_SECRET` | Signs the session cookie; at least 32 characters |
 | `SECURE_COOKIE` | `true` behind HTTPS (default); `false` only for local http |
 | `ENABLE_API_DOCS` | `true` serves `/docs`, `/redoc` and `/openapi.json`; off by default |
@@ -187,17 +187,28 @@ A test also checks that the committed `backend/openapi.json` matches the API.
 | Variable | Meaning |
 |---|---|
 | `BACKEND_URL` | The backend's base URL, used by server rendering and by the `/api` proxy |
+| `TRUST_UPSTREAM_PROXY` | `true` only when a reverse proxy in front of the frontend sets `X-Forwarded-For`; otherwise the frontend drops the `X-Forwarded-For` and `X-Real-IP` a client sends to `/api` |
 
 ## Login attempts
 
-After 10 failed logins from one client address within 15 minutes, the login answers `429` until the
-window passes; other addresses are not affected. The browser reaches the backend through the
-frontend, so the backend takes the client address from `X-Forwarded-For`, and only when the request
-comes from an address in `TRUSTED_PROXY_IPS`. The frontend forwards that header as it receives it and
-does not add one, so in production put a reverse proxy in front of the frontend that sets or appends
-`X-Forwarded-For` (nginx, Caddy and Traefik do by default), and set `TRUSTED_PROXY_IPS` to the
-frontend's address as the backend sees it. Without that header, every login shares the frontend's
-address.
+The browser reaches the backend through the frontend, so the backend takes the client address from
+`X-Forwarded-For`, and only when the request comes from an address in `TRUSTED_PROXY_IPS`.
+
+- **With a client address:** after 10 failed logins from one address within 15 minutes, the login
+  answers `429` until the window passes; other addresses are not affected.
+- **Without one:** the logins share one count and are never refused; each attempt waits 1 s per
+  recent failure, up to 5 s. So a stranger's failures slow the team down but cannot lock it out.
+
+The frontend adds no `X-Forwarded-For` of its own, and drops the one a client sends, so **the limit
+per address needs a reverse proxy** in front of the frontend that sets or appends `X-Forwarded-For`
+(nginx, Caddy and Traefik do by default). With one:
+
+- set `TRUST_UPSTREAM_PROXY=true` in the frontend, so it passes the header on;
+- set `TRUSTED_PROXY_IPS` in the backend to the frontend's address as the backend sees it. When the
+  services run in separate containers, that is the frontend container's address (or its network),
+  not `127.0.0.1`.
+
+Without a reverse proxy, only the progressive delay applies.
 
 ## Connecting Chatwoot
 

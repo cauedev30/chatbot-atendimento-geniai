@@ -43,7 +43,7 @@ class _Env(BaseModel):
     LLM_MODEL: NonEmpty
     LLM_EXTRA_BODY_JSON: str | None = None
     BOARD_USER: NonEmpty
-    BOARD_PASSWORD: Annotated[str, Field(min_length=8)]
+    BOARD_PASSWORD: Annotated[str, Field(min_length=16)]
     COOKIE_SECRET: Annotated[str, Field(min_length=32)]
     SECURE_COOKIE: Literal["true", "false"] = "true"
     BURST_WINDOW_MS: Annotated[int, Field(gt=0)] | None = None

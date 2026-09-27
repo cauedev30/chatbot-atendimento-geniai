@@ -65,7 +65,7 @@ def _lifespan(state: AppState) -> Callable[[FastAPI], AbstractAsyncContextManage
         )
 
         async def turn(conversation_id: int) -> None:
-            await run_turn(state.queue, deps, conversation_id)
+            await run_turn(state.queue, deps, conversation_id, scheduler)
 
         def on_error(err: BaseException, conversation_id: int) -> None:
             log.error({"err": err, "conversationId": conversation_id}, "turn processing failed")

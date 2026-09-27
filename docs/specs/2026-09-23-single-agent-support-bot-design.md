@@ -117,7 +117,10 @@ flowchart LR
    silent** in that conversation while the ticket is open.
 8. **Messages on an open ticket** (Awaiting human or In progress) attach to that ticket; the bot does
    not answer. After a ticket is closed (Resolved by bot, Resolved by human or No response), the next
-   message opens a new ticket.
+   message opens a new ticket. That includes messages that arrive while the turn that closes the ticket
+   as Resolved by bot is running: the ticket closes as decided, and those messages, which may be another
+   problem, open a new ticket that goes through identification and gets its own turn. If a person moved
+   the ticket out of triage during the turn, the turn sends nothing.
 9. **Silence:** a ticket still in triage, or waiting for FAQ feedback, with no customer message for
    **24 h** (configurable) goes to **No response**.
 10. **Media** (audio, image, document): the bot asks the customer to type the problem, once. Media

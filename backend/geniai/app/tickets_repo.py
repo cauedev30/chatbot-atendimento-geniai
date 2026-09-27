@@ -224,6 +224,12 @@ async def list_messages(conn: AsyncConnection, ticket_id: int) -> list[MessageRo
     return [MessageRow(**row._mapping) for row in await conn.execute(query)]
 
 
+async def move_messages(conn: AsyncConnection, message_ids: list[int], to_ticket_id: int) -> None:
+    await conn.execute(
+        update(triage_message).where(triage_message.c.id.in_(message_ids)).values(ticket_id=to_ticket_id)
+    )
+
+
 async def update_ticket(conn: AsyncConnection, ticket_id: int, patch: TicketPatch) -> None:
     _check_patch(patch)
     await conn.execute(update(ticket).where(ticket.c.id == ticket_id).values(**patch))

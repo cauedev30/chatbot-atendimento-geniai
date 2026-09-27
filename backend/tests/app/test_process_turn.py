@@ -3,17 +3,18 @@ import itertools
 import json
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from geniai.app.board import take_card
 from geniai.app.handle_inbound import handle_inbound_message
+from geniai.app.keyed_queue import KeyedQueue
 from geniai.app.ports import LlmRequest
-from geniai.app.process_turn import TurnOutcome, pending_customer_messages, process_turn
-from geniai.app.tickets_repo import MessageRow, TicketRow
+from geniai.app.process_turn import TurnOutcome, pending_customer_messages, process_turn, run_turn
+from geniai.app.tickets_repo import MessageRow, TicketRow, list_messages
 from geniai.app.turn_scheduler import RecordingScheduler
 from geniai.chatwoot.webhook import IncomingMessage
 from geniai.db.fixtures import FICTITIOUS
-from geniai.db.schema import ticket
+from geniai.db.schema import attendant, ticket
 from geniai.domain.texts import TEXT
 from geniai.domain.types import MessageAuthor
 from tests.conftest import START, Harness
@@ -281,26 +282,62 @@ class SlowLlm:
         h.llm.complete = slow  # type: ignore[method-assign]
 
 
-async def test_a_turn_that_would_close_the_ticket_yields_to_a_message_that_arrived_meanwhile(
+async def close_while_a_message_arrives(h: Harness, chat: Chat, late: str) -> int:
+    """The customer confirms the FAQ worked; while the LLM reads that, another message arrives."""
+    conversation_id = await chat.faq_sent()
+    await chat.receive(conversation_id, "sim, resolveu")
+    llm = SlowLlm(h)
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], faq_feedback="resolved"))
+    turn = asyncio.create_task(run_turn(KeyedQueue(), h.deps, conversation_id, chat.scheduler))
+    await asyncio.sleep(0.05)
+    await chat.receive(conversation_id, late)
+    llm.release.set()
+    assert await turn == "resolved_by_bot"
+    await h.settle()
+    return conversation_id
+
+
+async def test_closes_the_ticket_and_opens_a_new_one_for_a_message_that_arrived_during_the_turn(
     h: Harness, chat: Chat
 ) -> None:
+    conversation_id = await close_while_a_message_arrives(h, chat, "ah, e a impressora também parou")
+    async with h.begin() as conn:
+        rows = (
+            await conn.execute(
+                select(ticket.c.id, ticket.c.column)
+                .where(ticket.c.chatwoot_conversation_id == conversation_id)
+                .order_by(ticket.c.id)
+            )
+        ).all()
+    assert [r.column for r in rows] == ["resolved_by_bot", "in_triage"]
+    closed, new = rows[0].id, rows[1].id
+    async with h.begin() as conn:
+        assert [m.text for m in await list_messages(conn, new)] == ["ah, e a impressora também parou"]
+        assert "ah, e a impressora também parou" not in [m.text for m in await list_messages(conn, closed)]
+    assert chat.last_sent() == TEXT.resolved_thanks
+    assert h.chatwoot.statuses[-2:] == [StatusSet(conversation_id, "resolved"), StatusSet(conversation_id, "pending")]
+    # The new ticket's turn is due: it is greeted like any first message.
+    assert chat.scheduler.scheduled[-1] == conversation_id
+    assert await process_turn(h.deps, conversation_id) == "greeting"
+
+
+async def test_a_late_message_from_a_number_no_longer_registered_goes_to_a_person(h: Harness, chat: Chat) -> None:
     conversation_id = await chat.faq_sent()
     await chat.receive(conversation_id, "sim, resolveu")
     llm = SlowLlm(h)
     h.llm.push(turn_json(category_id=h.seed.categories["login"], faq_feedback="resolved"))
     turn = asyncio.create_task(process_turn(h.deps, conversation_id))
     await asyncio.sleep(0.05)
-    await chat.receive(conversation_id, "ah, e a impressora também parou")
-    sent_before = len(h.chatwoot.sent)
+    await chat.receive(conversation_id, "outra coisa")
+    async with h.begin() as conn:
+        await conn.execute(update(attendant).where(attendant.c.id == h.seed.attendants["ana"].id).values(active=False))
     llm.release.set()
-    assert await turn is None
-    assert len(h.chatwoot.sent) == sent_before
-    assert (await chat.ticket_of(conversation_id)).column == "in_triage"
-
-    h.llm.push(turn_json(category_id=h.seed.categories["other"], faq_feedback="unclear"))
-    assert await process_turn(h.deps, conversation_id) == "reask_feedback"
-    assert "sim, resolveu" in h.llm.requests[-1].user
-    assert "a impressora também parou" in h.llm.requests[-1].user
+    assert await turn == "resolved_by_bot"
+    await h.settle()
+    new = await chat.ticket_of(conversation_id)
+    assert (new.column, new.handoff_reason, new.summary) == ("awaiting_human", "unidentified", "outra coisa")
+    assert texts(h.chatwoot.sent)[-2:] == [TEXT.resolved_thanks, TEXT.unidentified_ack]
+    assert h.chatwoot.statuses[-1] == StatusSet(conversation_id, "open")
 
 
 async def test_a_message_that_arrived_during_a_turn_reaches_the_llm_as_new_in_the_next_turn(

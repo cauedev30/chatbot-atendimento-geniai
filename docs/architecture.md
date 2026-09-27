@@ -94,8 +94,10 @@ sequenceDiagram
    LLM through the precedence rules. The LLM runs outside any database transaction; the decision, the
    summary and category, and the bot's reply are written in one transaction, then sent. That
    transaction locks the ticket and drops the decision if a person moved the ticket out of triage
-   meanwhile, or if it would close the ticket while a newer customer message waits: the next turn then
-   reads all of them.
+   meanwhile. When the decision closes the ticket (Resolved by bot) and customer messages arrived during
+   the turn, the ticket still closes, and those messages move to a new ticket, identified like any first
+   message, whose turn is scheduled next. A webhook that waited for the ticket's lock during that close
+   looks for the open ticket again, so it attaches to the new one.
 4. **Silence** (`silence_sweeper.py`): every 5 minutes, triage tickets silent for 24 h move to
    *Sem resposta* and the conversation is resolved.
 5. **Restart**: timers live in memory, so on start the backend reschedules every triage conversation

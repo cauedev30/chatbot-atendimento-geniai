@@ -1,11 +1,12 @@
+import asyncio
 import itertools
 from typing import Any
 
 import pytest
 from sqlalchemy import select
 
-from geniai.app.handle_inbound import handle_inbound_message
-from geniai.app.tickets_repo import TicketRow, move_ticket
+from geniai.app.handle_inbound import handle_inbound_message, open_ticket_for
+from geniai.app.tickets_repo import TicketRow, get_ticket, list_messages, move_ticket
 from geniai.app.turn_scheduler import RecordingScheduler
 from geniai.chatwoot.webhook import IncomingMessage
 from geniai.db.schema import ticket, triage_message
@@ -181,3 +182,25 @@ async def test_writes_the_ticket_before_any_outbound_message(h: Harness, schedul
     await handle_inbound_message(h.deps, scheduler, inbound(h, phone=None))
     await h.settle()
     assert seen == [1]
+
+
+async def test_attaches_to_the_ticket_a_closing_turn_opened_while_this_message_waited_for_the_lock(
+    h: Harness, scheduler: RecordingScheduler
+) -> None:
+    await handle_inbound_message(h.deps, scheduler, inbound(h, conversation_id=58))
+    [first] = await tickets_of(h, 58)
+    async with h.begin() as conn:
+        # A turn holds the ticket, closes it and opens the next one, like process_turn with late messages.
+        await get_ticket(conn, first.id, lock=True)
+        await move_ticket(conn, first.id, "resolved_by_bot", "bot", h.now)
+        opened = await open_ticket_for(conn, 58, first.phone_e164, "ah, outra coisa", h.now)
+        waiting = asyncio.create_task(
+            handle_inbound_message(h.deps, scheduler, inbound(h, conversation_id=58, text="mais uma"))
+        )
+        await asyncio.sleep(0.1)
+        assert not waiting.done()
+    assert await waiting == "attached_to_triage"
+    tickets = await tickets_of(h, 58)
+    assert [t.id for t in tickets] == [first.id, opened.ticket_id]
+    async with h.begin() as conn:
+        assert [m.text for m in await list_messages(conn, opened.ticket_id)] == ["mais uma"]

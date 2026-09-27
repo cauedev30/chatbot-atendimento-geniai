@@ -1,4 +1,8 @@
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
+
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from geniai.app.notify import enqueue_message, enqueue_status
 from geniai.app.ports import Deps
@@ -25,6 +29,55 @@ InboundOutcome = Literal[
     "attached_to_triage",
     "attached_to_human",
 ]
+
+
+@dataclass(frozen=True)
+class OpenedTicket:
+    ticket_id: int
+    identified: bool
+
+
+async def open_ticket_for(
+    conn: AsyncConnection, conversation_id: int, phone: str | None, first_text: str, now: datetime
+) -> OpenedTicket:
+    """Identification (spec §5.1 step 2): a known phone opens a ticket in triage, anything else a ticket
+    waiting for a person. The caller stores the customer messages, then acknowledges an unidentified one."""
+    who = None if phone is None else await find_attendant_by_phone(conn, phone)
+    if who is None:
+        created = await create_ticket(
+            conn,
+            NewTicket(
+                column="awaiting_human",
+                conversation_id=conversation_id,
+                phone_e164=phone,
+                attendant_id=None,
+                unit_id=None,
+                category_id=await get_category_id_by_key(conn, "unidentified"),
+                handoff_reason="unidentified",
+                summary=truncate(first_text, 280),
+            ),
+            now,
+        )
+        return OpenedTicket(created.id, identified=False)
+    created = await create_ticket(
+        conn,
+        NewTicket(
+            column="in_triage",
+            conversation_id=conversation_id,
+            phone_e164=phone,
+            attendant_id=who.id,
+            unit_id=who.unit_id,
+        ),
+        now,
+    )
+    return OpenedTicket(created.id, identified=True)
+
+
+async def acknowledge_unidentified(conn: AsyncConnection, conversation_id: int, ticket_id: int, now: datetime) -> None:
+    """Unknown number: straight to a human, fixed acknowledgement only, never the FAQ."""
+    await add_message(conn, NewMessage(ticket_id=ticket_id, author="bot", text=TEXT.unidentified_ack, at=now))
+    await enqueue_message(conn, conversation_id, TEXT.unidentified_ack)
+    await enqueue_status(conn, conversation_id, "open")
 
 
 async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: IncomingMessage) -> InboundOutcome:
@@ -54,54 +107,27 @@ async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: Inco
 
         # Locked, so a turn closing this ticket meanwhile either waits or makes a new ticket open here.
         open_ticket = await find_open_ticket(conn, msg.conversation_id, lock=True)
+        if open_ticket is None:
+            # A turn that closed the ticket while this statement waited for its lock may have opened a new
+            # one for the messages that arrived during it; this statement could not see it, a new one can.
+            open_ticket = await find_open_ticket(conn, msg.conversation_id, lock=True)
         if open_ticket is not None:
             await add_message(conn, customer_message(open_ticket.id))
             await update_ticket(conn, open_ticket.id, {"last_customer_message_at": now})
             outcome = "attached_to_triage" if open_ticket.column == "in_triage" else "attached_to_human"
         else:
             phone = None if msg.phone is None else normalize_br_phone(msg.phone)
-            who = None if phone is None else await find_attendant_by_phone(conn, phone)
-            if who is None:
-                # Unknown number: straight to a human, fixed acknowledgement only, never the FAQ.
-                created = await create_ticket(
-                    conn,
-                    NewTicket(
-                        column="awaiting_human",
-                        conversation_id=msg.conversation_id,
-                        phone_e164=phone,
-                        attendant_id=None,
-                        unit_id=None,
-                        category_id=await get_category_id_by_key(conn, "unidentified"),
-                        handoff_reason="unidentified",
-                        summary=truncate(text, 280),
-                    ),
-                    now,
-                )
-                await add_message(conn, customer_message(created.id))
-                await add_message(
-                    conn, NewMessage(ticket_id=created.id, author="bot", text=TEXT.unidentified_ack, at=now)
-                )
-                await enqueue_message(conn, msg.conversation_id, TEXT.unidentified_ack)
-                await enqueue_status(conn, msg.conversation_id, "open")
-                outcome = "unidentified_ticket"
-            else:
-                created = await create_ticket(
-                    conn,
-                    NewTicket(
-                        column="in_triage",
-                        conversation_id=msg.conversation_id,
-                        phone_e164=phone,
-                        attendant_id=who.id,
-                        unit_id=who.unit_id,
-                    ),
-                    now,
-                )
-                await add_message(conn, customer_message(created.id))
+            opened = await open_ticket_for(conn, msg.conversation_id, phone, text, now)
+            await add_message(conn, customer_message(opened.ticket_id))
+            if opened.identified:
                 # The bot must not depend on how Chatwoot reopens a resolved conversation: triage runs in
                 # "pending".
                 if msg.conversation_status is not None and msg.conversation_status != "pending":
                     await enqueue_status(conn, msg.conversation_id, "pending")
                 outcome = "triage_ticket"
+            else:
+                await acknowledge_unidentified(conn, msg.conversation_id, opened.ticket_id, now)
+                outcome = "unidentified_ticket"
 
     deps.outbox.wake()
     if outcome in ("triage_ticket", "attached_to_triage"):

@@ -3,8 +3,9 @@ from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from geniai.app.handle_inbound import acknowledge_unidentified, open_ticket_for
 from geniai.app.keyed_queue import KeyedQueue, turn_key
-from geniai.app.notify import enqueue_message, enqueue_status_after_move
+from geniai.app.notify import enqueue_message, enqueue_status, enqueue_status_after_move
 from geniai.app.ports import Deps
 from geniai.app.tickets_repo import (
     MessageRow,
@@ -19,9 +20,11 @@ from geniai.app.tickets_repo import (
     list_active_categories,
     list_active_faq_items,
     list_messages,
+    move_messages,
     move_ticket,
     update_ticket,
 )
+from geniai.app.turn_scheduler import TurnScheduler
 from geniai.domain.human_request import mentions_human_request
 from geniai.domain.texts import TEXT, truncate
 from geniai.domain.triage import PreLlmSignals, decide_turn, pre_llm_decision
@@ -85,24 +88,44 @@ async def build_turn_context(
     )
 
 
-async def run_turn(queue: KeyedQueue, deps: Deps, conversation_id: int) -> TurnOutcome | None:
-    """How the scheduler runs a turn: one at a time per conversation, apart from its webhooks."""
-    return await queue.run(turn_key(conversation_id), lambda: process_turn(deps, conversation_id))
+async def run_turn(
+    queue: KeyedQueue, deps: Deps, conversation_id: int, scheduler: TurnScheduler | None = None
+) -> TurnOutcome | None:
+    """How the scheduler runs a turn: one at a time per conversation, apart from its webhooks. A turn that
+    closed the ticket may have opened a new one for messages that arrived during it: its turn is due."""
+    outcome = await queue.run(turn_key(conversation_id), lambda: process_turn(deps, conversation_id))
+    if outcome == "resolved_by_bot" and scheduler is not None:
+        scheduler.schedule(conversation_id)
+    return outcome
 
 
-async def _claim(conn: AsyncConnection, t: TicketRow, consumed_id: int, closes: bool) -> bool:
+async def _claim(conn: AsyncConnection, t: TicketRow, consumed_id: int) -> bool:
     """Locks the ticket and checks the turn still applies, then marks its messages as read. It does not
-    when a person moved the ticket out of triage meanwhile, nor, for a decision that closes the ticket,
-    when a customer message arrived meanwhile: the next turn reads it together with these."""
+    when a person moved the ticket out of triage meanwhile: the turn then sends nothing."""
     current = await get_ticket(conn, t.id, lock=True)
     if current is None or current.column != "in_triage":
         return False
     if current.last_consumed_message_id != t.last_consumed_message_id:
         return False
-    if closes and pending_customer_messages(await list_messages(conn, t.id), consumed_id):
-        return False
     await update_ticket(conn, t.id, {"last_consumed_message_id": consumed_id})
     return True
+
+
+async def _carry_late_messages(deps: Deps, conn: AsyncConnection, t: TicketRow, consumed_id: int) -> None:
+    """The ticket was just closed. Customer messages that arrived while the turn was running may be another
+    problem, so they open a new ticket, identified like any first message (spec §5.1 step 8)."""
+    late = pending_customer_messages(await list_messages(conn, t.id), consumed_id)
+    if not late:
+        return
+    now = deps.now()
+    first_text = next((m.text for m in late if not m.is_media), late[0].text)
+    opened = await open_ticket_for(conn, t.chatwoot_conversation_id, t.phone_e164, first_text, now)
+    await move_messages(conn, [m.id for m in late], opened.ticket_id)
+    if opened.identified:
+        # The close just queued "resolved"; triage runs in "pending".
+        await enqueue_status(conn, t.chatwoot_conversation_id, "pending")
+    else:
+        await acknowledge_unidentified(conn, t.chatwoot_conversation_id, opened.ticket_id, now)
 
 
 async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
@@ -144,7 +167,7 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
 
     if decision is None and ctx is None:
         async with deps.engine.begin() as conn:
-            if not await _claim(conn, t, consumed_id, closes=False):
+            if not await _claim(conn, t, consumed_id):
                 return None
             await add_message(conn, NewMessage(ticket_id=t.id, author="bot", text=greeting, at=deps.now()))
             await enqueue_message(conn, conversation_id, greeting)
@@ -213,7 +236,7 @@ async def _apply(
     turn: InterpretedTurn | None,
 ) -> TurnOutcome | None:
     async with deps.engine.begin() as conn:
-        if not await _claim(conn, t, consumed_id, closes=isinstance(decision, ResolvedByBot)):
+        if not await _claim(conn, t, consumed_id):
             return None
         if turn is not None:
             patch: dict[str, object] = {
@@ -227,6 +250,8 @@ async def _apply(
         await enqueue_message(conn, t.chatwoot_conversation_id, written.reply)
         if written.move is not None:
             await enqueue_status_after_move(conn, t.chatwoot_conversation_id, *written.move)
+        if written.kind == "resolved_by_bot":
+            await _carry_late_messages(deps, conn, t, consumed_id)
     deps.outbox.wake()
     summary = turn.summary if turn is not None else t.summary
     if written.handoff_reason is not None and summary == "":

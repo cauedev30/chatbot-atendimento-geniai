@@ -319,7 +319,13 @@ function Column(props: { column: BoardColumn; count: number; shown: boolean; chi
       aria-labelledby={headingId}
       data-shown={shown}
     >
-      <h2 id={headingId} className={styles.columnHead} tabIndex={-1}>
+      {/* Named "Aguardando humano, 13 tickets", not "Aguardando humano13". */}
+      <h2
+        id={headingId}
+        className={styles.columnHead}
+        tabIndex={-1}
+        aria-label={`${COLUMN_LABELS[column]}, ${count} ${count === 1 ? "ticket" : "tickets"}`}
+      >
         <span className={styles.columnName}>{COLUMN_LABELS[column]}</span>
         <span className={`figure ${styles.columnCount}`}>{count}</span>
       </h2>

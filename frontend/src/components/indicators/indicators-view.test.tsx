@@ -113,6 +113,11 @@ describe("IndicatorsView", () => {
   it("divides the heatmap by attendants, with a dash where a unit has none", () => {
     render(<IndicatorsView response={response({ normalize: true })} />);
     const heatmap = screen.getByRole("region", { name: "Unidade × categoria" });
+    expect(
+      within(heatmap).getByRole("table", {
+        name: "Tickets por unidade e categoria, divididos pelo número de atendentes da unidade",
+      }),
+    ).toBeInTheDocument();
     expect(within(heatmap).getByRole("row", { name: /Unidade Exemplo Centro/ })).toHaveTextContent("1,00");
     expect(within(heatmap).getByRole("row", { name: /Unidade Exemplo Norte/ })).toHaveTextContent("—");
     // Unknown numbers have no attendants to divide by.

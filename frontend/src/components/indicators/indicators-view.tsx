@@ -263,6 +263,11 @@ function Heatmap({ data, query }: { data: Indicators; query: IndicatorsQuery }) 
       ) : (
         <div className={styles.scroll}>
           <table className={`${styles.table} ${styles.heat}`}>
+            <caption className="visually-hidden">
+              {query.normalize
+                ? "Tickets por unidade e categoria, divididos pelo número de atendentes da unidade"
+                : "Tickets por unidade e categoria"}
+            </caption>
             <thead>
               <tr>
                 <th scope="col">Unidade</th>
@@ -335,6 +340,7 @@ function Time({ data }: { data: Indicators }) {
         </span>
       </p>
       <table className={`${styles.table} ${styles.pairs}`}>
+        <caption className="visually-hidden">Mediana e média de cada medida de tempo</caption>
         <thead className="visually-hidden">
           <tr>
             <th scope="col">Medida</th>

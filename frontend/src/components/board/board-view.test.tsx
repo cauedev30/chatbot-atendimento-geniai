@@ -90,16 +90,17 @@ afterEach(() => {
 });
 
 describe("BoardView", () => {
-  it("renders the five columns in order with their counts", () => {
+  it("renders the five columns in order, each named with its count", () => {
     render(<BoardView board={board()} />);
-    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.getAttribute("aria-label"));
     expect(headings).toEqual([
-      "Resolvido pelo bot1",
-      "Aguardando humano2",
-      "Em atendimento1",
-      "Resolvido por humano0",
-      "Sem resposta0",
+      "Resolvido pelo bot, 1 ticket",
+      "Aguardando humano, 2 tickets",
+      "Em atendimento, 1 ticket",
+      "Resolvido por humano, 0 tickets",
+      "Sem resposta, 0 tickets",
     ]);
+    expect(screen.getByRole("region", { name: "Aguardando humano, 2 tickets" })).toBeInTheDocument();
     expect(within(column(/^Aguardando humano/)).getAllByRole("article")).toHaveLength(2);
   });
 

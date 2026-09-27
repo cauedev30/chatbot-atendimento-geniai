@@ -113,6 +113,7 @@ cp .env.example .env             # then fill it in (see Configuration)
 
 | Command | What it does |
 |---|---|
+| `python -m geniai.db.cli create` | Create the database of `DATABASE_URL` when missing (used by the e2e run) |
 | `python -m geniai.db.cli migrate` | Apply `geniai/db/migrations/*.sql` to `DATABASE_URL` |
 | `python -m geniai.db.cli seed` | Load **fictitious** demo data (once; a second run does nothing) |
 | `python -m geniai` | Run the service on `HOST` and `PORT`. It migrates on start, reschedules turns left pending by a restart and sweeps silent tickets every 5 minutes |
@@ -152,7 +153,7 @@ Log in with `BOARD_USER` and `BOARD_PASSWORD` from the backend's environment.
 |---|---|---|
 | `backend/` | `ruff check . && ruff format --check . && mypy geniai && pytest` | Lint, format, strict types and the pytest suite (domain, database, use cases, LLM contract, Chatwoot, HTTP API). Needs `TEST_DATABASE_URL`: an empty, dedicated database that the tests truncate |
 | `frontend/` | `npm run check` | ESLint, `tsc --noEmit` and the Vitest suite (API client, formatters, login, board, indicators) |
-| `frontend/` | `npm run e2e` | Playwright smoke across both services: starts the backend on the dev database and the frontend, logs in, drags a card, opens the indicators. First time: `npx playwright install chromium` |
+| `frontend/` | `npm run e2e` | Playwright smoke across both services: starts the backend on its own `geniai_e2e` database (never the dev one) and the frontend, logs in, drags a card, opens the indicators. The database is `E2E_DATABASE_URL`, or `DATABASE_URL` from `backend/.env` pointed at `geniai_e2e` with the same credential; it is created when missing, so that role needs `CREATEDB`. First time: `npx playwright install chromium` |
 
 A test also checks that the committed `backend/openapi.json` matches the API.
 

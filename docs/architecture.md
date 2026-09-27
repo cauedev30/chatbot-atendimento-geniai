@@ -181,7 +181,7 @@ schema is `backend/openapi.json`.
 |---|---|---|
 | `GET /api/health` | — | `200 {"ok": true}` |
 | `POST /api/auth/login` | `{"user", "password"}` | `204` and the session cookie, `401`, or `429` after too many failures from one address |
-| `POST /api/auth/logout` | — | `204`, cookie cleared (with or without a valid session) |
+| `POST /api/auth/logout` | `{}` | `204`, cookie cleared (with or without a valid session); `400` when the body is not JSON |
 | `GET /api/auth/me` | — | `200 {"user"}` |
 | `GET /api/board` | — | `200` the board: `generatedAt`, `triageCount`, `columns` (all five, in order), `teamMembers`, `categories`, `requireResponsible` |
 | `POST /api/board/tickets/{id}/move` | `{"to": column}` | `204`, or `400` with the reason |

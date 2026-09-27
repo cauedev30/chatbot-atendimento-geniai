@@ -32,7 +32,8 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description Always clears the cookie, with or without a valid session.
+         * @description Always clears the cookie, with or without a valid session. JSON only, like every mutation: a
+         *     cross-site form cannot log the team out.
          */
         post: operations["logout_api_auth_logout_post"];
         delete?: never;
@@ -527,6 +528,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
             };
         };
     };

@@ -75,7 +75,7 @@ async def test_accepts_a_session_up_to_12_h_old_and_rejects_an_older_one(api: Ap
 
 
 async def test_logs_out(logged_in: Api) -> None:
-    res = await logged_in.client.post("/api/auth/logout")
+    res = await logged_in.client.post("/api/auth/logout", json={})
     assert res.status_code == 204
     assert f'{SESSION_COOKIE}=""' in res.headers["set-cookie"] or "Max-Age=0" in res.headers["set-cookie"]
     assert (await logged_in.client.get("/api/auth/me")).status_code == 401
@@ -117,6 +117,14 @@ async def test_logout_clears_the_cookie_even_without_a_valid_session(api: Api) -
     assert f"{SESSION_COOKIE}=" in res.headers["set-cookie"]
     assert "Max-Age=0" in res.headers["set-cookie"] or "expires=Thu, 01 Jan 1970" in res.headers["set-cookie"]
     assert (await api.client.post("/api/auth/logout", json={})).status_code == 204
+
+
+async def test_refuses_a_logout_that_is_not_json_and_keeps_the_session(logged_in: Api) -> None:
+    for extra in ({}, {"content": "x=1", "headers": {"content-type": "application/x-www-form-urlencoded"}}):
+        res = await logged_in.client.post("/api/auth/logout", **extra)  # type: ignore[arg-type]
+        assert (res.status_code, res.json()) == (400, {"detail": "Pedido inválido."})
+        assert "set-cookie" not in res.headers
+    assert (await logged_in.client.get("/api/auth/me")).status_code == 200
 
 
 async def test_changing_the_password_ends_open_sessions(h: Harness) -> None:

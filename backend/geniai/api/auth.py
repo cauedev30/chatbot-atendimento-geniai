@@ -104,9 +104,10 @@ async def login(body: LoginIn, request: Request, response: Response) -> None:
     issue_session(response, cfg)
 
 
-@router.post("/logout", status_code=204)
+@router.post("/logout", status_code=204, responses={400: {"model": ErrorOut}}, dependencies=[Depends(require_json)])
 async def logout(response: Response) -> None:
-    """Always clears the cookie, with or without a valid session."""
+    """Always clears the cookie, with or without a valid session. JSON only, like every mutation: a
+    cross-site form cannot log the team out."""
     response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="lax")
 
 

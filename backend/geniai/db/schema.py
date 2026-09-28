@@ -60,6 +60,7 @@ faq_item = sa.Table(
     sa.Column("title", sa.Text, nullable=False),
     sa.Column("applies_when", sa.Text, nullable=False),
     sa.Column("answer_text", sa.Text, nullable=False),
+    sa.Column("knowledge_base", sa.Text, nullable=False, server_default=""),
     sa.Column("active", sa.Boolean, nullable=False, server_default=sa.true()),
 )
 
@@ -97,6 +98,7 @@ ticket = sa.Table(
     sa.Column("last_customer_message_at", _tz(), nullable=False, server_default=sa.func.now()),
     sa.Column("last_moved_at", _tz(), nullable=False, server_default=sa.func.now()),
     sa.Column("last_consumed_message_id", sa.Integer),
+    sa.Column("faq_questions_answered", sa.Integer, nullable=False, server_default="0"),
 )
 
 ticket_move = sa.Table(

@@ -20,7 +20,13 @@ CTX = TurnContext(
     ],
     messages=[PromptMessage(author="bot", text="Olá! Falo com Ana Exemplo?")],
     new_messages=[PromptMessage(author="customer", text="sim, não consigo entrar no painel")],
-    state=TriageState(faq_attempted=False, clarifications_asked=0, unclear_feedback_reasks=0, media_prompts=0),
+    state=TriageState(
+        faq_attempted=False,
+        clarifications_asked=0,
+        unclear_feedback_reasks=0,
+        media_prompts=0,
+        faq_questions_answered=0,
+    ),
     max_clarifications=2,
 )
 

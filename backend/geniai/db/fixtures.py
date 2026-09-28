@@ -28,6 +28,7 @@ class FictitiousFaq(TypedDict):
     title: str
     applies_when: str
     answer_text: str
+    knowledge_base: str
 
 
 class Fictitious(TypedDict):
@@ -66,6 +67,11 @@ FICTITIOUS: Final[Fictitious] = {
                 '2. Toque em "Esqueci minha senha".\n'
                 "3. Abra o link que chegou no seu e-mail e crie uma senha nova."
             ),
+            "knowledge_base": (
+                "- O link para criar a senha nova vale por 1 hora.\n"
+                "- Se o e-mail não chegar em 5 minutos, confira a caixa de spam.\n"
+                "- A equipe nunca pede nem envia senha."
+            ),
         },
         "report": {
             "category": "report",
@@ -75,6 +81,10 @@ FICTITIOUS: Final[Fictitious] = {
                 "1. Confira se o período escolhido tem movimento.\n"
                 "2. Atualize a página com Ctrl+F5.\n"
                 "3. Se continuar em branco, saia do painel e entre de novo."
+            ),
+            "knowledge_base": (
+                "- Um período de mais de 90 dias pode levar até 1 minuto para abrir.\n"
+                "- O relatório mostra só as vendas já confirmadas."
             ),
         },
         "reconnect": {
@@ -86,6 +96,8 @@ FICTITIOUS: Final[Fictitious] = {
                 '2. Toque em "Reconectar".\n'
                 "3. No celular da unidade, leia o QR Code que aparecer."
             ),
+            # Left empty on purpose: a question about this entry has nothing to be answered from.
+            "knowledge_base": "",
         },
     },
     "team": {
@@ -147,7 +159,7 @@ async def seed_fictitious(conn: AsyncConnection) -> SeedResult:
             conn,
             faq_item,
             {"category_id": categories[f["category"]], "title": f["title"]},
-            {"applies_when": f["applies_when"], "answer_text": f["answer_text"]},
+            {"applies_when": f["applies_when"], "answer_text": f["answer_text"], "knowledge_base": f["knowledge_base"]},
         )
     team = {
         key: await _get_or_insert(conn, team_member, {"name": name}, {}) for key, name in FICTITIOUS["team"].items()

@@ -60,6 +60,7 @@ def _state_of(t: TicketRow) -> TriageState:
         clarifications_asked=t.clarifications_asked,
         unclear_feedback_reasks=t.unclear_feedback_reasks,
         media_prompts=t.media_prompts,
+        faq_questions_answered=t.faq_questions_answered,
     )
 
 

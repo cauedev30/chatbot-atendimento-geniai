@@ -68,6 +68,7 @@ class TriageState:
     clarifications_asked: int
     unclear_feedback_reasks: int
     media_prompts: int
+    faq_questions_answered: int
 
 
 @dataclass(frozen=True)

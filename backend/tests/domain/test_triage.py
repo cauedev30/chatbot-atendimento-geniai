@@ -21,6 +21,7 @@ def state(**overrides: Any) -> TriageState:
         "clarifications_asked": 0,
         "unclear_feedback_reasks": 0,
         "media_prompts": 0,
+        "faq_questions_answered": 0,
     }
     return TriageState(**(base | overrides))
 

@@ -41,3 +41,13 @@ async def test_is_idempotent_running_twice_returns_the_same_ids_without_duplicat
     assert await _count(engine, unit) == len(FICTITIOUS["units"])
     assert await _count(engine, category) == len(FICTITIOUS["categories"]) + 2
     assert await _count(engine, faq_item) == len(FICTITIOUS["faq"])
+
+
+async def test_seeds_a_knowledge_base_per_faq_item_and_leaves_one_empty(engine: AsyncEngine) -> None:
+    async with engine.begin() as conn:
+        seed = await seed_fictitious(conn)
+        rows = (await conn.execute(select(faq_item.c.id, faq_item.c.knowledge_base))).all()
+    bases = {row.id: row.knowledge_base for row in rows}
+    for key, f in FICTITIOUS["faq"].items():
+        assert bases[seed.faq[key]] == f["knowledge_base"]
+    assert [key for key, f in FICTITIOUS["faq"].items() if f["knowledge_base"] == ""] == ["reconnect"]

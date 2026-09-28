@@ -12,12 +12,14 @@ from geniai.app.tickets_repo import (
     find_attendant_by_phone,
     find_open_ticket,
     get_category_id_by_key,
+    get_faq_item,
     list_active_categories,
     list_messages,
     message_exists,
     move_ticket,
     update_ticket,
 )
+from geniai.db.fixtures import FICTITIOUS
 from geniai.db.schema import ticket_move
 from tests.conftest import Harness
 
@@ -130,3 +132,13 @@ async def test_rejects_a_patch_that_is_not_a_ticket_column_or_touches_id_or_colu
         for patch in patches:
             with pytest.raises(ValueError):
                 await update_ticket(conn, t.id, patch)
+
+
+async def test_reads_an_faq_item_with_its_knowledge_base_and_a_new_ticket_with_no_question_answered(
+    h: Harness,
+) -> None:
+    async with h.begin() as conn:
+        item = await get_faq_item(conn, h.seed.faq["password"])
+    assert item is not None
+    assert item.knowledge_base == FICTITIOUS["faq"]["password"]["knowledge_base"]
+    assert (await new_triage_ticket(h)).faq_questions_answered == 0

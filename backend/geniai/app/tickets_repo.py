@@ -36,6 +36,7 @@ class TicketRow:
     last_customer_message_at: datetime
     last_moved_at: datetime
     last_consumed_message_id: int | None
+    faq_questions_answered: int
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,7 @@ class FaqItemRow:
     applies_when: str
     answer_text: str
     active: bool
+    knowledge_base: str
 
 
 def _check_patch(patch: TicketPatch) -> None:

@@ -3,8 +3,8 @@ from typing import Any
 import pytest
 
 from geniai.domain.types import InterpretedTurn
-from geniai.eval.cases import EvalCase, Expected, build_catalog
-from geniai.eval.score import CaseRun, percentile, score_runs
+from geniai.eval.cases import EvalCase, Expected, FaqQuestionCase, build_catalog
+from geniai.eval.score import CaseRun, percentile, score_faq_questions, score_runs
 
 CATALOG = build_catalog()
 
@@ -86,3 +86,20 @@ def test_an_expected_faq_missing_from_the_catalog_never_counts_as_a_hit() -> Non
     cases = [EvalCase("x", ["?"], Expected(False, "Geral / Outros", "Não existe"))]
     report = score_runs("m", cases, [CaseRun("x", 1, turn(faq_item_id=None))], CATALOG)
     assert report.faq_accuracy == 0
+
+
+def test_scores_questions_on_the_feedback_whether_the_answer_was_found_and_the_reply() -> None:
+    cases = [
+        FaqQuestionCase("q1", "password", "vale por quanto tempo?", True),
+        FaqQuestionCase("q2", "password", "troco o e-mail?", False),
+        FaqQuestionCase("q3", "report", "exporta em PDF?", False),
+        FaqQuestionCase("q4", "report", "demora quanto?", True),
+    ]
+    runs = [
+        CaseRun("q1", 1, turn(faq_feedback="question", faq_answer_found=True, reply="Vale 1 hora.")),
+        CaseRun("q2", 1, turn(faq_feedback="question", faq_answer_found=False, reply="")),
+        CaseRun("q3", 1, turn(faq_feedback="question", faq_answer_found=True, reply="Exporta sim.")),
+        CaseRun("q4", 1, None, "timeout"),
+    ]
+    assert score_faq_questions(cases, runs) == pytest.approx(2 / 4)
+    assert score_faq_questions([], []) == 1

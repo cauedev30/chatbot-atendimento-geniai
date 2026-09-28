@@ -5,7 +5,7 @@ from geniai.db.fixtures import FICTITIOUS
 from geniai.domain.rules import DEFAULT_RULES
 from geniai.domain.texts import TEXT, category_label
 from geniai.domain.types import TriageState
-from geniai.llm.prompt import PromptCategory, PromptFaqItem, PromptMessage, TurnContext
+from geniai.llm.prompt import PromptCategory, PromptFaqItem, PromptMessage, PromptSentFaq, TurnContext
 
 
 @dataclass(frozen=True)
@@ -126,5 +126,59 @@ def context_for(c: EvalCase, catalog: EvalCatalog) -> TurnContext:
         ),
         max_clarifications=DEFAULT_RULES.max_clarifications,
         sent_faq=None,
+        max_faq_questions=DEFAULT_RULES.max_faq_questions,
+    )
+
+
+@dataclass(frozen=True)
+class FaqQuestionCase:
+    """A question about the FAQ entry just sent. answer_found: its knowledge base answers it."""
+
+    id: str
+    faq: str
+    question: str
+    answer_found: bool
+
+
+FAQ_QUESTION_CASES: Final[list[FaqQuestionCase]] = [
+    FaqQuestionCase("q1", "password", "o link pra criar a senha nova vale por quanto tempo?", True),
+    FaqQuestionCase("q2", "password", "fiz isso mas o e-mail não chegou, o que eu faço?", True),
+    FaqQuestionCase("q3", "report", "o relatório do ano inteiro demora mesmo pra abrir?", True),
+    FaqQuestionCase("q4", "report", "o relatório mostra venda que ainda não foi confirmada?", True),
+    FaqQuestionCase("q5", "password", "dá pra trocar o e-mail do login?", False),
+    FaqQuestionCase("q6", "report", "consigo exportar o relatório em PDF?", False),
+    FaqQuestionCase("q7", "password", "o painel tem aplicativo pra celular?", False),
+    FaqQuestionCase("q8", "reconnect", "e se o QR Code não aparecer no painel?", False),
+]
+"""Questions after the FAQ entry was sent: 4 answered by its knowledge base and 4 it does not answer,
+which must go to a person (one of them about an entry whose knowledge base is empty)."""
+
+
+def question_context_for(c: FaqQuestionCase, catalog: EvalCatalog) -> TurnContext:
+    entry = FICTITIOUS["faq"][c.faq]
+    faq_id = next(f.id for f in catalog.faq_items if f.title == entry["title"])
+    sent = "\n\n".join(["Isso costuma resolver:", entry["answer_text"], TEXT.faq_follow_up])
+    return TurnContext(
+        attendant_name=_ATTENDANT["name"],
+        unit_name=_UNIT,
+        categories=[PromptCategory(id=x.id, system=x.system, name=x.name) for x in catalog.categories],
+        faq_items=catalog.faq_items,
+        messages=[
+            PromptMessage(author="bot", text=TEXT.greeting(_ATTENDANT["name"], _UNIT)),
+            PromptMessage(author="customer", text=f"sim. {entry['applies_when']}"),
+            PromptMessage(author="bot", text=sent),
+        ],
+        new_messages=[PromptMessage(author="customer", text=c.question)],
+        state=TriageState(
+            faq_attempted=True,
+            clarifications_asked=0,
+            unclear_feedback_reasks=0,
+            media_prompts=0,
+            faq_questions_answered=0,
+        ),
+        max_clarifications=DEFAULT_RULES.max_clarifications,
+        sent_faq=PromptSentFaq(
+            id=faq_id, title=entry["title"], answer_text=entry["answer_text"], knowledge_base=entry["knowledge_base"]
+        ),
         max_faq_questions=DEFAULT_RULES.max_faq_questions,
     )

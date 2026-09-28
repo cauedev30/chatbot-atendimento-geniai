@@ -268,5 +268,6 @@ by default.
 - **End to end** (`frontend/e2e`, Playwright): both services on a database of their own
   (`geniai_e2e`, or `E2E_DATABASE_URL`), created when missing; login, the board,
   a real drag between columns that survives a reload, and the indicators.
-- **Evaluation set** (`backend/geniai/eval`): 30 fictitious conversations run against real models to
+- **Evaluation set** (`backend/geniai/eval`): 30 fictitious conversations, plus 8 questions about an
+  FAQ entry already sent (half answered by its knowledge base, half not), run against real models to
   choose one; human-request detection must be 100%.

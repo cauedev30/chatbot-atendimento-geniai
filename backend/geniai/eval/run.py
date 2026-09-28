@@ -17,8 +17,8 @@ from typing import Annotated
 from pydantic import AnyHttpUrl, BaseModel, Field, TypeAdapter, ValidationError
 
 from geniai.domain.rules import DEFAULT_RULES
-from geniai.eval.cases import CASES, build_catalog, context_for
-from geniai.eval.score import CaseRun, ModelReport, score_runs
+from geniai.eval.cases import CASES, FAQ_QUESTION_CASES, build_catalog, context_for, question_context_for
+from geniai.eval.score import CaseRun, ModelReport, score_faq_questions, score_runs
 from geniai.llm.interpret import interpret_turn
 from geniai.llm.openai_compatible import OpenAiCompatibleConfig, create_openai_compatible_llm
 
@@ -63,11 +63,13 @@ async def run_candidate(candidate: Candidate, api_key: str) -> list[CaseRun]:
     catalog = build_catalog()
     runs: list[CaseRun] = []
     print(f"{candidate.label} ", end="", flush=True)
-    for case in CASES:
+    contexts = [(c.id, context_for(c, catalog)) for c in CASES]
+    contexts += [(c.id, question_context_for(c, catalog)) for c in FAQ_QUESTION_CASES]
+    for case_id, ctx in contexts:
         started = time.perf_counter()
-        result = await interpret_turn(llm, context_for(case, catalog), EVAL_RULES)
+        result = await interpret_turn(llm, ctx, EVAL_RULES)
         latency_ms = round((time.perf_counter() - started) * 1000)
-        runs.append(CaseRun(case.id, latency_ms, result.turn, None if result.ok else result.error))
+        runs.append(CaseRun(case_id, latency_ms, result.turn, None if result.ok else result.error))
         print("." if result.ok else "x", end="", flush=True)
     print()
     return runs
@@ -79,6 +81,7 @@ def _pct(n: float) -> str:
 
 def print_table(reports: list[ModelReport]) -> None:
     header = ["model", "human (model)", "human (model+keywords)", "gate", "false positives", "category", "faq"]
+    header += ["faq questions"]
     header += ["p50 ms", "p95 ms", "failures"]
     rows = [
         [
@@ -89,6 +92,7 @@ def print_table(reports: list[ModelReport]) -> None:
             str(r.human_request.false_positives_model),
             _pct(r.category_accuracy),
             _pct(r.faq_accuracy),
+            "-" if r.faq_question_accuracy is None else _pct(r.faq_question_accuracy),
             str(r.latency_p50_ms),
             str(r.latency_p95_ms),
             str(r.failures),
@@ -109,7 +113,11 @@ async def evaluate(
     for candidate in candidates:
         runs = await run_candidate(candidate, keys[candidate.apiKeyEnv])
         all_runs[candidate.label] = runs
-        reports.append(score_runs(candidate.label, CASES, runs, catalog))
+        questions = {c.id for c in FAQ_QUESTION_CASES}
+        conversations = [r for r in runs if r.case_id not in questions]
+        report = score_runs(candidate.label, CASES, conversations, catalog)
+        accuracy = score_faq_questions(FAQ_QUESTION_CASES, [r for r in runs if r.case_id in questions])
+        reports.append(replace(report, faq_question_accuracy=accuracy))
     return reports, all_runs
 
 

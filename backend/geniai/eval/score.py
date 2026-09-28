@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from geniai.domain.human_request import mentions_human_request
 from geniai.domain.types import InterpretedTurn
-from geniai.eval.cases import EvalCase, EvalCatalog
+from geniai.eval.cases import EvalCase, EvalCatalog, FaqQuestionCase
 
 
 @dataclass(frozen=True)
@@ -37,6 +37,8 @@ class ModelReport:
     faq_accuracy: float
     latency_p50_ms: int | None
     latency_p95_ms: int | None
+    faq_question_accuracy: float | None = None
+    """Share of FAQ_QUESTION_CASES read right (see score_faq_questions); None when not run."""
 
 
 def percentile(values: list[int], p: float) -> int | None:
@@ -53,6 +55,20 @@ _MISSING = -1
 
 def _rate(n: int, d: int) -> float:
     return 1 if d == 0 else n / d
+
+
+def score_faq_questions(cases: list[FaqQuestionCase], runs: list[CaseRun]) -> float:
+    """A question is read right when the model says "question", finds the answer exactly when the knowledge
+    base has it, and writes a reply exactly then. A failed run counts as wrong."""
+    turns = {r.case_id: r.turn for r in reversed(runs)}
+    hits = 0
+    for c in cases:
+        turn = turns.get(c.id)
+        if turn is None or turn.faq_feedback != "question":
+            continue
+        if turn.faq_answer_found == c.answer_found and (turn.reply.strip() != "") == c.answer_found:
+            hits += 1
+    return _rate(hits, len(cases))
 
 
 def score_runs(label: str, cases: list[EvalCase], runs: list[CaseRun], catalog: EvalCatalog) -> ModelReport:

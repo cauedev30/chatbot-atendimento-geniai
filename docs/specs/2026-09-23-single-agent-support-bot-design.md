@@ -311,6 +311,8 @@ One page, filtered by period and unit. Everything is computed from the tables in
   - human-request detection — **must be 100%** (a blocking requirement);
   - category accuracy against the expected label;
   - FAQ match accuracy;
+  - questions about the FAQ entry sent: answered when its knowledge base has the answer, handed over
+    when it does not;
   - p50 and p95 latency, measured from Brazil.
 
   **This same set is the model comparison** of decision 8: candidates run side by side on it.

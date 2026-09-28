@@ -81,7 +81,8 @@ flowchart LR
 ```
 
 - **Domain** holds the ticket state machine, the counters (one FAQ attempt, at most three questions
-  answered about it, at most two clarifying questions) and the precedence rules of §5.3. It has no I/O and is unit-tested.
+  answered about it, at most two clarifying questions) and the precedence rules of §5.3. It has no
+  I/O and is unit-tested.
 - **LLM port** hides the provider. Swapping models means writing one adapter.
 - **Chatwoot port** sends messages, toggles conversation status and builds conversation links.
 - **Baseline stack:** backend in Python 3.12 with FastAPI, Pydantic (every inbound payload and every
@@ -238,8 +239,8 @@ column (`in_triage`, `resolved_by_bot`, `awaiting_human`, `in_progress`, `resolv
 `no_response`), category_id (current), **bot_category_id (the agent's original choice, kept to
 measure its accuracy)**, handoff_reason (`human_requested`, `faq_not_resolved`, `no_faq_match`,
 `unidentified`, `registration_mismatch`, `off_topic`, `media`, `llm_failure`), faq_item_id,
-faq_attempted, faq_questions_answered, clarifications_asked, summary, responsible_id (null = unassigned),
-chatwoot_conversation_id, opened_at, handed_off_at, taken_at, closed_at.
+faq_attempted, faq_questions_answered, clarifications_asked, summary, responsible_id (null =
+unassigned), chatwoot_conversation_id, opened_at, handed_off_at, taken_at, closed_at.
 
 ## 8. Kanban
 

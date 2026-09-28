@@ -5,10 +5,10 @@ support team and an indicators page.
 
 The bot identifies the customer by phone number, opens a ticket right away, tries **one** answer from
 the team's FAQ, answers a few questions about it from that entry's knowledge base, and hands the
-conversation to a person the moment one is asked for. One LLM
-interprets each customer turn; code decides the flow. Every ticket lands on the board with a summary,
-a category and the unit, and feeds the indicators: which problems happen most, how tickets get
-solved, and which units suffer most from each problem.
+conversation to a person the moment one is asked for. One LLM interprets each customer turn; code
+decides the flow. Every ticket lands on the board with a summary, a category and the unit, and feeds
+the indicators: which problems happen most, how tickets get solved, and which units suffer most from
+each problem.
 
 - **Backend:** Python 3.12 · FastAPI · Pydantic · SQLAlchemy Core on asyncpg · PostgreSQL
 - **Frontend:** React · Next.js (App Router) · TypeScript
@@ -250,9 +250,9 @@ Without a reverse proxy, only the progressive delay applies.
 `python -m geniai.eval.run` runs 30 fictitious conversations, plus 8 questions about an FAQ entry
 already sent, against every candidate in `EVAL_CANDIDATES`. It reports, per model: human-request
 detection (must be 100%), category and FAQ accuracy, how many questions it read right (answered only
-when the entry's knowledge base has the answer), and p50/p95 latency, and saves the full result under `backend/eval-results/`. Each candidate
-names the environment variable that holds its API key, so keys never appear in files. Run it from a
-machine in Brazil so the latency matches production.
+when the entry's knowledge base has the answer), and p50/p95 latency, and saves the full result under
+`backend/eval-results/`. Each candidate names the environment variable that holds its API key, so keys
+never appear in files. Run it from a machine in Brazil so the latency matches production.
 
 ## Deploy notes
 

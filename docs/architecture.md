@@ -95,8 +95,9 @@ sequenceDiagram
    person. Later turns are decided in code first (keyword request for a person, media), then by the
    LLM through the precedence rules. Once the FAQ entry was sent, the LLM also gets that entry's text
    and knowledge base (`sent_faq`); a question about it is answered from them, up to
-   `max_faq_questions` (3) times, each answer followed by the "did it help?" question again. The LLM runs outside any database transaction; the decision, the
-   summary and category, and the bot's reply are written in one transaction, then sent. That
+   `max_faq_questions` (3) times, each answer followed by the "did it help?" question again. The LLM
+   runs outside any database transaction; the decision, the summary and category, and the bot's
+   reply are written in one transaction, then sent. That
    transaction locks the ticket and drops the decision if a person moved the ticket out of triage
    meanwhile. When the decision closes the ticket (Resolved by bot) and customer messages arrived during
    the turn, the ticket still closes, and those messages move to a new ticket, identified like any first
@@ -171,8 +172,8 @@ One PostgreSQL database; the DDL is `backend/geniai/db/migrations/0001_init.sql`
 `ticket` keeps the attendant and a snapshot of the unit, the phone, the column, the current
 `category_id` and the LLM's `bot_category_id` (kept to measure how often people correct it), the
 handoff reason, the FAQ entry sent, the counters (`faq_attempted`, `faq_questions_answered`,
-`clarifications_asked`, `unclear_feedback_reasks`, `media_prompts`), the summary, the responsible person, the Chatwoot
-conversation id and the timestamps `opened_at`, `handed_off_at`, `taken_at`, `closed_at`,
+`clarifications_asked`, `unclear_feedback_reasks`, `media_prompts`), the summary, the responsible
+person, the Chatwoot conversation id and the timestamps `opened_at`, `handed_off_at`, `taken_at`, `closed_at`,
 `last_customer_message_at`, `last_moved_at`, and `last_consumed_message_id`, the last customer message a
 turn has read. A partial unique index allows at most one open ticket
 (triage, awaiting or in progress) per conversation.

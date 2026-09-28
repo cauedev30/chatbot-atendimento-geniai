@@ -44,7 +44,7 @@ from geniai.domain.types import (
     TriageState,
 )
 from geniai.llm.interpret import interpret_turn
-from geniai.llm.prompt import PromptCategory, PromptFaqItem, PromptMessage, TurnContext
+from geniai.llm.prompt import PromptCategory, PromptFaqItem, PromptMessage, PromptSentFaq, TurnContext
 
 TurnOutcome = Literal["greeting"] | DecisionKind
 
@@ -75,6 +75,14 @@ async def build_turn_context(
     faq_items = await list_active_faq_items(conn)
     new = pending_customer_messages(messages, t.last_consumed_message_id)
     new_ids = {m.id for m in new}
+    sent_faq: PromptSentFaq | None = None
+    if t.faq_attempted and t.faq_item_id is not None:
+        # Only the entry sent: questions about it are answered from its own knowledge base.
+        sent = await get_faq_item(conn, t.faq_item_id)
+        if sent is not None:
+            sent_faq = PromptSentFaq(
+                id=sent.id, title=sent.title, answer_text=sent.answer_text, knowledge_base=sent.knowledge_base
+            )
     return TurnContext(
         attendant_name=who.name,
         unit_name=who.unit_name,
@@ -87,6 +95,8 @@ async def build_turn_context(
         new_messages=[PromptMessage(author=m.author, text=m.text) for m in new],
         state=_state_of(t),
         max_clarifications=deps.rules.max_clarifications,
+        sent_faq=sent_faq,
+        max_faq_questions=deps.rules.max_faq_questions,
     )
 
 

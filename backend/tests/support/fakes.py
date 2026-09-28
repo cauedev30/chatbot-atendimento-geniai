@@ -108,6 +108,7 @@ def turn_json(**fields: Any) -> str:
             "needs_clarification": False,
             "summary": "Resumo de teste",
             "reply": "",
+            "faq_answer_found": False,
             **fields,
         },
         ensure_ascii=False,

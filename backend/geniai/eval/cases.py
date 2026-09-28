@@ -125,4 +125,6 @@ def context_for(c: EvalCase, catalog: EvalCatalog) -> TurnContext:
             faq_questions_answered=0,
         ),
         max_clarifications=DEFAULT_RULES.max_clarifications,
+        sent_faq=None,
+        max_faq_questions=DEFAULT_RULES.max_faq_questions,
     )

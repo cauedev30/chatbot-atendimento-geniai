@@ -1,9 +1,18 @@
 import json
+from dataclasses import replace
 
 from geniai.domain.rules import DEFAULT_RULES
 from geniai.domain.types import TriageState
 from geniai.llm.interpret import interpret_turn
-from geniai.llm.prompt import PromptCategory, PromptFaqItem, PromptMessage, TurnContext, build_user_payload
+from geniai.llm.prompt import (
+    SYSTEM_PROMPT,
+    PromptCategory,
+    PromptFaqItem,
+    PromptMessage,
+    PromptSentFaq,
+    TurnContext,
+    build_user_payload,
+)
 from tests.support.fakes import ScriptedLlm, turn_json
 
 CTX = TurnContext(
@@ -28,6 +37,8 @@ CTX = TurnContext(
         faq_questions_answered=0,
     ),
     max_clarifications=2,
+    sent_faq=None,
+    max_faq_questions=3,
 )
 
 
@@ -89,10 +100,52 @@ def test_the_user_payload_has_the_documented_shape() -> None:
                 "applies_when": "Não consegue entrar no painel.",
             }
         ],
-        "state": {"faq_attempted": False, "clarifications_asked": 0, "max_clarifications": 2},
+        "state": {
+            "faq_attempted": False,
+            "clarifications_asked": 0,
+            "max_clarifications": 2,
+            "faq_questions_answered": 0,
+            "max_faq_questions": 3,
+        },
         "conversation": [{"author": "bot", "text": "Olá! Falo com Ana Exemplo?"}],
         "new_messages": ["sim, não consigo entrar no painel"],
     }
     # Accents kept, two-space indent, no trailing spaces.
     assert '  "registered": {\n    "name": "Ana Exemplo",' in payload
     assert " \n" not in payload
+
+
+def test_after_the_faq_was_sent_the_payload_has_only_that_entry_with_its_text_and_knowledge_base() -> None:
+    ctx = replace(
+        CTX,
+        state=replace(CTX.state, faq_attempted=True, faq_questions_answered=1),
+        sent_faq=PromptSentFaq(
+            id=10, title="Redefinir senha do painel", answer_text="1. Abra o login.", knowledge_base="- Vale 1 hora."
+        ),
+    )
+    payload = json.loads(build_user_payload(ctx))
+    assert payload["sent_faq"] == {
+        "id": 10,
+        "title": "Redefinir senha do painel",
+        "answer_text": "1. Abra o login.",
+        "knowledge_base": "- Vale 1 hora.",
+    }
+    assert payload["state"]["faq_attempted"] is True
+    assert payload["state"]["faq_questions_answered"] == 1
+    assert list(payload) == [
+        "registered",
+        "categories",
+        "faq_items",
+        "sent_faq",
+        "state",
+        "conversation",
+        "new_messages",
+    ]
+
+
+def test_the_prompt_limits_answers_to_questions_to_the_entry_sent() -> None:
+    assert '"question"' in SYSTEM_PROMPT
+    assert "faq_answer_found" in SYSTEM_PROMPT
+    assert "sent_faq.knowledge_base" in SYSTEM_PROMPT
+    assert "Never invent" in SYSTEM_PROMPT
+    assert "password" in SYSTEM_PROMPT

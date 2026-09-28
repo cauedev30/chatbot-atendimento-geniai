@@ -19,10 +19,11 @@ class _TurnOutput(BaseModel):
     off_topic: StrictBool
     category_id: JsonInt
     faq_item_id: JsonInt | None
-    faq_feedback: Literal["resolved", "not_resolved", "unclear"] | None
+    faq_feedback: Literal["resolved", "not_resolved", "question", "unclear"] | None
     needs_clarification: StrictBool
     summary: Annotated[StrictStr, Field(min_length=1, max_length=1000)]
     reply: Annotated[StrictStr, Field(max_length=1000)]
+    faq_answer_found: StrictBool = False
 
 
 def parse_turn_output(raw: object, category_ids: Collection[int], faq_item_ids: Collection[int]) -> InterpretedTurn:
@@ -41,4 +42,5 @@ def parse_turn_output(raw: object, category_ids: Collection[int], faq_item_ids: 
         needs_clarification=out.needs_clarification,
         summary=out.summary,
         reply=out.reply,
+        faq_answer_found=out.faq_answer_found,
     )

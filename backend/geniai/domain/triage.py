@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from geniai.domain.rules import TriageRules
 from geniai.domain.types import (
+    AnswerFaqQuestion,
     AskClarification,
     AskForText,
     Decision,
@@ -44,6 +45,12 @@ def decide_turn(state: TriageState, turn: InterpretedTurn, rules: TriageRules) -
         if turn.faq_feedback == "resolved":
             return ResolvedByBot()
         if turn.faq_feedback == "not_resolved":
+            return Handoff("faq_not_resolved")
+        if turn.faq_feedback == "question":
+            # Answered only from the knowledge base of the entry sent, max_faq_questions times.
+            answered = turn.faq_answer_found and turn.reply.strip() != ""
+            if answered and state.faq_questions_answered < rules.max_faq_questions:
+                return AnswerFaqQuestion()
             return Handoff("faq_not_resolved")
         # OWNER-UNCONFIRMED: an unclear answer is asked again max_unclear_feedback_reasks times.
         if state.unclear_feedback_reasks < rules.max_unclear_feedback_reasks:

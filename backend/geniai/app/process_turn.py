@@ -29,6 +29,7 @@ from geniai.domain.human_request import mentions_human_request
 from geniai.domain.texts import TEXT, truncate
 from geniai.domain.triage import PreLlmSignals, decide_turn, pre_llm_decision
 from geniai.domain.types import (
+    AnswerFaqQuestion,
     AskClarification,
     AskForText,
     Column,
@@ -226,6 +227,12 @@ async def _write_decision(
         case ResolvedByBot():
             moved = await move_ticket(conn, t.id, "resolved_by_bot", "bot", now)
             return _Written("resolved_by_bot", TEXT.resolved_thanks, (moved.from_, "resolved_by_bot"), None)
+        case AnswerFaqQuestion():
+            await update_ticket(conn, t.id, {"faq_questions_answered": t.faq_questions_answered + 1})
+            # The ticket stays in triage, awaiting the feedback on the FAQ entry.
+            parts = [turn.reply if turn else "", TEXT.faq_follow_up]
+            reply = "\n\n".join(p.strip() for p in parts if p.strip())
+            return _Written("answer_faq_question", reply, None, None)
 
 
 async def _apply(

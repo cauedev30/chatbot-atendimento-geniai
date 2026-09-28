@@ -4,6 +4,7 @@ from typing import Any
 from geniai.domain.rules import DEFAULT_RULES
 from geniai.domain.triage import PreLlmSignals, decide_turn, pre_llm_decision
 from geniai.domain.types import (
+    AnswerFaqQuestion,
     AskClarification,
     AskForText,
     Handoff,
@@ -37,6 +38,7 @@ def turn(**overrides: Any) -> InterpretedTurn:
         "needs_clarification": False,
         "summary": "resumo",
         "reply": "",
+        "faq_answer_found": False,
     }
     return InterpretedTurn(**(base | overrides))
 
@@ -123,6 +125,58 @@ def test_4_follows_max_unclear_feedback_reasks() -> None:
     assert decide_turn(AWAITING, turn(faq_feedback="unclear"), rules) == Handoff("faq_not_resolved")
 
 
+# 4. a question about the FAQ entry that was sent
+
+
+def question(**overrides: Any) -> InterpretedTurn:
+    return turn(**({"faq_feedback": "question", "faq_answer_found": True, "reply": "Vale por 1 hora."} | overrides))
+
+
+def test_4_a_question_answered_from_the_knowledge_base_is_answered() -> None:
+    assert decide_turn(AWAITING, question(), DEFAULT_RULES) == AnswerFaqQuestion()
+
+
+def test_4_the_third_question_is_still_answered() -> None:
+    assert decide_turn(state(faq_attempted=True, faq_questions_answered=2), question(), DEFAULT_RULES) == (
+        AnswerFaqQuestion()
+    )
+
+
+def test_4_the_fourth_question_hands_over() -> None:
+    third_answered = state(faq_attempted=True, faq_questions_answered=3)
+    assert decide_turn(third_answered, question(), DEFAULT_RULES) == Handoff("faq_not_resolved")
+
+
+def test_4_follows_max_faq_questions() -> None:
+    assert DEFAULT_RULES.max_faq_questions == 3
+    rules = replace(DEFAULT_RULES, max_faq_questions=0)
+    assert decide_turn(AWAITING, question(), rules) == Handoff("faq_not_resolved")
+
+
+def test_4_a_question_without_an_answer_in_the_knowledge_base_hands_over() -> None:
+    assert decide_turn(AWAITING, question(faq_answer_found=False, reply=""), DEFAULT_RULES) == Handoff(
+        "faq_not_resolved"
+    )
+
+
+def test_4_a_question_with_an_empty_reply_hands_over_even_if_the_answer_was_found() -> None:
+    assert decide_turn(AWAITING, question(reply="  "), DEFAULT_RULES) == Handoff("faq_not_resolved")
+
+
+def test_4_a_question_does_not_use_the_unclear_answer_reask() -> None:
+    reasked = state(faq_attempted=True, unclear_feedback_reasks=1)
+    assert decide_turn(reasked, question(), DEFAULT_RULES) == AnswerFaqQuestion()
+
+
+def test_4_resolved_and_not_resolved_come_before_a_question() -> None:
+    assert decide_turn(AWAITING, question(faq_feedback="resolved"), DEFAULT_RULES) == ResolvedByBot()
+    assert decide_turn(AWAITING, question(faq_feedback="not_resolved"), DEFAULT_RULES) == Handoff("faq_not_resolved")
+
+
+def test_4_a_human_request_beats_a_question() -> None:
+    assert decide_turn(AWAITING, question(human_requested=True), DEFAULT_RULES) == Handoff("human_requested")
+
+
 def test_5_faq_match_sends_the_entry() -> None:
     assert decide_turn(state(), turn(faq_item_id=3, needs_clarification=True), DEFAULT_RULES) == SendFaq(3)
 
@@ -144,6 +198,22 @@ def test_7_hands_over_with_no_faq_and_nothing_to_clarify() -> None:
 def test_decision_kinds_are_stable_names() -> None:
     kinds = [
         d.kind
-        for d in (Handoff("media"), SendFaq(1), AskClarification(), ReaskFeedback(), ResolvedByBot(), AskForText())
+        for d in (
+            Handoff("media"),
+            SendFaq(1),
+            AskClarification(),
+            ReaskFeedback(),
+            ResolvedByBot(),
+            AskForText(),
+            AnswerFaqQuestion(),
+        )
     ]
-    assert kinds == ["handoff", "send_faq", "ask_clarification", "reask_feedback", "resolved_by_bot", "ask_for_text"]
+    assert kinds == [
+        "handoff",
+        "send_faq",
+        "ask_clarification",
+        "reask_feedback",
+        "resolved_by_bot",
+        "ask_for_text",
+        "answer_faq_question",
+    ]

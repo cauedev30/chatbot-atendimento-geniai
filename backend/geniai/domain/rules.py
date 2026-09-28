@@ -22,6 +22,8 @@ class TriageRules:
     """OWNER-UNCONFIRMED: "take" on the board requires choosing who takes the ticket."""
     max_clarifications: int
     """Spec §5.1 step 6: at most two clarifying questions."""
+    max_faq_questions: int
+    """Spec §5.1 step 5: questions about the FAQ entry sent that the bot answers; the next one hands over."""
     llm_timeout_ms: int
     """Spec §10: LLM timeout (~8 s) and one retry."""
     llm_retries: int
@@ -35,6 +37,7 @@ DEFAULT_RULES = TriageRules(
     max_media_prompts=1,
     take_asks_who_takes=True,
     max_clarifications=2,
+    max_faq_questions=3,
     llm_timeout_ms=8_000,
     llm_retries=1,
 )

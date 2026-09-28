@@ -42,7 +42,7 @@ HANDOFF_REASONS: Final[tuple[HandoffReason, ...]] = get_args(HandoffReason)
 
 Actor = Literal["bot", "human"]
 MessageAuthor = Literal["customer", "bot"]
-FaqFeedback = Literal["resolved", "not_resolved", "unclear"]
+FaqFeedback = Literal["resolved", "not_resolved", "question", "unclear"]
 
 
 @dataclass(frozen=True)
@@ -58,6 +58,8 @@ class InterpretedTurn:
     needs_clarification: bool
     summary: str
     reply: str
+    faq_answer_found: bool = False
+    """With faq_feedback "question": the answer is in the knowledge base of the FAQ entry sent."""
 
 
 @dataclass(frozen=True)
@@ -103,5 +105,20 @@ class AskForText:
     kind: ClassVar[Literal["ask_for_text"]] = "ask_for_text"
 
 
-Decision = Handoff | SendFaq | AskClarification | ReaskFeedback | ResolvedByBot | AskForText
-DecisionKind = Literal["handoff", "send_faq", "ask_clarification", "reask_feedback", "resolved_by_bot", "ask_for_text"]
+@dataclass(frozen=True)
+class AnswerFaqQuestion:
+    """Answer a question about the FAQ entry that was sent, with the LLM's reply drawn from its knowledge base."""
+
+    kind: ClassVar[Literal["answer_faq_question"]] = "answer_faq_question"
+
+
+Decision = Handoff | SendFaq | AskClarification | ReaskFeedback | ResolvedByBot | AskForText | AnswerFaqQuestion
+DecisionKind = Literal[
+    "handoff",
+    "send_faq",
+    "ask_clarification",
+    "reask_feedback",
+    "resolved_by_bot",
+    "ask_for_text",
+    "answer_faq_question",
+]

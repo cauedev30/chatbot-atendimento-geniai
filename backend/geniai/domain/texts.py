@@ -34,5 +34,10 @@ def category_label(system: str, name: str) -> str:
     return f"{system} / {name}"
 
 
+def with_unanswered_question(summary: str, question: str) -> str:
+    """The card summary of a handoff on a question about the FAQ entry that the bot did not answer."""
+    return f"{summary.strip()} Dúvida sem resposta: {truncate(question.strip(), 280)}".strip()
+
+
 def truncate(text: str, max_len: int) -> str:
     return text if len(text) <= max_len else f"{text[: max_len - 1]}…"

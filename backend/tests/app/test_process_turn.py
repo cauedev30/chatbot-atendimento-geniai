@@ -10,6 +10,7 @@ from geniai.app.handle_inbound import handle_inbound_message
 from geniai.app.keyed_queue import KeyedQueue
 from geniai.app.ports import LlmRequest
 from geniai.app.process_turn import TurnOutcome, pending_customer_messages, process_turn, run_turn
+from geniai.app.silence_sweeper import sweep_silent_tickets
 from geniai.app.tickets_repo import MessageRow, TicketRow, list_messages
 from geniai.app.turn_scheduler import RecordingScheduler
 from geniai.chatwoot.webhook import IncomingMessage
@@ -54,11 +55,26 @@ class Chat:
         assert await self.customer(conversation_id, "oi") == "greeting"
         return conversation_id
 
-    async def faq_sent(self) -> int:
+    async def faq_sent(self, faq: str = "password", category: str = "login") -> int:
         conversation_id = await self.greeted()
-        self.h.llm.push(turn_json(category_id=self.h.seed.categories["login"], faq_item_id=self.h.seed.faq["password"]))
+        self.h.llm.push(turn_json(category_id=self.h.seed.categories[category], faq_item_id=self.h.seed.faq[faq]))
         assert await self.customer(conversation_id, "esqueci a senha") == "send_faq"
         return conversation_id
+
+    async def asks(
+        self, conversation_id: int, text: str, reply: str = "", found: bool = True, summary: str = "Resumo de teste"
+    ) -> TurnOutcome | None:
+        """The customer asks a question about the FAQ entry sent; the LLM answers it from the knowledge base or not."""
+        self.h.llm.push(
+            turn_json(
+                category_id=self.h.seed.categories["login"],
+                faq_feedback="question",
+                faq_answer_found=found,
+                reply=reply,
+                summary=summary,
+            )
+        )
+        return await self.customer(conversation_id, text)
 
     async def ticket_of(self, conversation_id: int) -> TicketRow:
         async with self.h.begin() as conn:
@@ -376,3 +392,81 @@ async def test_a_turn_drops_its_answer_when_a_person_took_the_ticket_meanwhile(h
     assert await turn is None
     assert chat.last_sent() != "Qual erro?"
     assert (await chat.ticket_of(conversation_id)).column == "in_progress"
+
+
+# Questions about the FAQ entry sent (spec §5.1 step 5)
+
+
+async def test_answers_a_question_about_the_faq_entry_and_asks_again_if_it_worked(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.faq_sent()
+    outcome = await chat.asks(conversation_id, "o link vale por quanto tempo?", reply="O link vale por 1 hora.")
+    assert outcome == "answer_faq_question"
+    assert chat.last_sent() == "\n\n".join(["O link vale por 1 hora.", TEXT.faq_follow_up])
+    t = await chat.ticket_of(conversation_id)
+    assert (t.column, t.faq_questions_answered, t.unclear_feedback_reasks) == ("in_triage", 1, 0)
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], faq_feedback="resolved"))
+    assert await chat.customer(conversation_id, "sim, resolveu") == "resolved_by_bot"
+    assert (await chat.ticket_of(conversation_id)).column == "resolved_by_bot"
+
+
+async def test_answers_three_questions_and_hands_the_fourth_over(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.faq_sent()
+    for n in range(3):
+        assert await chat.asks(conversation_id, f"dúvida {n}", reply=f"Resposta {n}.") == "answer_faq_question"
+    outcome = await chat.asks(conversation_id, "e o e-mail muda?", reply="Não muda.", summary="Esqueceu a senha.")
+    assert outcome == "handoff"
+    t = await chat.ticket_of(conversation_id)
+    assert (t.column, t.handoff_reason, t.faq_questions_answered) == ("awaiting_human", "faq_not_resolved", 3)
+    assert chat.last_sent() == TEXT.handoff
+    assert t.summary == "Esqueceu a senha. Dúvida sem resposta: e o e-mail muda?"
+
+
+async def test_hands_over_a_question_the_knowledge_base_does_not_answer_keeping_it_in_the_summary(
+    h: Harness, chat: Chat
+) -> None:
+    conversation_id = await chat.faq_sent()
+    outcome = await chat.asks(conversation_id, "dá pra trocar o e-mail do login?", found=False, summary="Senha.")
+    assert outcome == "handoff"
+    t = await chat.ticket_of(conversation_id)
+    assert (t.column, t.handoff_reason) == ("awaiting_human", "faq_not_resolved")
+    assert texts(h.chatwoot.sent)[-1] == TEXT.handoff
+    assert "dá pra trocar o e-mail do login?" in t.summary
+    assert t.summary.startswith("Senha.")
+
+
+async def test_hands_over_a_question_about_an_entry_with_an_empty_knowledge_base(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.faq_sent("reconnect", "whatsappDisconnected")
+    assert await chat.asks(conversation_id, "e se o QR Code não aparecer?", found=False) == "handoff"
+    assert json.loads(h.llm.requests[-1].user)["sent_faq"]["knowledge_base"] == ""
+    t = await chat.ticket_of(conversation_id)
+    assert (t.column, t.handoff_reason) == ("awaiting_human", "faq_not_resolved")
+    assert chat.last_sent() == TEXT.handoff
+
+
+async def test_the_llm_sees_the_entry_sent_and_its_knowledge_base_only_after_sending_it(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.faq_sent()
+    before = json.loads(h.llm.requests[-1].user)
+    assert "sent_faq" not in before
+    assert "answer_text" not in h.llm.requests[-1].user
+    assert "knowledge_base" not in h.llm.requests[-1].user
+    await chat.asks(conversation_id, "o link vale por quanto tempo?", reply="Vale por 1 hora.")
+    after = json.loads(h.llm.requests[-1].user)
+    password = FICTITIOUS["faq"]["password"]
+    assert after["sent_faq"] == {
+        "id": h.seed.faq["password"],
+        "title": password["title"],
+        "answer_text": password["answer_text"],
+        "knowledge_base": password["knowledge_base"],
+    }
+    assert FICTITIOUS["faq"]["report"]["knowledge_base"] not in h.llm.requests[-1].user
+    assert FICTITIOUS["faq"]["report"]["answer_text"] not in h.llm.requests[-1].user
+    assert (after["state"]["faq_questions_answered"], after["state"]["max_faq_questions"]) == (0, 3)
+
+
+async def test_a_ticket_silent_after_an_answered_question_goes_to_no_response(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.faq_sent()
+    await chat.asks(conversation_id, "o link vale por quanto tempo?", reply="Vale por 1 hora.")
+    t = await chat.ticket_of(conversation_id)
+    h.advance(24 * 3_600_000)
+    assert await sweep_silent_tickets(h.deps) == [t.id]
+    assert (await chat.ticket_of(conversation_id)).column == "no_response"

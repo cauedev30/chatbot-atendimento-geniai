@@ -26,7 +26,7 @@ from geniai.app.tickets_repo import (
 )
 from geniai.app.turn_scheduler import TurnScheduler
 from geniai.domain.human_request import mentions_human_request
-from geniai.domain.texts import TEXT, truncate
+from geniai.domain.texts import TEXT, truncate, with_unanswered_question
 from geniai.domain.triage import PreLlmSignals, decide_turn, pre_llm_decision
 from geniai.domain.types import (
     AnswerFaqQuestion,
@@ -257,8 +257,14 @@ async def _apply(
         if not await _claim(conn, t, consumed_id):
             return None
         if turn is not None:
+            summary = turn.summary
+            if turn.faq_feedback == "question" and isinstance(decision, Handoff):
+                # The team gets the question the bot did not answer, in the customer's words.
+                pending = pending_customer_messages(messages, t.last_consumed_message_id)
+                question = " / ".join(m.text for m in pending if not m.is_media)
+                summary = with_unanswered_question(summary, question)
             patch: dict[str, object] = {
-                "summary": turn.summary,
+                "summary": summary,
                 "category_id": turn.category_id,
                 "bot_category_id": turn.category_id,
             }

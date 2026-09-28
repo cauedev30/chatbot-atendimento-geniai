@@ -8,8 +8,9 @@
 
 Customers — people working at our client units — message our support WhatsApp number. The bot
 identifies them by phone number against a base we maintain, opens a ticket right away, listens to the
-problem and, when the problem matches an entry in our FAQ, sends that entry's instructions once. If
-the customer asks for a person at any moment, the bot hands the conversation over immediately.
+problem and, when the problem matches an entry in our FAQ, sends that entry's instructions once. It
+answers a few questions about those instructions, only from that entry's knowledge base. If the
+customer asks for a person at any moment, the bot hands the conversation over immediately.
 
 Every ticket lands on a kanban board that the support team controls, already summarized and
 categorized. Because every ticket carries its unit, category and outcome as structured fields, the
@@ -44,7 +45,7 @@ suffer most from a given problem.
 | 3 | The **kanban lives inside this project** — same repository, same database: the backend serves it as a JSON API and the frontend renders it. | Reusing an external dashboard; using Chatwoot as the board | One source of truth; indicators come straight from the same tables. |
 | 4 | **Five columns, in this order:** Resolved by bot → Awaiting human → In progress → Resolved by human → No response. | Two columns (resolved / open) | Keeps "nobody took it yet" apart from "someone is on it", which the waiting-time indicator needs. Keeps customers who vanished from inflating the bot's success rate. |
 | 5 | **Closed category list** (system + problem), with "Other". The agent can only choose from it; humans can correct it on the card. | Free categories written by the agent; closed list plus a free tag | Charts stay comparable over time. |
-| 6 | **One FAQ attempt, FAQ-only.** No FAQ match means summarize and hand over. | Two attempts; letting the agent suggest solutions outside the FAQ | Every instruction the customer receives was written by the team; "resolved by bot" means "resolved by the FAQ". |
+| 6 | **One FAQ attempt, FAQ-only.** The entry's text is sent once, verbatim. Then the bot answers up to three questions about it, only from that entry's knowledge base. No FAQ match, or a question its knowledge base does not answer, means summarize and hand over. | Two attempts; letting the agent suggest solutions outside the FAQ; answering from every entry's knowledge base | Every instruction and every answer the customer receives comes from what the team wrote; "resolved by bot" means "resolved by the FAQ". |
 | 7 | **Single shared login**; the responsible person is chosen on the card. | Individual logins | Simpler for a two-person team. Move history still records *when*, not *who*. |
 | 8 | **The LLM is provider-agnostic**; the model is chosen by a comparative evaluation once the agent works. DeepSeek V4.1 Flash is the leading candidate (see §12). | Committing to DeepSeek now | Latency and behavior are measured on our own conversations before committing. |
 | 9 | The bot is a **Chatwoot Agent Bot**. The WhatsApp number is connected to Chatwoot through a non-official connector. | Receiving WhatsApp webhooks directly | Our number does not use the official API, and humans answer customers inside Chatwoot. |
@@ -79,8 +80,8 @@ flowchart LR
     CWP --> CW
 ```
 
-- **Domain** holds the ticket state machine, the counters (one FAQ attempt, at most two clarifying
-  questions) and the precedence rules of §5.3. It has no I/O and is unit-tested.
+- **Domain** holds the ticket state machine, the counters (one FAQ attempt, at most three questions
+  answered about it, at most two clarifying questions) and the precedence rules of §5.3. It has no I/O and is unit-tested.
 - **LLM port** hides the provider. Swapping models means writing one adapter.
 - **Chatwoot port** sends messages, toggles conversation status and builds conversation links.
 - **Baseline stack:** backend in Python 3.12 with FastAPI, Pydantic (every inbound payload and every
@@ -109,7 +110,13 @@ flowchart LR
    sentence, never the procedure. Then the bot asks whether it solved the problem.
    - Resolved → **Resolved by bot**.
    - Not resolved → **Awaiting human** (`faq_not_resolved`).
-   - Unclear answer → the bot asks once more; a second unclear answer → **Awaiting human**.
+   - A question about the instructions → the LLM answers it **only from that entry's text and
+     knowledge base** and the conversation, never from general knowledge or other entries; the bot
+     sends the answer and asks again whether it solved the problem. It answers **at most three**
+     questions. A question the knowledge base does not answer, one off the entry's subject, or a
+     fourth one → **Awaiting human** (`faq_not_resolved`), with the question in the ticket summary.
+   - Unclear answer → the bot asks once more; a second unclear answer → **Awaiting human**. A question
+     does not count as an unclear answer.
 6. **No FAQ match:** the LLM may ask **at most two clarifying questions** so the summary is useful,
    then the ticket goes to **Awaiting human** (`no_faq_match`).
 7. **Handoff:** the bot tells the customer the team will take over, sets the ticket to
@@ -121,8 +128,8 @@ flowchart LR
    as Resolved by bot is running: the ticket closes as decided, and those messages, which may be another
    problem, open a new ticket that goes through identification and gets its own turn. If a person moved
    the ticket out of triage during the turn, the turn sends nothing.
-9. **Silence:** a ticket still in triage, or waiting for FAQ feedback, with no customer message for
-   **24 h** (configurable) goes to **No response**.
+9. **Silence:** a ticket still in triage, or waiting for FAQ feedback (also after a question was
+   answered), with no customer message for **24 h** (configurable) goes to **No response**.
 10. **Media** (audio, image, document): the bot asks the customer to type the problem, once. Media
     again → **Awaiting human** (`media`).
 
@@ -132,6 +139,7 @@ flowchart LR
 stateDiagram-v2
     [*] --> InTriage: known number
     [*] --> AwaitingHuman: unknown number
+    InTriage --> InTriage: answers a question about the FAQ entry (up to 3)
     InTriage --> ResolvedByBot: customer confirms the FAQ worked
     InTriage --> AwaitingHuman: handoff (any reason)
     InTriage --> NoResponse: 24 h of silence
@@ -157,7 +165,10 @@ For each customer turn, the first rule that applies wins:
 2. **Registration mismatch** — the customer denies the registered name or unit → handoff
    (`registration_mismatch`).
 3. **Off-topic or suspicious** content → handoff (`off_topic`).
-4. **Awaiting FAQ feedback** → apply step 5 of §5.1.
+4. **Awaiting FAQ feedback** → apply step 5 of §5.1, in this order: resolved → Resolved by bot; not
+   resolved → handoff (`faq_not_resolved`); a question whose answer the LLM found in the entry's
+   knowledge base, with a non-empty reply, and fewer than three questions answered → answer it; any
+   other question → handoff (`faq_not_resolved`); unclear or no feedback → ask once more, then handoff.
 5. **FAQ match**, and the FAQ attempt not yet used → send the FAQ entry.
 6. **Clarification needed**, and fewer than two questions asked → ask.
 7. Otherwise → handoff (`no_faq_match`).
@@ -165,13 +176,18 @@ For each customer turn, the first rule that applies wins:
 ## 6. LLM contract
 
 **Input:** system prompt (role, tone, the rules above), the active category list, the active FAQ
-entries (id, category, title and "when it applies" description — the verbatim answer text stays in
-code), the customer's registered name and unit, the counters' state, the triage conversation the bot
+entries (id, category, title and "when it applies" description; answer texts and knowledge bases
+stay out), the customer's registered name and unit, the counters' state (including
+`faq_questions_answered` and `max_faq_questions`), the triage conversation the bot
 has already answered (`conversation`) and, after it, the customer messages of this turn
 (`new_messages`: those after the last message a turn has read). The system prompt tells the model to
 decide the turn from `new_messages`. A message that arrives while the model is working on a turn is
 stored before that turn's reply, so in the plain conversation it would look answered; sending it in
 `new_messages` keeps it visibly pending for the next turn.
+
+Once the FAQ entry was sent, the input also has `sent_faq`: that entry only (id, title, answer text
+and knowledge base), the one source for answering questions about it. Before the entry is sent there
+is no `sent_faq`, and no answer text or knowledge base reaches the model.
 
 **Output** (validated with Pydantic; categories and FAQ ids must come from the lists sent in the
 input):
@@ -184,6 +200,7 @@ input):
   "category_id": 3,
   "faq_item_id": 12,
   "faq_feedback": null,
+  "faq_answer_found": false,
   "needs_clarification": false,
   "summary": "Não consegue entrar no painel; diz que a senha está errada.",
   "reply": "Veja se isto resolve:"
@@ -192,9 +209,13 @@ input):
 
 - `category_id` must be in the active list; anything else rejects the output.
 - `faq_item_id` is an FAQ id or `null`; an unknown id is treated as `null`.
-- `faq_feedback` is `"resolved"`, `"not_resolved"`, `"unclear"` or `null`.
-- `summary` (1–1000 characters) is what the kanban card shows; `reply` (0–1000) is framing text only,
-  never an FAQ procedure. Booleans are strict: `"true"` is not a boolean.
+- `faq_feedback` is `"resolved"`, `"not_resolved"`, `"question"` (the customer asks about the
+  instructions sent), `"unclear"` or `null`.
+- `faq_answer_found` (default `false`) says, for a question, that its answer is in `sent_faq`'s text
+  or knowledge base (or the conversation) and on the entry's subject.
+- `summary` (1–1000 characters) is what the kanban card shows; `reply` (0–1000) is framing text, never
+  an FAQ procedure, or the answer to a question about the entry sent, written only from `sent_faq`.
+  It is empty when the answer was not found. Booleans are strict: `"true"` is not a boolean.
 
 There is **no action field**: the LLM has no way to ask for anything to be executed. The model runs
 without its reasoning mode, to keep latency within the target.
@@ -206,7 +227,7 @@ without its reasoning mode, to keep latency within the target.
 | `unit` | Client units | id, name, active |
 | `attendant` | The customer base, loaded by the team | id, phone_e164 (unique), name, unit_id, active |
 | `category` | Closed list, never deleted | id, system, name, active, created_at |
-| `faq_item` | FAQ entries, editable without deploy | id, category_id, title, applies_when, answer_text, active |
+| `faq_item` | FAQ entries, editable without deploy | id, category_id, title, applies_when, answer_text, knowledge_base, active |
 | `team_member` | People who can be responsible | id, name, active |
 | `ticket` | The canonical ticket | see below |
 | `ticket_move` | Column history | ticket_id, from, to, at, actor (`bot` / `human`) |
@@ -217,7 +238,7 @@ column (`in_triage`, `resolved_by_bot`, `awaiting_human`, `in_progress`, `resolv
 `no_response`), category_id (current), **bot_category_id (the agent's original choice, kept to
 measure its accuracy)**, handoff_reason (`human_requested`, `faq_not_resolved`, `no_faq_match`,
 `unidentified`, `registration_mismatch`, `off_topic`, `media`, `llm_failure`), faq_item_id,
-faq_attempted, clarifications_asked, summary, responsible_id (null = unassigned),
+faq_attempted, faq_questions_answered, clarifications_asked, summary, responsible_id (null = unassigned),
 chatwoot_conversation_id, opened_at, handed_off_at, taken_at, closed_at.
 
 ## 8. Kanban

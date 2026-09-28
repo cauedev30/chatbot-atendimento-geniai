@@ -4,7 +4,8 @@ GeniAI's WhatsApp support desk: a chatbot that runs as a Chatwoot Agent Bot, a k
 support team and an indicators page.
 
 The bot identifies the customer by phone number, opens a ticket right away, tries **one** answer from
-the team's FAQ and hands the conversation to a person the moment one is asked for. One LLM
+the team's FAQ, answers a few questions about it from that entry's knowledge base, and hands the
+conversation to a person the moment one is asked for. One LLM
 interprets each customer turn; code decides the flow. Every ticket lands on the board with a summary,
 a category and the unit, and feeds the indicators: which problems happen most, how tickets get
 solved, and which units suffer most from each problem.
@@ -24,6 +25,9 @@ solved, and which units suffer most from each problem.
 - Groups a burst of short messages into one turn (about 5 s of silence).
 - Sends at most one FAQ entry, verbatim as the team wrote it; the LLM only writes the framing
   sentence. Then asks whether it solved the problem.
+- Answers up to three questions about the entry sent, only from that entry's knowledge base, and asks
+  again whether it solved the problem. A question the knowledge base does not answer, or a fourth one,
+  goes to a person with the question in the ticket summary.
 - Asks at most two clarifying questions, then summarizes and hands over.
 - Hands over immediately on any request for a person, detected by keywords in code even if the LLM
   is down, and by the LLM.
@@ -126,8 +130,9 @@ Run **one process with one worker**: the order of each conversation's messages a
 burst timers, are kept in memory. The service logs each request as a JSON line with the webhook token
 masked; uvicorn's own access log is off because it would print the token. If you start uvicorn
 yourself (`uvicorn geniai.main:create_app --factory`), pass `--no-access-log` and no `--workers`.
-Tunable conversation rules (burst window, silence timeout, re-ask counts, whether "take" asks who)
-live in `backend/geniai/domain/rules.py`; the ones marked `OWNER-UNCONFIRMED` still await the owner's
+Tunable conversation rules (burst window, silence timeout, re-ask counts, how many questions about
+the FAQ entry are answered (`max_faq_questions`, 3), whether "take" asks who) live in
+`backend/geniai/domain/rules.py`; the ones marked `OWNER-UNCONFIRMED` still await the owner's
 confirmation.
 
 ## Frontend

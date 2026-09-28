@@ -92,7 +92,9 @@ sequenceDiagram
    read, `ticket.last_consumed_message_id`) form one turn. A message stored while a turn is running
    stays pending for the next turn. The first turn gets the greeting, written by code, unless it already asks for a
    person. Later turns are decided in code first (keyword request for a person, media), then by the
-   LLM through the precedence rules. The LLM runs outside any database transaction; the decision, the
+   LLM through the precedence rules. Once the FAQ entry was sent, the LLM also gets that entry's text
+   and knowledge base (`sent_faq`); a question about it is answered from them, up to
+   `max_faq_questions` (3) times, each answer followed by the "did it help?" question again. The LLM runs outside any database transaction; the decision, the
    summary and category, and the bot's reply are written in one transaction, then sent. That
    transaction locks the ticket and drops the decision if a person moved the ticket out of triage
    meanwhile. When the decision closes the ticket (Resolved by bot) and customer messages arrived during
@@ -136,7 +138,10 @@ For each turn the first rule that applies wins (`domain/triage.py`):
 1. human requested (keyword in code, or the LLM) → handoff;
 2. registration mismatch → handoff;
 3. off-topic or suspicious → handoff;
-4. awaiting FAQ feedback → resolved, not resolved (handoff), or unclear (asked once more, then handoff);
+4. awaiting FAQ feedback → resolved; not resolved (handoff); a question answered from the entry's
+   knowledge base while fewer than three were answered (answer it, stay in triage); any other question,
+   or the fourth (handoff `faq_not_resolved`, the question added to the summary); unclear (asked once
+   more, then handoff);
 5. an FAQ entry matches and the one FAQ attempt is unused → send it, verbatim;
 6. the problem is still vague and fewer than two questions were asked → ask;
 7. otherwise → handoff (`no_faq_match`).
@@ -155,7 +160,7 @@ One PostgreSQL database; the DDL is `backend/geniai/db/migrations/0001_init.sql`
 | `unit` | Client units (`name`, `active`) |
 | `attendant` | The customer base: `phone_e164` (unique), `name`, `unit_id`, `active` |
 | `category` | Closed list of problems (`system`, `name`, `active`); `key` marks the system categories `other` and `unidentified` |
-| `faq_item` | FAQ entries: `category_id`, `title`, `applies_when` (sent to the LLM), `answer_text` (sent verbatim, never to the LLM), `active` |
+| `faq_item` | FAQ entries: `category_id`, `title`, `applies_when` (sent to the LLM), `answer_text` (sent verbatim to the customer) and `knowledge_base` (for questions about the entry), which reach the LLM only after the entry was sent, and only those of the entry sent; `active` |
 | `team_member` | People who can take a ticket |
 | `ticket` | The ticket (below) |
 | `ticket_move` | Column history: `from_column`, `to_column`, `at`, `actor` (`bot` / `human`) |
@@ -164,8 +169,8 @@ One PostgreSQL database; the DDL is `backend/geniai/db/migrations/0001_init.sql`
 
 `ticket` keeps the attendant and a snapshot of the unit, the phone, the column, the current
 `category_id` and the LLM's `bot_category_id` (kept to measure how often people correct it), the
-handoff reason, the FAQ entry sent, the counters (`faq_attempted`, `clarifications_asked`,
-`unclear_feedback_reasks`, `media_prompts`), the summary, the responsible person, the Chatwoot
+handoff reason, the FAQ entry sent, the counters (`faq_attempted`, `faq_questions_answered`,
+`clarifications_asked`, `unclear_feedback_reasks`, `media_prompts`), the summary, the responsible person, the Chatwoot
 conversation id and the timestamps `opened_at`, `handed_off_at`, `taken_at`, `closed_at`,
 `last_customer_message_at`, `last_moved_at`, and `last_consumed_message_id`, the last customer message a
 turn has read. A partial unique index allows at most one open ticket
@@ -236,6 +241,10 @@ by default.
   its value. `.env` files are ignored by git.
 - **The bot never executes anything:** the LLM output has no action field, and the FAQ procedure sent
   to the customer is always the team's text.
+- **The bot does not invent answers:** a question about the FAQ entry sent is answered only from that
+  entry's text and knowledge base; the prompt forbids general knowledge and asking for or sending
+  passwords. The LLM never sees another entry's text or knowledge base. Code answers at most three
+  questions, and hands over when the LLM reports no answer or writes an empty one.
 - **Data:** the repository and its tests use invented data only.
 
 ## Tests

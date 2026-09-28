@@ -1,14 +1,18 @@
-"""`python -m geniai.db.cli {create|migrate|seed}`, on DATABASE_URL."""
+"""`python -m geniai.db.cli {create|migrate|seed}` and `load-faq <file.json>`, on DATABASE_URL."""
 
 import asyncio
 import os
 import re
 import sys
+from collections.abc import Callable, Coroutine
+from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from sqlalchemy import text
 
 from geniai.db.engine import create_engine
+from geniai.db.faq_file import FaqFile, FaqFileError, load_faq, read_faq_file
 from geniai.db.fixtures import has_data, seed_fictitious
 from geniai.db.migrate import migrate
 
@@ -70,16 +74,47 @@ async def _seed(url: str) -> None:
     print("Fictitious seed loaded.")
 
 
+async def _load_faq(url: str, faq: FaqFile) -> None:
+    """Loads the FAQ file in one transaction (spec §13)."""
+    engine = create_engine(url)
+    try:
+        await migrate(engine)
+        async with engine.begin() as conn:
+            summary = await load_faq(conn, faq)
+    finally:
+        await engine.dispose()
+    print(summary.describe())
+
+
+USAGE = "usage: python -m geniai.db.cli {create|migrate|seed} | load-faq <file.json>"
+
+
 def main(argv: list[str]) -> int:
-    commands = {"create": _create, "migrate": _migrate, "seed": _seed}
-    if len(argv) != 1 or argv[0] not in commands:
-        print("usage: python -m geniai.db.cli {create|migrate|seed}", file=sys.stderr)
+    commands: dict[str, Callable[[str], Coroutine[Any, Any, None]]] = {
+        "create": _create,
+        "migrate": _migrate,
+        "seed": _seed,
+    }
+    if len(argv) == 1 and argv[0] in commands:
+        command = commands[argv[0]]
+    elif len(argv) == 2 and argv[0] == "load-faq":
+        try:
+            faq = read_faq_file(Path(argv[1]))
+        except FaqFileError as err:
+            print(err, file=sys.stderr)
+            print("Invalid FAQ file; nothing was loaded.", file=sys.stderr)
+            return 1
+
+        async def command(url: str) -> None:
+            await _load_faq(url, faq)
+    else:
+        print(USAGE, file=sys.stderr)
         return 2
     url = os.environ.get("DATABASE_URL")
     if not url:
         print("DATABASE_URL is required", file=sys.stderr)
         return 2
-    asyncio.run(commands[argv[0]](url))
+    asyncio.run(command(url))
     return 0
 
 

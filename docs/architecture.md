@@ -38,7 +38,8 @@ flowchart LR
 - `llm/` builds the prompt, validates the model's JSON (`output_schema.py`) and retries once
   (`interpret.py`). `openai_compatible.py` talks to any OpenAI-compatible chat completions API.
 - `chatwoot/` parses webhook events (`webhook.py`) and calls the Chatwoot API with retries (`http.py`).
-- `db/` has the SQLAlchemy Core schema, the SQL migrations with a small runner, and the fictitious seed.
+- `db/` has the SQLAlchemy Core schema, the SQL migrations with a small runner, the fictitious seed and
+  the loader of the FAQ file (`faq_file.py`, run by `python -m geniai.db.cli load-faq`).
 - `api/` has the FastAPI routers and the JSON response models (`schemas.py`).
 - `main.py` builds the app. On start it migrates the database, wires the real adapters, reschedules
   turns left pending by a restart and starts the silence sweeper; on shutdown it stops them.
@@ -176,6 +177,11 @@ conversation id and the timestamps `opened_at`, `handed_off_at`, `taken_at`, `cl
 turn has read. A partial unique index allows at most one open ticket
 (triage, awaiting or in progress) per conversation.
 
+`category` and `faq_item` are loaded from `backend/faq/faq.json` by `load-faq`: the whole file is
+validated first, then one transaction creates or updates categories by `key` and entries by category
+and title, and deactivates what the file no longer lists (never deletes it, since tickets point to it).
+The categories it creates have the system "Geral", like "Outros".
+
 ## JSON API
 
 Served by the backend under `/api`, proxied by the frontend. Field names are camelCase; enum values
@@ -245,7 +251,8 @@ by default.
   entry's text and knowledge base; the prompt forbids general knowledge and asking for or sending
   passwords. The LLM never sees another entry's text or knowledge base. Code answers at most three
   questions, and hands over when the LLM reports no answer or writes an empty one.
-- **Data:** the repository and its tests use invented data only.
+- **Data:** the tests use invented data only. The FAQ file holds the support team's instructions and
+  no unit, person, phone number or password.
 
 ## Tests
 

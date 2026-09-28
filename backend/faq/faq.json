@@ -1,0 +1,161 @@
+{
+  "categories": [
+    {
+      "key": "dispatch_failure",
+      "name": "Falha no disparo"
+    },
+    {
+      "key": "templates",
+      "name": "Templates"
+    },
+    {
+      "key": "number_quality",
+      "name": "Qualidade e limite do número"
+    },
+    {
+      "key": "new_number",
+      "name": "Número novo e aquecimento"
+    },
+    {
+      "key": "access",
+      "name": "Acessos e login"
+    },
+    {
+      "key": "chat_usage",
+      "name": "Uso do Chat GeniAI"
+    },
+    {
+      "key": "dispatcher_usage",
+      "name": "Uso do Disparador"
+    },
+    {
+      "key": "billing",
+      "name": "Financeiro e comercial"
+    },
+    {
+      "key": "other",
+      "name": "Outros"
+    }
+  ],
+  "items": [
+    {
+      "category": "dispatch_failure",
+      "title": "Disparo com falha",
+      "applies_when": "o disparo deu erro, não saiu, ou voltou com muitas falhas.",
+      "answer_text": "Vamos conferir 3 coisas antes:\n-> Planilha: colunas telefone, nome, variavel_1 em diante. Telefone só com números, nenhuma célula vazia nas variáveis e o valor como número, sem R$ (o R$ já está no template).\n-> Limite: perto do número, no Disparador, aparece o contador (ex.: 900/2000). O limite volta 24 horas depois de cada disparo, então veja se ainda tem saldo.\n-> Teste: crie uma nova campanha, com outro template, e dispare para 50 a 100 contatos. Dando certo, dispare o restante dividido em manhã e tarde.\n\nSe continuar dando erro, me manda o print do erro, a planilha usada e o nome do template que eu vejo com a equipe.",
+      "knowledge_base": "- É comum ter entre 10% e 20% de falha num disparo. A Meta tem um limite \"invisível\": quem já recebeu muitos disparos, inclusive de outras empresas, pode não receber. Número errado ou que não existe também falha.\n- Disparo que falhou conta no Disparador, mas não é enviado e não é cobrado.\n- Não repita disparo para o mesmo cliente em menos de 14 dias. A Meta recusa o envio, a qualidade do número cai e o cliente pode denunciar.\n- Depois de uma queda de conexão, espere cerca de 1 hora e veja se chegam respostas dos contatos do disparo que falhou, antes de disparar de novo. Assim ninguém recebe duas vezes.\n- Template com 2 ou mais variáveis falha mais. Às vezes o próprio template deixa de poder ser usado: aí é preciso criar outro.\n- A Meta às vezes fica instável e os disparos falham para todo mundo. A equipe avisa nos grupos quando isso acontece e quando volta.\n- Fórmula para tirar o primeiro nome na planilha: =ESQUERDA(B2; LOCALIZAR(\" \"; B2) - 1)."
+    },
+    {
+      "category": "templates",
+      "title": "Template rejeitado ou com erro ao criar",
+      "applies_when": "a Meta rejeitou o template, ou dá erro ao cadastrar.",
+      "answer_text": "Para o template passar, segue o que mais ajuda:\n-> Nome do template em inglês e, se repetir, coloque _v1, _v2 no fim.\n-> Formatação (negrito etc.) só no corpo. Cabeçalho e rodapé em texto puro e botões em MAIÚSCULO.\n-> Variáveis como {{1}}, {{2}} no texto (nunca o nome ou o valor escrito), e o exemplo vai no campo de exemplo embaixo.\n-> No máximo 2 ou 3 emojis, poucos pontos finais e poucos espaços entre os parágrafos.\n-> Texto de aviso, não de venda. Evite \"entre agora\", \"acesse já\", \"veja isso\".\n-> Sem \"atenciosamente\": deixe a identificação no rodapé.\n-> Sempre com o botão BLOQUEAR MENSAGENS.\n\nSe der erro na tela, recarregue a página com Ctrl + Shift + R e tente de novo. A aprovação leva até 24 horas; use o botão sincronizar para atualizar o status.",
+      "knowledge_base": "- A Meta tem até 24 horas corridas para aprovar. Enviado às 16h, costuma sair perto do meio-dia do dia seguinte.\n- Pode criar quantos templates quiser; não há restrição por criar muitos.\n- O texto do corpo precisa ser coerente do começo ao fim com o assunto da mensagem.\n- Há vídeo ensinando a criar template, inclusive com imagem e botões (tutoriais do Disparador).\n- Dá para pedir a uma IA que adapte um texto pronto às regras de utilidade da Meta.\n- Queda de qualidade do número não costuma ser a causa da rejeição."
+    },
+    {
+      "category": "templates",
+      "title": "Template caiu como marketing, e eu queria utilidade",
+      "applies_when": "o template foi aprovado como marketing e o cliente quer que seja utilidade.",
+      "answer_text": "Depois de aprovado não é possível trocar a categoria, a Meta não permite nem revisar. Quem define se é utilidade ou marketing é o robô da Meta, então o caminho é criar várias versões: mesmo com o texto igual, cada template é avaliado de novo, e isso aumenta a chance de cair em utilidade. Siga as regras de criação (nome em inglês, tom de aviso, sem apelo de venda) e mantenha o botão BLOQUEAR MENSAGENS.",
+      "knowledge_base": "- Não existe regra garantida: o mesmo texto pode sair utilidade numa unidade e marketing em outra. É tentativa e erro.\n- Mensagem com tom comercial, de venda ou de promoção quase sempre cai em marketing.\n- Os disparos de aquecimento da equipe usam template de utilidade."
+    },
+    {
+      "category": "templates",
+      "title": "Não consigo apagar templates",
+      "applies_when": "o botão de excluir template não funciona, ou a lista está cheia.",
+      "answer_text": "A exclusão de templates pelo Disparador está desativada por enquanto, até a próxima atualização. Me manda o nome dos templates que você quer tirar e o final do número, que a equipe desativa direto na Meta.",
+      "knowledge_base": "- A exclusão foi desligada para evitar um problema que já tinha acontecido no faturamento.\n- Desativados na Meta, eles ainda podem aparecer na tela do Disparador até a atualização."
+    },
+    {
+      "category": "number_quality",
+      "title": "A qualidade do número caiu",
+      "applies_when": "o número foi para qualidade média ou baixa, ou chegou um alerta de spam.",
+      "answer_text": "Quando a qualidade cai, o mais seguro é:\n-> Diminuir os disparos (ou parar, se estiver baixa) até voltar para alta.\n-> Criar templates novos e parar de usar os que estavam sendo usados.\n-> Dividir sempre os disparos em manhã e tarde.\n-> Não repetir disparo para o mesmo cliente em menos de 14 dias.\n\nA qualidade costuma voltar em 2 a 4 dias. Vou avisar a equipe para acompanhar o seu número e passar o limite de disparos até normalizar.",
+      "knowledge_base": "- O índice de qualidade é atualizado a cada 6 horas; espere de 24 a 48 horas para confirmar a volta.\n- Denúncias num dia só se recuperam em 3 a 4 dias. Espalhadas ao longo do tempo, demoram mais.\n- Na qualidade baixa (\"Low\"), o certo é parar todos os disparos.\n- Causas comuns: o mesmo template usado demais, base antiga ou de má qualidade, disparo repetido para os mesmos clientes, volume alto para réguas altas, muitas denúncias.\n- O botão BLOQUEAR MENSAGENS reduz as denúncias. Sem ele, o cliente que não quer mais receber denuncia.\n- Avisos de spam frequentes podem levar ao banimento do número. Um banimento exige muitas denúncias (na casa de 60 ou mais), e um número novo leva de 2 a 4 semanas ou mais."
+    },
+    {
+      "category": "number_quality",
+      "title": "Regras gerais de disparo",
+      "applies_when": "dúvida geral sobre como disparar (\"posso disparar tudo de uma vez?\", \"como divido as réguas?\"). Não se aplica a \"quanto posso disparar hoje no meu número\": isso vai para humano.",
+      "answer_text": "As regras gerais são:\n-> Divida sempre o disparo em 2: metade de manhã e metade à tarde, com pelo menos 2 horas entre eles.\n-> Quanto mais alta a régua, menor o volume. NR pode usar mais, 1 a 3 menos, 4 a 6 bem menos.\n-> NR e R1 devem ser a maior parte dos disparos (cerca de 60%).\n-> Separe as réguas em planilhas diferentes (por exemplo, NR a R2 numa e R3 em diante em outra) para achar o erro mais fácil.\n-> Não repita disparo para o mesmo cliente em menos de 14 dias.\n-> O limite volta 24 horas depois de cada disparo.\n\nO limite exato do seu número depende da qualidade e do tempo de uso dele, então quem passa é a equipe.",
+      "knowledge_base": "- Para aumentar o limite de todas as réguas, são necessárias duas coisas: constância de disparos bons (NR, marketing, atendimento) e tempo de uso do número, no mínimo 2 semanas.\n- Régua alta (4 a 6) tem mais risco de denúncia: poucas denúncias num disparo já derrubam a qualidade.\n- Para não repetir clientes, distribua a base ao longo do mês (cada régua consumida em semanas diferentes).\n- Manter horários fixos de disparo ajuda a resposta dos clientes e o aproveitamento do limite de 24 h."
+    },
+    {
+      "category": "new_number",
+      "title": "Número novo em aquecimento",
+      "applies_when": "o cliente recebeu número novo, ou pergunta sobre os disparos de aquecimento da equipe.",
+      "answer_text": "Todo número novo passa por um aquecimento de cerca de 7 dias. Nesse período a equipe dispara um template de avaliação de atendimento para a base de clientes ativos de vocês. É importante:\n-> Não disparar por esse número até a equipe liberar.\n-> Responder os clientes que forem respondendo, pode ser uma mensagem simples de agradecimento. As respostas chegam no Chat GeniAI e são elas que movimentam o número.\n\nDepois de liberado, o número começa só com NR e vai aumentando o limite semana a semana, conforme a equipe orientar.",
+      "knowledge_base": "- Para aquecer, a equipe precisa de uma planilha com cerca de 1.000 clientes ativos e pagantes, com nome e telefone.\n- A meta são cerca de 1.000 conversas: por isso as respostas da unidade importam.\n- Disparar antes do fim do aquecimento pode causar restrição ou banimento. Com isso são mais 4 semanas ou mais até ter outro número.\n- Um número novo passa pela aprovação da Meta, que pode levar de 15 a 20 dias úteis.\n- Guia usado nas primeiras semanas: 1ª semana só NR; 2ª NR e marketing leve, R2 até ~150; 3ª até ~300; 4ª libera outras réguas com limite. Os valores exatos quem passa é a equipe.\n- Número que já foi banido pode continuar aparecendo na plataforma até a próxima atualização do Disparador, mas não funciona."
+    },
+    {
+      "category": "new_number",
+      "title": "Segundo número (backup)",
+      "applies_when": "dúvida sobre o segundo número da unidade.",
+      "answer_text": "O segundo número é uma reserva: ele fica pronto para assumir caso o principal caia ou seja banido, para vocês não ficarem sem número. Por isso a recomendação é não usar no dia a dia. Se precisar usar, que seja pouco e só para NR, com o limite que a equipe passar.",
+      "knowledge_base": "- Ele também passa pelo aquecimento.\n- Usar muito o backup arrisca os dois números. Se os dois tomarem restrição, são 2 a 3 semanas para recuperar um.\n- Se a unidade precisar de um número para outro uso (informativos, relacionamento), a equipe avalia à parte."
+    },
+    {
+      "category": "access",
+      "title": "Não consigo entrar na plataforma",
+      "applies_when": "erro de login, página de login não abre.",
+      "answer_text": "Confira o endereço de cada plataforma:\n-> Chat GeniAI: https://appchatfvk.geniai.online/app/login\n-> Disparador GeniAI: https://app.geniai.online/login\n\nUse pelo computador (pelo celular a tela não funciona bem) e recarregue com Ctrl + Shift + R. Se a senha estiver dando inválida, eu passo para a equipe verificar o seu acesso.",
+      "knowledge_base": "- O login do Chat e o do Disparador são separados e as senhas podem ser diferentes.\n- Se ninguém da unidade consegue entrar ou enviar mensagem, pode ser acesso pausado por mensalidade em atraso. Isso é com o financeiro, então passa para humano.\n- O bot nunca envia senha, nem pede senha."
+    },
+    {
+      "category": "chat_usage",
+      "title": "Conversas não aparecem no Chat",
+      "applies_when": "a atendente só vê conversas resolvidas, vê menos conversas que as outras, ou não acha as conversas do mês.",
+      "answer_text": "Normalmente é o filtro. No topo da lista de conversas, clique nas duas setinhas e troque \"Resolvidas\" por \"Todos\". Veja também o filtro de canal: selecione os canais (números) que vocês estão usando e aplique.\n\nAtendente que entrou depois só vê as conversas a partir de quando o acesso foi criado.",
+      "knowledge_base": "- Na aba lateral da conversa aparece quando foi a última mensagem do atendente e a do cliente.\n- Quando um canal é banido, as conversas dele somem para quem estava atribuído."
+    },
+    {
+      "category": "chat_usage",
+      "title": "Áudio sem som no Chat",
+      "applies_when": "o áudio toca mas não sai som só no Chat GeniAI.",
+      "answer_text": "Clique com o botão direito na aba do navegador em que o Chat está aberto. Se aparecer \"Ativar som do site\", clique nela: o som estava desativado só para essa página. Vale conferir também se o som do computador funciona em outros sites.",
+      "knowledge_base": ""
+    },
+    {
+      "category": "chat_usage",
+      "title": "Chat trava, cai ou não atualiza",
+      "applies_when": "a página cai ao abrir conversas, um usuário não aparece para transferir, algo não atualiza.",
+      "answer_text": "Recarregue a página por completo com Ctrl + Shift + R. Se continuar, limpe o histórico e o cache do navegador e entre de novo. Se mesmo assim der problema, me manda um print ou vídeo do que acontece que eu passo para a equipe.",
+      "knowledge_base": ""
+    },
+    {
+      "category": "chat_usage",
+      "title": "Atribuir, transferir e resolver conversa",
+      "applies_when": "dúvida sobre atribuição automática, troca de atendente ou fechar conversa.",
+      "answer_text": "A conversa é atribuída automaticamente para quem responde. Na aba lateral da conversa dá para trocar o atendente ou resolver a conversa. Quando o cliente mandar mensagem de novo, a conversa resolvida volta para a triagem.",
+      "knowledge_base": "- As informações do disparo que o cliente recebeu ficam no contato: na conversa, aba lateral direita, ícone do contato → atributos do contato.\n- As respostas aos botões do template são o que abre a conversa no Chat. Dá para criar automação que responde conforme o botão escolhido (quem configura é a equipe)."
+    },
+    {
+      "category": "dispatcher_usage",
+      "title": "Tutoriais do Disparador e do Chat",
+      "applies_when": "\"como faço X no Disparador/Chat\" sem problema específico (criar campanha, template com imagem, primeiros passos).",
+      "answer_text": "Os vídeos de suporte ensinam o passo a passo das duas plataformas:\n-> Disparador GeniAI: https://drive.google.com/drive/folders/1QSZD8ppp7prZkNlRknJXqJ7aOhIYeoOU?usp=sharing\n-> Chat GeniAI: https://drive.google.com/drive/folders/1u1vTTb8TrbEb4dAxQulzuI5Fi867AhtK?usp=sharing\n\nSe depois de assistir ainda ficar alguma dúvida, me fala que a equipe marca uma chamada rápida.",
+      "knowledge_base": "- Há um guia em PDF só para o gestor: como liberar os números (WABA) para cada atendente usar no Disparador. Liberar acesso aos números é responsabilidade do gestor.\n- O gestor controla quem vê cada número pelo acesso de gestor."
+    },
+    {
+      "category": "dispatcher_usage",
+      "title": "Planilha do disparo",
+      "applies_when": "como montar a planilha, a planilha não é aceita.",
+      "answer_text": "A planilha precisa ter as colunas: telefone, nome, variavel_1, variavel_2 (quantas o template tiver). Telefone só com números, nenhuma célula vazia nas variáveis e valor como número, sem R$. O modelo pode ser baixado de dentro da campanha: é só copiar e colar os números e nomes dos clientes nele.\n\nPara colocar só o primeiro nome na variavel_1: =ESQUERDA(B2; LOCALIZAR(\" \"; B2) - 1)",
+      "knowledge_base": "- Planilha sem nome ou sem telefone não serve para disparo nem para aquecimento.\n- Em CSV, o separador é ponto e vírgula.\n- Confira qual template vai ser usado antes, para a planilha ter as variáveis certas."
+    },
+    {
+      "category": "dispatcher_usage",
+      "title": "Custos e relatório de disparos",
+      "applies_when": "onde ver o gasto, quantos disparos saíram, histórico por data.",
+      "answer_text": "Os custos e os disparos ficam no acesso de gestor, na parte do financeiro. Para ver um período, escolha o número na aba de contas e abra o filtro de datas. A visão geral das contas mostra sempre o ciclo do mês.\n\nDentro de cada campanha aparece o template usado, quantos disparos foram feitos e quantos deram certo.",
+      "knowledge_base": "- Os disparos de aquecimento da equipe usam template de utilidade.\n- Disparo com falha não é cobrado."
+    },
+    {
+      "category": "dispatcher_usage",
+      "title": "Relatório de quem pediu BLOQUEAR MENSAGENS",
+      "applies_when": "lista dos clientes que pediram bloqueio num período.",
+      "answer_text": "A lista de quem pediu bloqueio fica na planilha de bloqueios da unidade, que é atualizada automaticamente. Na coluna data_entrada_bloqueio dá para filtrar por dia e copiar os dados. Se você não tiver o link da planilha, eu peço para a equipe te enviar.",
+      "knowledge_base": "- O botão BLOQUEAR MENSAGENS é o que alimenta essa planilha. Por isso ele deve estar em todo template."
+    }
+  ]
+}

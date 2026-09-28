@@ -76,7 +76,7 @@ is first-party. Chatwoot calls the backend directly. Details: [docs/architecture
 backend/
   geniai/
     domain/      pure rules: ticket transitions, turn precedence, silence, phone, texts, tunables
-    db/          SQLAlchemy schema, SQL migrations, fictitious seed, CLI
+    db/          SQLAlchemy schema, SQL migrations, fictitious seed, FAQ file loader, CLI
     app/         use cases: inbound messages, turns, silence sweeper, board, indicators
     llm/         LLM contract (prompt, output schema, one-retry interpretation), OpenAI-compatible adapter
     chatwoot/    webhook parsing and HTTP client
@@ -84,6 +84,7 @@ backend/
     eval/        30 fictitious conversations and the model comparison runner
     config.py    environment configuration
     main.py      the FastAPI app and its background work
+  faq/faq.json   the FAQ: categories, entries and their knowledge bases (loaded with load-faq)
   tests/         pytest suite, mirroring geniai/
   openapi.json   the API schema the frontend types are generated from
 frontend/
@@ -120,11 +121,29 @@ cp .env.example .env             # then fill it in (see Configuration)
 | `python -m geniai.db.cli create` | Create the database of `DATABASE_URL` when missing (used by the e2e run) |
 | `python -m geniai.db.cli migrate` | Apply `geniai/db/migrations/*.sql` to `DATABASE_URL` |
 | `python -m geniai.db.cli seed` | Load **fictitious** demo data (once; a second run does nothing) |
+| `python -m geniai.db.cli load-faq faq/faq.json` | Load the FAQ file (see below) into `DATABASE_URL` |
 | `python -m geniai` | Run the service on `HOST` and `PORT`. It migrates on start, reschedules turns left pending by a restart and sweeps silent tickets every 5 minutes |
 | `python -m geniai.eval.run` | Run the evaluation set against the models in `EVAL_CANDIDATES` |
 | `python -m geniai.export_openapi` | Rewrite `openapi.json` after an API change |
 
 The service reads only environment variables; load `.env` with your shell or process manager.
+
+**The FAQ** is edited in `backend/faq/faq.json` and loaded with `load-faq`; there is no screen for it
+yet. The file has the category list (`key`, `name`) and the entries (`category`, `title`,
+`applies_when`, `answer_text`, `knowledge_base`):
+
+- `answer_text` is sent to the customer exactly as written;
+- `applies_when` tells the LLM when the entry fits;
+- `knowledge_base` (a list of `- ` lines, possibly empty) is the only source for answering questions
+  about the entry sent. Leave out anything not confirmed: a question it does not answer goes to a
+  person.
+
+The command checks the whole file first and loads nothing if something is wrong (an empty field, an
+entry whose category is not in the file, a repeated title or key). Then, in one transaction, it creates
+or updates categories by `key` and entries by category and title, and deactivates the categories and
+entries the file no longer lists; nothing is deleted. The key `other` renames the existing "Outros"
+category and `unidentified` is reserved. Running it again with the same file changes nothing. It
+prints how many entries and categories were created, updated, left unchanged and deactivated.
 
 Run **one process with one worker**: the order of each conversation's messages and turns, and the
 burst timers, are kept in memory. The service logs each request as a JSON line with the webhook token
@@ -247,10 +266,9 @@ machine in Brazil so the latency matches production.
 
 ## Status and open items
 
-The bot, the board and the indicators are implemented and tested, with fictitious data. Still open
-(spec §13):
+The bot, the board and the indicators are implemented and tested, with fictitious data. The FAQ
+content and category list are in `backend/faq/faq.json`. Still open (spec §13):
 
-- FAQ content and the initial category list, written by the support team.
 - The model choice, by the evaluation set.
 - Confirming that the WhatsApp connector delivers the real phone number, not an internal id.
 - Confirming which Chatwoot webhook carries conversation status changes.
@@ -260,5 +278,6 @@ The bot, the board and the indicators are implemented and tested, with fictitiou
 
 ## Data
 
-The repository is public. It contains only invented data: no real phone numbers, unit names, people
-or account ids.
+The repository is public. Apart from the FAQ file, which holds the support team's instructions, it
+contains only invented data: no real phone numbers, unit names, people or account ids, here or in
+the FAQ.

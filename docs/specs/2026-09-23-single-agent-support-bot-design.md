@@ -341,7 +341,9 @@ Source: official API pricing page (api-docs.deepseek.com, model `deepseek-flash`
 
 These are not decided yet. None of them blocks the implementation.
 
-- **FAQ content and the initial category list** — written by the support team.
+- **FAQ content and the category list** — written by the support team. The content is in
+  `backend/faq/faq.json`, loaded with `python -m geniai.db.cli load-faq`. Knowledge-base points the
+  team has not confirmed stay out of the file until they are.
 - **Model choice** — decided by the evaluation set (§11).
 - **Connector check:** confirm that Chatwoot contacts from this inbox carry the real phone number.
   Some non-official connectors deliver an internal WhatsApp id instead, which would break

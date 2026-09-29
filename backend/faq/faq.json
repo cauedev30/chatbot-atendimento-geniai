@@ -2,38 +2,47 @@
   "categories": [
     {
       "key": "dispatch_failure",
+      "system": "Disparador",
       "name": "Falha no disparo"
     },
     {
       "key": "templates",
+      "system": "Disparador",
       "name": "Templates"
     },
     {
       "key": "number_quality",
+      "system": "Disparador",
       "name": "Qualidade e limite do número"
     },
     {
       "key": "new_number",
+      "system": "Disparador",
       "name": "Número novo e aquecimento"
     },
     {
       "key": "access",
+      "system": "Disparador",
       "name": "Acessos e login"
     },
     {
       "key": "chat_usage",
+      "system": "Chatwoot",
       "name": "Uso do Chat GeniAI"
     },
     {
       "key": "dispatcher_usage",
+      "system": "Disparador",
       "name": "Uso do Disparador"
     },
     {
       "key": "billing",
+      "system": "Geral",
       "name": "Financeiro e comercial"
     },
     {
       "key": "other",
+      "system": "Geral",
       "name": "Outros"
     }
   ],

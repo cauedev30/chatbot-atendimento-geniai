@@ -12,9 +12,9 @@ from tests.conftest import Harness
 
 VALID: dict[str, Any] = {
     "categories": [
-        {"key": "panel", "name": "Painel"},
-        {"key": "agenda", "name": "Agenda"},
-        {"key": "other", "name": "Outros assuntos"},
+        {"key": "panel", "system": "Painel", "name": "Acesso"},
+        {"key": "agenda", "system": "Agenda", "name": "Horários"},
+        {"key": "other", "system": "Geral", "name": "Outros assuntos"},
     ],
     "items": [
         {
@@ -57,6 +57,15 @@ def test_rejects_an_empty_required_field() -> None:
     assert "answer_text" in errors_of(with_changes(items=items))
 
 
+def test_rejects_a_category_without_a_system() -> None:
+    missing = with_changes()
+    del missing["categories"][0]["system"]
+    assert "categories.0.system" in errors_of(missing)
+    blank = with_changes()
+    blank["categories"][1]["system"] = " "
+    assert "categories.1.system" in errors_of(blank)
+
+
 def test_rejects_an_item_of_a_category_not_in_the_file() -> None:
     items = with_changes()["items"]
     items[1]["category"] = "finance"
@@ -66,8 +75,8 @@ def test_rejects_an_item_of_a_category_not_in_the_file() -> None:
 def test_rejects_a_repeated_title_a_repeated_key_and_the_unidentified_category() -> None:
     data = with_changes()
     data["items"][1]["title"] = "Senha do painel"
-    data["categories"].append({"key": "panel", "name": "De novo"})
-    data["categories"].append({"key": "unidentified", "name": "Sem cadastro"})
+    data["categories"].append({"key": "panel", "system": "Painel", "name": "De novo"})
+    data["categories"].append({"key": "unidentified", "system": "Geral", "name": "Sem cadastro"})
     message = errors_of(data)
     assert '"Senha do painel"' in message
     assert '"panel"' in message
@@ -99,6 +108,21 @@ def test_the_command_refuses_an_invalid_file_before_touching_the_database(
     assert main(["load-faq", str(bad)]) == 1
     assert "nothing was loaded" in capsys.readouterr().err
     assert main(["load-faq"]) == 2
+
+
+async def test_a_file_with_a_category_without_a_system_loads_nothing(
+    h: Harness, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    before = await categories_by_key(h)
+    data = with_changes()
+    del data["categories"][0]["system"]
+    bad = tmp_path / "faq.json"
+    bad.write_text(json.dumps(data), encoding="utf-8")
+    assert main(["load-faq", str(bad)]) == 1
+    err = capsys.readouterr().err
+    assert "categories.0.system" in err
+    assert "nothing was loaded" in err
+    assert await categories_by_key(h) == before
 
 
 async def load(h: Harness, faq: FaqFile) -> LoadSummary:
@@ -142,7 +166,8 @@ async def test_loads_the_file_and_retires_what_it_does_not_list(h: Harness) -> N
         "Horário sumiu": ("agenda", ""),
     }
     found = await categories_by_key(h)
-    assert found["panel"] == [("Geral", "Painel", True)]
+    assert found["panel"] == [("Painel", "Acesso", True)]
+    assert found["agenda"] == [("Agenda", "Horários", True)]
     assert found["other"] == [("Geral", "Outros assuntos", True)]
     assert found["unidentified"] == [("Geral", "Não identificado", True)]
     # The categories the file does not list stay, inactive: tickets and indicators still point to them.
@@ -177,7 +202,23 @@ async def test_updates_edited_items_and_brings_back_a_listed_item_or_category(h:
     assert (summary.items_created, summary.items_updated, summary.items_unchanged) == (0, 2, 0)
     assert summary.categories_updated == 1
     assert (await active_items(h))["Senha do painel"] == ("panel", "- O link vale por 2 horas.")
-    assert (await categories_by_key(h))["agenda"] == [("Geral", "Agenda", True)]
+    assert (await categories_by_key(h))["agenda"] == [("Agenda", "Horários", True)]
+
+
+async def test_a_new_system_for_a_category_is_an_update(h: Harness) -> None:
+    await load(h, parse_faq_file(VALID))
+    moved = with_changes()
+    moved["categories"][0]["system"] = "Chatwoot"
+    moved["categories"][2]["system"] = "Suporte"
+    summary = await load(h, parse_faq_file(moved))
+    assert (summary.categories_created, summary.categories_updated, summary.categories_unchanged) == (0, 2, 1)
+    assert (summary.items_updated, summary.items_unchanged) == (0, 2)
+    found = await categories_by_key(h)
+    assert found["panel"] == [("Chatwoot", "Acesso", True)]
+    assert found["other"] == [("Suporte", "Outros assuntos", True)]
+    assert found["unidentified"] == [("Geral", "Não identificado", True)]
+    summary = await load(h, parse_faq_file(moved))
+    assert (summary.categories_updated, summary.categories_unchanged) == (0, 3)
 
 
 def test_the_faq_file_in_the_repository_is_valid() -> None:
@@ -193,6 +234,17 @@ def test_the_faq_file_in_the_repository_is_valid() -> None:
         "billing",
         "other",
     ]
+    assert {c.key: c.system for c in faq.categories} == {
+        "dispatch_failure": "Disparador",
+        "templates": "Disparador",
+        "number_quality": "Disparador",
+        "new_number": "Disparador",
+        "access": "Disparador",
+        "chat_usage": "Chatwoot",
+        "dispatcher_usage": "Disparador",
+        "billing": "Geral",
+        "other": "Geral",
+    }
     assert len(faq.items) == 17
     assert {c.key for c in faq.categories} >= {i.category for i in faq.items}
     for item in faq.items:

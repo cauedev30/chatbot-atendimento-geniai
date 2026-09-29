@@ -1,8 +1,9 @@
 """The FAQ file and its loader: `python -m geniai.db.cli load-faq <file.json>`.
 
-The team edits the FAQ in `backend/faq/faq.json` and loads it with the command. Loading is one
-transaction and can be repeated: categories are matched by `key` and entries by (category, title);
-what the file no longer lists is deactivated, never deleted, since tickets and indicators point to it.
+The team edits the FAQ in `backend/faq/faq.json` and loads it with the command. Each category has its
+`system` and `name`, shown together as "system / name". Loading is one transaction and can be repeated:
+categories are matched by `key` and entries by (category, title); what the file no longer lists is
+deactivated, never deleted, since tickets and indicators point to it.
 """
 
 import json
@@ -22,9 +23,6 @@ FAQ_FILE: Final = Path(__file__).resolve().parents[2] / "faq" / "faq.json"
 SYSTEM_KEYS: Final = frozenset({"other", "unidentified"})
 """Categories created by the migrations; the file may rename "other" and never touches "unidentified"."""
 
-CATEGORY_SYSTEM: Final = "Geral"
-"""The `system` of the categories the file creates (the file has no such field), as for "other"."""
-
 
 def _not_blank(value: str) -> str:
     if not value.strip():
@@ -39,6 +37,7 @@ class FaqFileCategory(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     key: Text
+    system: Text
     name: Text
 
 
@@ -132,15 +131,16 @@ async def _load_categories(conn: AsyncConnection, faq: FaqFile) -> tuple[dict[st
     for c in faq.categories:
         row = rows.get(c.key)
         if row is None:
-            query = insert(category).values(key=c.key, system=CATEGORY_SYSTEM, name=c.name).returning(category.c.id)
+            query = insert(category).values(key=c.key, system=c.system, name=c.name).returning(category.c.id)
             ids[c.key] = int((await conn.execute(query)).scalar_one())
             created += 1
             continue
         ids[c.key] = row.id
-        if (row.name, row.active) == (c.name, True):
+        if (row.system, row.name, row.active) == (c.system, c.name, True):
             unchanged += 1
             continue
-        await conn.execute(update(category).where(category.c.id == row.id).values(name=c.name, active=True))
+        values = {"system": c.system, "name": c.name, "active": True}
+        await conn.execute(update(category).where(category.c.id == row.id).values(**values))
         updated += 1
     retired = await conn.execute(
         update(category)

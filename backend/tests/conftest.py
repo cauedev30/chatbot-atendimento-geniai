@@ -60,7 +60,9 @@ async def engine() -> AsyncIterator[AsyncEngine]:
         await conn.execute(text(RESET_SQL))
         # Leaves only the system categories of the migrations, as they were created.
         await conn.execute(text("DELETE FROM category WHERE key IS NULL OR key NOT IN ('other', 'unidentified')"))
-        await conn.execute(text("UPDATE category SET name = 'Outros', active = true WHERE key = 'other'"))
+        await conn.execute(
+            text("UPDATE category SET system = 'Geral', name = 'Outros', active = true WHERE key = 'other'")
+        )
     yield eng
     await eng.dispose()
 

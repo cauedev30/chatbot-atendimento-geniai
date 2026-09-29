@@ -16,6 +16,9 @@ class IncomingMessage:
     has_media: bool
     conversation_status: str | None
     """Chatwoot conversation status at delivery ("pending" while the bot handles it); None when absent."""
+    contact_identifier: str | None = None
+    """The contact's identifier in Chatwoot (a WhatsApp connector may put the chat id here, which ends in
+    "@g.us" for a group); None when absent."""
 
 
 @dataclass(frozen=True)
@@ -35,6 +38,7 @@ ChatwootEvent = IncomingMessage | ConversationResolved | Ignored
 
 class _Phone(BaseModel):
     phone_number: StrictStr | None = None
+    identifier: StrictStr | None = None
 
 
 class _Meta(BaseModel):
@@ -100,9 +104,13 @@ def parse_chatwoot_event(body: object) -> ChatwootEvent:
         has_media = len(m.attachments or []) > 0
         if text == "" and not has_media:
             return Ignored("empty message")
+        meta_sender = m.conversation.meta.sender if m.conversation.meta else None
         phone = m.sender.phone_number if m.sender else None
-        if phone is None and m.conversation.meta and m.conversation.meta.sender:
-            phone = m.conversation.meta.sender.phone_number
+        if phone is None and meta_sender:
+            phone = meta_sender.phone_number
+        identifier = m.sender.identifier if m.sender else None
+        if identifier is None and meta_sender:
+            identifier = meta_sender.identifier
         return IncomingMessage(
             message_id=m.id,
             conversation_id=m.conversation.id,
@@ -110,6 +118,7 @@ def parse_chatwoot_event(body: object) -> ChatwootEvent:
             text=text,
             has_media=has_media,
             conversation_status=m.conversation.status,
+            contact_identifier=identifier,
         )
 
     try:

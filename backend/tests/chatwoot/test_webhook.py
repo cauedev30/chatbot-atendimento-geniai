@@ -47,6 +47,20 @@ def test_gives_a_none_phone_when_there_is_none() -> None:
     assert event.phone is None
 
 
+def test_reads_the_contact_identifier_from_the_sender_or_the_conversation() -> None:
+    group = "120363000000000001@g.us"
+    event = parse_chatwoot_event(INCOMING | {"sender": {"id": 9, "identifier": group, "phone_number": None}})
+    assert isinstance(event, IncomingMessage)
+    assert (event.phone, event.contact_identifier) == ("+5511900000001", group)
+    meta = {"id": 45, "meta": {"sender": {"identifier": group}}}
+    event = parse_chatwoot_event(INCOMING | {"sender": {"id": 9}, "conversation": meta})
+    assert isinstance(event, IncomingMessage)
+    assert (event.phone, event.contact_identifier) == (None, group)
+    event = parse_chatwoot_event(INCOMING)
+    assert isinstance(event, IncomingMessage)
+    assert event.contact_identifier is None
+
+
 def test_accepts_the_numeric_incoming_message_type() -> None:
     assert isinstance(parse_chatwoot_event(INCOMING | {"message_type": 0}), IncomingMessage)
 

@@ -138,4 +138,5 @@ outbox = sa.Table(
     sa.Column("created_at", _tz(), nullable=False, server_default=sa.func.now()),
     sa.Column("done_at", _tz()),
     sa.Column("error", sa.Text),
+    sa.Column("chatwoot_message_id", sa.Integer, unique=True),
 )

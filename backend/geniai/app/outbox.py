@@ -41,8 +41,36 @@ async def enqueue_message(conn: AsyncConnection, conversation_id: int, text: str
     await conn.execute(insert(outbox).values(conversation_id=conversation_id, kind="message", payload=text))
 
 
-async def enqueue_status(conn: AsyncConnection, conversation_id: int, status: "ChatwootStatus") -> None:
-    await conn.execute(insert(outbox).values(conversation_id=conversation_id, kind="status", payload=status))
+async def enqueue_status(
+    conn: AsyncConnection, conversation_id: int, status: "ChatwootStatus", *, chatwoot_message_id: int | None = None
+) -> None:
+    """`chatwoot_message_id`: the customer message that caused the row, when no ticket keeps it (see
+    outbox_row_for_message)."""
+    await conn.execute(
+        insert(outbox).values(
+            conversation_id=conversation_id, kind="status", payload=status, chatwoot_message_id=chatwoot_message_id
+        )
+    )
+
+
+async def outbox_row_for_message(conn: AsyncConnection, chatwoot_message_id: int) -> bool:
+    query = select(outbox.c.id).where(outbox.c.chatwoot_message_id == chatwoot_message_id).limit(1)
+    return (await conn.execute(query)).first() is not None
+
+
+async def status_pending(conn: AsyncConnection, conversation_id: int, status: "ChatwootStatus") -> bool:
+    """A change to `status` for the conversation is already waiting to be sent."""
+    query = (
+        select(outbox.c.id)
+        .where(
+            outbox.c.conversation_id == conversation_id,
+            outbox.c.kind == "status",
+            outbox.c.payload == status,
+            outbox.c.state == "pending",
+        )
+        .limit(1)
+    )
+    return (await conn.execute(query)).first() is not None
 
 
 async def _finish(deps: "Deps", row_id: int, state: Literal["sent", "failed"], error: str | None = None) -> None:

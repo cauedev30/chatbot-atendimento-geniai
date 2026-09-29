@@ -52,3 +52,5 @@ class Deps:
     now: Callable[[], datetime]
     log: Logger
     outbox: Outbox = field(default_factory=Outbox)
+    bot_only_phones: frozenset[str] = frozenset()
+    """Test mode (BOT_ONLY_PHONES): when not empty, the only phones the bot serves; see domain/audience.py."""

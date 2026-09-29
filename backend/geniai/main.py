@@ -62,6 +62,7 @@ def _lifespan(state: AppState) -> Callable[[FastAPI], AbstractAsyncContextManage
             rules=config.rules,
             now=lambda: datetime.now(UTC),
             log=log,
+            bot_only_phones=config.bot_only_phones,
         )
 
         async def turn(conversation_id: int) -> None:

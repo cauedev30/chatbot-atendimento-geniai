@@ -101,6 +101,25 @@ async def test_closes_the_card_when_the_conversation_is_resolved_in_chatwoot(api
     assert row.column == "resolved_by_human"
 
 
+async def test_hands_a_group_conversation_to_the_team_and_ignores_the_same_delivery_again(api: Api) -> None:
+    body = {
+        "event": "message_created",
+        "id": next(_message_ids),
+        "content": "bom dia, grupo",
+        "message_type": "incoming",
+        "conversation": {"id": 47, "status": "pending"},
+        "sender": {"identifier": "120363000000000001@g.us", "phone_number": None},
+    }
+    assert (await api.client.post(URL, json=body)).json() == {"outcome": "not_served"}
+    await api.h.settle()
+    assert (await api.client.post(URL, json=body)).json() == {"outcome": "duplicate"}
+    await api.h.settle()
+    assert api.h.chatwoot.statuses == [StatusSet(47, "open")]
+    assert api.h.chatwoot.sent == []
+    assert await stored_texts(api, 47) == []
+    assert api.scheduler.scheduled == []
+
+
 async def test_the_webhook_needs_no_session_and_is_not_under_api(api: Api) -> None:
     assert (await api.client.post(f"/api/webhooks/chatwoot/{WEBHOOK_TOKEN}", json={})).status_code == 404
 

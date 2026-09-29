@@ -204,6 +204,7 @@ A test also checks that the committed `backend/openapi.json` matches the API.
 | `SECURE_COOKIE` | `true` behind HTTPS (default); `false` only for local http |
 | `ENABLE_API_DOCS` | `true` serves `/docs`, `/redoc` and `/openapi.json`; off by default |
 | `TRUSTED_PROXY_IPS` | Addresses or networks (comma-separated) of the frontend that proxies `/api`, whose `X-Forwarded-For` is believed; default `127.0.0.1,::1` |
+| `BOT_ONLY_PHONES` | Optional test mode: comma-separated phone numbers the bot serves; any other conversation is handed to the team at once. Empty serves everyone. Each entry must be a Brazilian phone number |
 | `BURST_WINDOW_MS` | Optional: silence that closes a burst of messages into one turn |
 | `SILENCE_TIMEOUT_HOURS` | Optional: silence that moves a triage ticket to "No response" |
 | `EVAL_CANDIDATES` | JSON list of `{label, baseUrl, model, apiKeyEnv, extraBody?}` for the evaluation |

@@ -11,6 +11,7 @@ from pydantic import AfterValidator, BaseModel, Field, ValidationError
 from geniai.api.auth import AuthConfig
 from geniai.api.login_limit import Network
 from geniai.chatwoot.http import ChatwootHttpConfig
+from geniai.domain.phone import normalize_br_phone
 from geniai.domain.rules import DEFAULT_RULES, TriageRules
 from geniai.llm.openai_compatible import OpenAiCompatibleConfig
 
@@ -50,6 +51,7 @@ class _Env(BaseModel):
     SILENCE_TIMEOUT_HOURS: Annotated[float, Field(gt=0)] | None = None
     ENABLE_API_DOCS: Literal["true", "false"] = "false"
     TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
+    BOT_ONLY_PHONES: str | None = None
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,8 @@ class AppConfig:
     """Serve /docs, /redoc and /openapi.json. Off by default: the schema is exported at build time."""
     trusted_proxies: tuple[Network, ...] = (ip_network("127.0.0.1/32"), ip_network("::1/128"))
     """Peers whose X-Forwarded-For is believed: the frontend that proxies /api (see api/login_limit.py)."""
+    bot_only_phones: frozenset[str] = frozenset()
+    """Test mode: when not empty, the bot serves only these phones (E.164); see domain/audience.py."""
 
 
 def _reject_non_finite(constant: str) -> object:
@@ -75,6 +79,20 @@ def _reject_non_finite(constant: str) -> object:
 
 def _invalid(names: list[str]) -> ConfigError:
     return ConfigError(f"Invalid or missing environment variables: {', '.join(names)}")
+
+
+def _phone_list(raw: str | None) -> frozenset[str]:
+    """Comma-separated phones, normalized like the contact's phone; an entry that is not a Brazilian phone
+    number is a configuration error."""
+    phones: set[str] = set()
+    for entry in (raw or "").split(","):
+        if entry.strip() == "":
+            continue
+        phone = normalize_br_phone(entry)
+        if phone is None:
+            raise _invalid(["BOT_ONLY_PHONES"])
+        phones.add(phone)
+    return frozenset(phones)
 
 
 def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
@@ -99,6 +117,7 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
         trusted_proxies = tuple(ip_network(entry.strip()) for entry in e.TRUSTED_PROXY_IPS.split(",") if entry.strip())
     except ValueError:
         raise _invalid(["TRUSTED_PROXY_IPS"]) from None
+    bot_only_phones = _phone_list(e.BOT_ONLY_PHONES)
     rules = DEFAULT_RULES
     if e.BURST_WINDOW_MS is not None:
         rules = replace(rules, burst_window_ms=e.BURST_WINDOW_MS)
@@ -124,4 +143,5 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
         rules=rules,
         enable_api_docs=e.ENABLE_API_DOCS == "true",
         trusted_proxies=trusted_proxies,
+        bot_only_phones=bot_only_phones,
     )

@@ -29,6 +29,20 @@ def test_loads_a_valid_environment_with_defaults() -> None:
     assert config.llm.extra_body is None
     assert config.enable_api_docs is False
     assert config.trusted_proxies == (ip_network("127.0.0.1/32"), ip_network("::1/128"))
+    assert config.bot_only_phones == frozenset()
+
+
+def test_reads_the_test_mode_phones_normalized_like_the_contact_phone() -> None:
+    config = load_config(VALID | {"BOT_ONLY_PHONES": "+55 (11) 90000-0001, 5511900000002,,11 90000003 "})
+    assert config.bot_only_phones == frozenset({"+5511900000001", "+5511900000002", "+5511990000003"})
+
+
+@pytest.mark.parametrize("value", ["+5511900000001, sem-numero", "123", "+1 555 0100"])
+def test_rejects_a_test_mode_entry_that_is_not_a_phone_without_echoing_it(value: str) -> None:
+    with pytest.raises(ConfigError) as err:
+        load_config(VALID | {"BOT_ONLY_PHONES": value})
+    assert "BOT_ONLY_PHONES" in str(err.value)
+    assert value not in str(err.value)
 
 
 def test_applies_overrides() -> None:

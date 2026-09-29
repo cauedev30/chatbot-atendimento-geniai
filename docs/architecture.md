@@ -31,7 +31,7 @@ flowchart LR
 
 - `domain/` holds pure rules with no I/O: the ticket columns and the moves each actor may make
   (`transitions.py`), the turn precedence (`triage.py`), the 24 h silence rule (`silence.py`), phone
-  normalization (`phone.py`), the human-request keyword check (`human_request.py`), the fixed customer
+  normalization (`phone.py`), which conversations the bot serves (`audience.py`), the human-request keyword check (`human_request.py`), the fixed customer
   texts in Portuguese (`texts.py`) and every tunable in one place (`rules.py`).
 - `app/` holds the use cases. They depend on **ports** (`app/ports.py`): `LlmPort`, `ChatwootPort`,
   a `Logger` and the database engine, bundled in `Deps`. Tests swap the ports for fakes.
@@ -78,8 +78,17 @@ sequenceDiagram
 
 1. **Inbound** (`handle_inbound.py`, under the conversation's webhook lane). A duplicate Chatwoot
    message id is ignored. A message on an open ticket is attached to it: a triage ticket gets its
-   burst window restarted, a ticket with a person gets no reply. With no open ticket the phone is
-   normalized and looked up among active attendants:
+   burst window restarted, a ticket with a person gets no reply. With no open ticket, the bot first
+   decides whether it serves the conversation (`domain/audience.py`), before any ticket, reply or LLM
+   call. It never serves a group (the contact's identifier or phone ends in `@g.us`, an assumption about
+   the WhatsApp connector still to be checked on the real inbox) nor a contact without a usable
+   Brazilian phone; in test mode (`BOT_ONLY_PHONES` not empty) it serves only the listed phones. A
+   conversation it does not serve is handed to the team silently: if Chatwoot does not report it
+   `open`, one status change to `open` goes to the outbox (not twice for one conversation while it
+   waits, not again for a repeated delivery of the message), with one log line (conversation id and
+   reason, never the phone), and nothing else: no ticket, no card, no message stored or sent. The
+   webhook answers `not_served`. An open ticket keeps its flow even if its phone left the list.
+   Otherwise the phone is normalized and looked up among active attendants:
    - **unknown** → a ticket straight in *Aguardando humano* (reason `unidentified`), a fixed
      acknowledgement, the conversation opened for the team;
    - **known** → a ticket *in triage*, with the unit copied onto it; if Chatwoot says the
@@ -112,7 +121,8 @@ sequenceDiagram
 ### Outbox
 
 `app/outbox.py` is a transactional outbox. A message or a status change for a conversation is a row
-(`kind` `message` or `status`, `state` `pending`), inserted in the transaction that changes the
+(`kind` `message` or `status`, `state` `pending`; `chatwoot_message_id` for the hand-over of a
+conversation the bot does not serve, which has no ticket to remember the message), inserted in the transaction that changes the
 ticket, so nothing is sent before the commit and nothing is lost if the process stops. After the
 commit the use case wakes the worker (`OutboxWorker`, started and stopped with the app). The worker
 also looks for pending rows at start and every 5 s. It sends them in id order within each
@@ -219,7 +229,8 @@ by default.
   504 answer. A read timeout (30 s) or any other answer ends it at once, because repeating a POST that
   Chatwoot did process would send the customer the same message twice. A final failure is logged,
   never raised into the flow.
-- **Duplicates:** a Chatwoot message id is stored once; a repeated delivery answers `duplicate`.
+- **Duplicates:** a Chatwoot message id is stored once (with the ticket's messages, or on the outbox
+  row of a conversation handed to the team); a repeated delivery answers `duplicate`.
 - **Races:** the webhooks of a conversation run one at a time in its webhook lane and its turns in its
   turn lane; both lock the ticket row when they write, and the database allows one open ticket per
   conversation. The lanes live in the process, so the backend runs a single worker. Reopening a card whose conversation
@@ -261,7 +272,7 @@ by default.
   and migrations; the ticket repository; the LLM contract, prompt payload and retry; the OpenAI and
   Chatwoot HTTP clients (on `httpx.MockTransport`); inbound messages, burst window, turns, silence and
   restart (with a scripted LLM, a fake Chatwoot and a clock the test controls); board and indicators;
-  the HTTP API, login and webhook (through `httpx.ASGITransport`); configuration; and a check that
+  who the bot serves (groups, test mode) and the silent hand-over; the HTTP API, login and webhook (through `httpx.ASGITransport`); configuration; and a check that
   `openapi.json` is current. The gate adds ruff and strict mypy.
 - **Frontend** (`frontend/src/**/*.test.ts(x)`, Vitest and Testing Library): the API client,
   formatters and labels, login, the board (columns, counts, take, move failure, category, close,

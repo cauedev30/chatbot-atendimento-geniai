@@ -21,6 +21,8 @@ each problem.
 
 - Identifies the sender by phone number only (Brazilian numbers normalized, including the 9th
   mobile digit). An unknown number goes straight to a person and never gets the FAQ.
+- Never answers a group, nor a contact without a phone number: those conversations go to the team at
+  once, silently. A test mode (`BOT_ONLY_PHONES`) limits the bot to a list of phones.
 - Greets the attendant by registered name and unit and asks for the problem.
 - Groups a burst of short messages into one turn (about 5 s of silence).
 - Sends at most one FAQ entry, verbatim as the team wrote it; the LLM only writes the framing
@@ -247,6 +249,17 @@ Without a reverse proxy, only the progressive delay applies.
 3. If the Agent Bot does not deliver conversation status changes, add an account webhook with the same
    URL and the `conversation_status_changed` event.
 
+With an Agent Bot on the inbox, Chatwoot keeps each new conversation `pending`, out of the team's
+"Open" list, until the bot lets it go. So a conversation the bot does not serve is opened for the team
+at once, with no reply and no ticket:
+
+- **Groups are always passed to the team**, whatever the configuration. A group is recognized by a
+  contact identifier or phone ending in `@g.us`, or by a contact without a usable phone number
+  (`backend/geniai/domain/audience.py`; still to be checked against the real connector).
+- **Test mode:** to try the bot on a real inbox without taking over every customer, set
+  `BOT_ONLY_PHONES` to the test phones. Every other conversation goes to the team as above; a ticket
+  already open keeps its flow. Leave it empty to serve everyone.
+
 ## Choosing the model
 
 `python -m geniai.eval.run` runs 30 fictitious conversations, plus 8 questions about an FAQ entry
@@ -273,7 +286,8 @@ The bot, the board and the indicators are implemented and tested, with fictitiou
 content and category list are in `backend/faq/faq.json`. Still open (spec §13):
 
 - The model choice, by the evaluation set.
-- Confirming that the WhatsApp connector delivers the real phone number, not an internal id.
+- Confirming that the WhatsApp connector delivers the real phone number, not an internal id, and how
+  it shows a group conversation.
 - Confirming which Chatwoot webhook carries conversation status changes.
 - How the team loads and updates the attendant and unit base.
 - Hosting and deploy.

@@ -129,9 +129,10 @@ cp .env.example .env             # then fill it in (see Configuration)
 The service reads only environment variables; load `.env` with your shell or process manager.
 
 **The FAQ** is edited in `backend/faq/faq.json` and loaded with `load-faq`; there is no screen for it
-yet. The file has the category list (`key`, `name`) and the entries (`category`, `title`,
+yet. The file has the category list (`key`, `system`, `name`) and the entries (`category`, `title`,
 `applies_when`, `answer_text`, `knowledge_base`):
 
+- `system` and `name` make the category label on the board and in the indicators ("system / name");
 - `answer_text` is sent to the customer exactly as written;
 - `applies_when` tells the LLM when the entry fits;
 - `knowledge_base` (a list of `- ` lines, possibly empty) is the only source for answering questions

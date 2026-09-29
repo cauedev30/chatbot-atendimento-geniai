@@ -181,7 +181,7 @@ turn has read. A partial unique index allows at most one open ticket
 `category` and `faq_item` are loaded from `backend/faq/faq.json` by `load-faq`: the whole file is
 validated first, then one transaction creates or updates categories by `key` and entries by category
 and title, and deactivates what the file no longer lists (never deletes it, since tickets point to it).
-The categories it creates have the system "Geral", like "Outros".
+Each category in the file has its `system` and `name` (the label "system / name").
 
 ## JSON API
 

@@ -25,7 +25,9 @@ class TriageRules:
     max_faq_questions: int
     """Spec §5.1 step 5: questions about the FAQ entry sent that the bot answers; the next one hands over."""
     llm_timeout_ms: int
-    """Spec §10: LLM timeout (~8 s) and one retry."""
+    """OWNER-UNCONFIRMED: time limit of one LLM call in a turn with text only (spec §10: one retry)."""
+    llm_image_timeout_ms: int
+    """OWNER-UNCONFIRMED: time limit of one LLM call in a turn with images, which the model reads slower."""
     llm_retries: int
     max_images_per_turn: int
     """OWNER-UNCONFIRMED: images the LLM reads in one turn, the most recent ones; older ones are only named."""
@@ -44,7 +46,8 @@ DEFAULT_RULES = TriageRules(
     take_asks_who_takes=True,
     max_clarifications=2,
     max_faq_questions=3,
-    llm_timeout_ms=8_000,
+    llm_timeout_ms=5_000,
+    llm_image_timeout_ms=8_000,
     llm_retries=1,
     max_images_per_turn=4,
     max_image_bytes=5 * 1024 * 1024,

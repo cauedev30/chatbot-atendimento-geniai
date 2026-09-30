@@ -46,7 +46,7 @@ class Candidate(BaseModel):
 _CANDIDATES: TypeAdapter[list[Candidate]] = TypeAdapter(Annotated[list[Candidate], Field(min_length=1)])
 
 # Generous timeout and no retry: we measure the model, not the production guard rails.
-EVAL_RULES = replace(DEFAULT_RULES, llm_timeout_ms=30_000, llm_retries=0)
+EVAL_RULES = replace(DEFAULT_RULES, llm_timeout_ms=30_000, llm_image_timeout_ms=30_000, llm_retries=0)
 
 
 class EvalConfigError(Exception):

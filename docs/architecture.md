@@ -271,8 +271,8 @@ by default.
 
 ## Error handling
 
-- **LLM:** about 8 s timeout, one retry, then the ticket goes to a person (`llm_failure`) and the
-  customer is told the team will take over. The LLM output is validated: an unknown category rejects
+- **LLM:** 5 s timeout in a turn with text only and 8 s in a turn with images, one retry, then the
+  ticket goes to a person (`llm_failure`) and the customer is told the team will take over. The LLM output is validated: an unknown category rejects
   it, an unknown FAQ id becomes none, extra fields are dropped.
 - **Chatwoot:** the ticket and the bot's message are stored before any send. A call is repeated (twice,
   with a growing delay) only when it surely was not processed: a connection failure or a 502, 503 or

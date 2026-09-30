@@ -185,3 +185,21 @@ def test_the_prompt_explains_every_attachment_label_and_forbids_asking_to_resend
     assert "image_descriptions" in SYSTEM_PROMPT
     assert "resend" in SYSTEM_PROMPT
     assert "did not arrive" in SYSTEM_PROMPT
+
+
+def test_a_text_turn_waits_5_s_for_the_llm_and_a_turn_with_images_8_s() -> None:
+    assert (DEFAULT_RULES.llm_timeout_ms, DEFAULT_RULES.llm_image_timeout_ms, DEFAULT_RULES.llm_retries) == (
+        5_000,
+        8_000,
+        1,
+    )
+
+
+async def test_gives_a_turn_with_images_the_longer_time_limit() -> None:
+    rules = replace(DEFAULT_RULES, llm_timeout_ms=111, llm_image_timeout_ms=222)
+    llm = ScriptedLlm()
+    llm.push(turn_json(category_id=2), turn_json(category_id=2))
+    await interpret_turn(llm, CTX, rules)
+    image = ImageData(b"PNG", "image/png")
+    await interpret_turn(llm, replace(CTX, images=(image,)), rules)
+    assert [r.timeout_ms for r in llm.requests] == [111, 222]

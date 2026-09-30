@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 
+from geniai.domain.attachments import MAX_DESCRIPTION_LEN
 from geniai.domain.types import InterpretedTurn
 from geniai.json_types import JsonInt
 
@@ -24,6 +25,15 @@ class _TurnOutput(BaseModel):
     summary: Annotated[StrictStr, Field(min_length=1, max_length=1000)]
     reply: Annotated[StrictStr, Field(max_length=1000)]
     faq_answer_found: StrictBool = False
+    image_descriptions: object = None
+    """Read leniently (see _descriptions): a bad value here never costs the turn."""
+
+
+def _descriptions(raw: object) -> tuple[str, ...]:
+    """Keeps the position of each entry, so the n-th description stays with the n-th image."""
+    if not isinstance(raw, list):
+        return ()
+    return tuple(item.strip()[:MAX_DESCRIPTION_LEN] if isinstance(item, str) else "" for item in raw)
 
 
 def parse_turn_output(raw: object, category_ids: Collection[int], faq_item_ids: Collection[int]) -> InterpretedTurn:
@@ -43,4 +53,5 @@ def parse_turn_output(raw: object, category_ids: Collection[int], faq_item_ids: 
         summary=out.summary,
         reply=out.reply,
         faq_answer_found=out.faq_answer_found,
+        image_descriptions=_descriptions(out.image_descriptions),
     )

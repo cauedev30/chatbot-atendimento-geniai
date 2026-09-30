@@ -101,3 +101,23 @@ def test_accepts_an_integral_json_number_and_an_empty_reply() -> None:
 def test_rejects_a_non_object() -> None:
     with pytest.raises(ValueError):
         parse(["not", "an", "object"])
+
+
+def test_reads_the_description_of_each_image_sent() -> None:
+    turn = parse(VALID | {"image_descriptions": ["Tela de login com erro.", "Relatório vazio."]})
+    assert turn.image_descriptions == ("Tela de login com erro.", "Relatório vazio.")
+    assert parse(VALID).image_descriptions == ()
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (None, ()),
+        ("uma tela", ()),
+        ({"1": "uma tela"}, ()),
+        (["uma tela", 3, None, "  "], ("uma tela", "", "", "")),
+        (["x" * 400], ("x" * 300,)),
+    ],
+)
+def test_an_odd_image_description_never_invalidates_the_output(value: object, expected: tuple[str, ...]) -> None:
+    assert parse(VALID | {"image_descriptions": value}).image_descriptions == expected

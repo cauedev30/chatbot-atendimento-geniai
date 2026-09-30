@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 import httpx
 import pytest
 
-from geniai.app.ports import LlmRequest
+from geniai.app.ports import ImageData, LlmRequest
 from geniai.llm.openai_compatible import OpenAiCompatibleConfig, create_openai_compatible_llm
 
 Handler = Callable[[httpx.Request], Awaitable[httpx.Response]]
@@ -54,6 +54,27 @@ async def test_posts_a_json_mode_chat_completion_and_returns_the_content() -> No
         "temperature": 0,
         "thinking": {"type": "disabled"},
     }
+
+
+async def test_sends_the_user_message_in_parts_with_each_image_as_a_data_uri() -> None:
+    async def ok(_: httpx.Request) -> httpx.Response:
+        return completion('{"ok":true}')
+
+    transport, calls = recording_transport(ok)
+    llm = create_openai_compatible_llm(config(transport))
+    images = (ImageData(b"PNG-1", "image/png"), ImageData(b"JPG-2", "image/jpeg"))
+    await llm.complete(LlmRequest(system="sys", user="usr [imagem 1] [imagem 2]", timeout_ms=1000, images=images))
+    assert json.loads(calls[0].content)["messages"] == [
+        {"role": "system", "content": "sys"},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "usr [imagem 1] [imagem 2]"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,UE5HLTE="}},
+                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,SlBHLTI="}},
+            ],
+        },
+    ]
 
 
 async def test_throws_on_a_non_2xx_status() -> None:

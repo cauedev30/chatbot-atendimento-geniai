@@ -1,6 +1,7 @@
 import json
 from dataclasses import replace
 
+from geniai.app.ports import ImageData
 from geniai.domain.rules import DEFAULT_RULES
 from geniai.domain.types import TriageState
 from geniai.llm.interpret import interpret_turn
@@ -149,3 +150,38 @@ def test_the_prompt_limits_answers_to_questions_to_the_entry_sent() -> None:
     assert "sent_faq.knowledge_base" in SYSTEM_PROMPT
     assert "Never invent" in SYSTEM_PROMPT
     assert "password" in SYSTEM_PROMPT
+
+
+async def test_sends_the_images_of_the_turn_and_says_how_many_there_are() -> None:
+    llm = ScriptedLlm()
+    llm.push(turn_json(category_id=1, image_descriptions=["Tela de login com erro."]))
+    image = ImageData(b"PNG-1", "image/png")
+    ctx = replace(CTX, new_messages=[PromptMessage(author="customer", text="[imagem 1] deu isso")], images=(image,))
+    result = await interpret_turn(llm, ctx, DEFAULT_RULES)
+    assert result.turn is not None
+    assert result.turn.image_descriptions == ("Tela de login com erro.",)
+    assert llm.requests[0].images == (image,)
+    payload = json.loads(llm.requests[0].user)
+    assert (payload["images_attached"], payload["new_messages"]) == (1, ["[imagem 1] deu isso"])
+    assert list(payload)[-2:] == ["new_messages", "images_attached"]
+
+
+def test_a_turn_without_images_sends_no_image_count() -> None:
+    assert "images_attached" not in json.loads(build_user_payload(CTX))
+
+
+def test_the_prompt_explains_every_attachment_label_and_forbids_asking_to_resend() -> None:
+    for label in [
+        "[imagem 1]",
+        "[imagem: ",
+        "[imagem vista pelo bot]",
+        "[imagem — não foi possível abrir]",
+        "[imagem — além do limite, não vista]",
+        "[áudio — o bot não ouve]",
+        "[vídeo — o bot não abre]",
+        "[arquivo — o bot não abre]",
+    ]:
+        assert label in SYSTEM_PROMPT
+    assert "image_descriptions" in SYSTEM_PROMPT
+    assert "resend" in SYSTEM_PROMPT
+    assert "did not arrive" in SYSTEM_PROMPT

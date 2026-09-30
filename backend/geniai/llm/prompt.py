@@ -2,6 +2,8 @@ import json
 from dataclasses import dataclass
 from typing import Final
 
+from geniai.app.ports import ImageData
+from geniai.domain import attachments as label
 from geniai.domain.texts import category_label
 from geniai.domain.types import MessageAuthor, TriageState
 
@@ -42,7 +44,8 @@ class TurnContext:
     """Everything the LLM sees for one customer turn (spec §6). FAQ answer texts and knowledge bases are
     included only for the entry already sent (sent_faq), once it was sent. messages is the conversation the
     bot already answered; new_messages are the customer messages of this turn, which may have been stored
-    before the bot's last reply when they arrived during it."""
+    before the bot's last reply when they arrived during it. Message texts carry the labels of their
+    attachments (domain/attachments.py); images holds the images sent with this call, in label order."""
 
     attendant_name: str
     unit_name: str
@@ -54,9 +57,10 @@ class TurnContext:
     max_clarifications: int
     sent_faq: PromptSentFaq | None
     max_faq_questions: int
+    images: tuple[ImageData, ...] = ()
 
 
-SYSTEM_PROMPT: Final = """You are the triage interpreter for GeniAI's customer support on WhatsApp.
+SYSTEM_PROMPT: Final = f"""You are the triage interpreter for GeniAI's customer support on WhatsApp.
 Code controls the conversation. Your only job is to read the conversation and return one JSON object.
 You never execute anything and never promise to execute anything.
 
@@ -64,10 +68,18 @@ The customers are staff at client units. They were identified by phone number, a
 
 The input has "conversation", the triage so far, which the bot has already answered, and "new_messages", the customer's messages the bot has not answered yet, in the order they were sent. This turn is about new_messages: decide every field from them, reading them in the light of the conversation. A new message may have been sent while the bot was writing its last reply, so it can raise something the conversation does not show as answered.
 
+Customer messages may carry attachments, shown as labels next to the message text, which is then their caption:
+- "{label.image_sent(1)}", "{label.image_sent(2)}"...: an image attached to this request, numbered in the order of the attached images; "images_attached" says how many there are. Look at each one: what it shows counts exactly as if the customer had written it (the system, the screen, an error message).
+- "{label.image_seen("<descrição>")}" or "{label.IMAGE_SEEN_FALLBACK}": an image seen in an earlier turn; the description says what it showed.
+- "{label.IMAGE_FAILED}": an image the bot could not open.
+- "{label.IMAGE_OVER_LIMIT}": an image the bot did not look at, because the customer sent too many at once.
+- "{label.AUDIO}", "{label.VIDEO}", "{label.FILE}": an audio, a video or a file, which the bot cannot open.
+Every attachment reached the bot. Never say or suggest that an attachment did not arrive, and never ask the customer to resend it. When what you can read is not enough to understand the problem, reply that the bot cannot open that attachment and ask the customer to write the problem in text.
+
 When state.faq_attempted is true, the bot already sent the customer one FAQ entry, and the input has "sent_faq": that entry's title, the instructions it sent ("answer_text") and its "knowledge_base". They are the only source for answering questions about the instructions.
 
 Return exactly this JSON object and nothing else:
-{"human_requested": boolean, "registration_mismatch": boolean, "off_topic": boolean, "category_id": number, "faq_item_id": number | null, "faq_feedback": "resolved" | "not_resolved" | "question" | "unclear" | null, "faq_answer_found": boolean, "needs_clarification": boolean, "summary": string, "reply": string}
+{{"human_requested": boolean, "registration_mismatch": boolean, "off_topic": boolean, "category_id": number, "faq_item_id": number | null, "faq_feedback": "resolved" | "not_resolved" | "question" | "unclear" | null, "faq_answer_found": boolean, "needs_clarification": boolean, "summary": string, "reply": string, "image_descriptions": [string]}}
 
 Field rules:
 - human_requested: true if the customer asks, in any wording, to talk to a person, an attendant, a human or the support team, or refuses to talk to a bot.
@@ -78,8 +90,9 @@ Field rules:
 - faq_feedback: only when state.faq_attempted is true. "resolved" if the customer says the instructions worked, "not_resolved" if they did not, "question" if the customer asks something about the instructions that were sent, "unclear" otherwise. null when state.faq_attempted is false.
 - faq_answer_found: only when faq_feedback is "question". true if the answer is in sent_faq.answer_text, sent_faq.knowledge_base or the conversation. false if it is not there, or if the question is outside the subject of sent_faq. false in every other case.
 - needs_clarification: true if the problem is still too vague to summarize for a support person.
-- summary: one or two sentences in Brazilian Portuguese for the support team, describing the problem so far.
-- reply: a short message in Brazilian Portuguese to the customer. If needs_clarification is true, it is one clarifying question. If faq_item_id is not null, it is a single sentence introducing the instructions; never write the instructions or any procedure yourself. If faq_feedback is "question" and faq_answer_found is true, it is the answer, written only from sent_faq.answer_text, sent_faq.knowledge_base and the conversation, in the tone of the support team: short sentences, straight to the point, no emoji; do not ask whether it solved the problem, the bot asks that. If faq_answer_found is false, reply is empty. Never invent anything, never use general knowledge, never ask for or send a password. Otherwise it may be empty."""  # noqa: E501
+- summary: one or two sentences in Brazilian Portuguese for the support team, describing the problem so far, including what the images showed.
+- reply: a short message in Brazilian Portuguese to the customer. If needs_clarification is true, it is one clarifying question. If faq_item_id is not null, it is a single sentence introducing the instructions; never write the instructions or any procedure yourself. If faq_feedback is "question" and faq_answer_found is true, it is the answer, written only from sent_faq.answer_text, sent_faq.knowledge_base and the conversation, in the tone of the support team: short sentences, straight to the point, no emoji; do not ask whether it solved the problem, the bot asks that. If faq_answer_found is false, reply is empty. Never invent anything, never use general knowledge, never ask for or send a password. Otherwise it may be empty.
+- image_descriptions: one short description in Brazilian Portuguese of each image attached to this request, in order ("{label.image_sent(1)}" first): what it shows that matters for support, such as the system, the screen and any error message. An empty list when no image is attached."""  # noqa: E501
 
 
 def build_user_payload(ctx: TurnContext) -> str:
@@ -108,4 +121,6 @@ def build_user_payload(ctx: TurnContext) -> str:
     }
     payload["conversation"] = [{"author": m.author, "text": m.text} for m in ctx.messages]
     payload["new_messages"] = [m.text for m in ctx.new_messages]
+    if ctx.images:
+        payload["images_attached"] = len(ctx.images)
     return json.dumps(payload, ensure_ascii=False, indent=2)

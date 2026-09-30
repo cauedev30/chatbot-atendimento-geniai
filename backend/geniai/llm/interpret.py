@@ -28,7 +28,9 @@ async def interpret_turn(llm: LlmPort, ctx: TurnContext, rules: TriageRules) -> 
     """One LLM call per customer turn, validated; retried llm_retries times (spec §10)."""
     category_ids = {c.id for c in ctx.categories}
     faq_item_ids = {f.id for f in ctx.faq_items}
-    request = LlmRequest(system=SYSTEM_PROMPT, user=build_user_payload(ctx), timeout_ms=rules.llm_timeout_ms)
+    request = LlmRequest(
+        system=SYSTEM_PROMPT, user=build_user_payload(ctx), timeout_ms=rules.llm_timeout_ms, images=ctx.images
+    )
     max_attempts = 1 + rules.llm_retries
     last_error = ""
     for attempt in range(1, max_attempts + 1):

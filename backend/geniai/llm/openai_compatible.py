@@ -1,11 +1,12 @@
 import asyncio
+import base64
 from dataclasses import dataclass
 from typing import Annotated
 
 import httpx
 from pydantic import BaseModel, Field
 
-from geniai.app.ports import LlmPort, LlmRequest
+from geniai.app.ports import ImageData, LlmPort, LlmRequest
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,20 @@ class _Completion(BaseModel):
     choices: Annotated[list[_Choice], Field(min_length=1)]
 
 
+def _data_uri(image: ImageData) -> str:
+    return f"data:{image.content_type};base64,{base64.b64encode(image.data).decode('ascii')}"
+
+
+def _user_content(request: LlmRequest) -> str | list[dict[str, object]]:
+    """Plain text without images; with them, the text then each image as a data URI (some providers,
+    Ollama among them, do not fetch image links)."""
+    if not request.images:
+        return request.user
+    parts: list[dict[str, object]] = [{"type": "text", "text": request.user}]
+    parts += [{"type": "image_url", "image_url": {"url": _data_uri(image)}} for image in request.images]
+    return parts
+
+
 class _OpenAiCompatibleLlm:
     def __init__(self, cfg: OpenAiCompatibleConfig) -> None:
         self._cfg = cfg
@@ -41,7 +56,7 @@ class _OpenAiCompatibleLlm:
             "model": self._cfg.model,
             "messages": [
                 {"role": "system", "content": request.system},
-                {"role": "user", "content": request.user},
+                {"role": "user", "content": _user_content(request)},
             ],
             "response_format": {"type": "json_object"},
             "temperature": 0,

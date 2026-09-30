@@ -80,6 +80,9 @@ class InterpretedTurn:
     reply: str
     faq_answer_found: bool = False
     """With faq_feedback "question": the answer is in the knowledge base of the FAQ entry sent."""
+    image_descriptions: tuple[str, ...] = ()
+    """A short description of each image sent with the turn, in order, as the LLM gave them ("" when an
+    entry was not text); may be shorter or longer than the images sent."""
 
 
 @dataclass(frozen=True)

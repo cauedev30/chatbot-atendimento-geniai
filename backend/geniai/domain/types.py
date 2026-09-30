@@ -83,6 +83,9 @@ class InterpretedTurn:
     image_descriptions: tuple[str, ...] = ()
     """A short description of each image sent with the turn, in order, as the LLM gave them ("" when an
     entry was not text); may be shorter or longer than the images sent."""
+    handoff_reply: str = ""
+    """The sentence to the customer when the code hands the ticket to the team ("" when the LLM wrote
+    none); the code decides whether there is a handoff, never this field."""
 
 
 @dataclass(frozen=True)

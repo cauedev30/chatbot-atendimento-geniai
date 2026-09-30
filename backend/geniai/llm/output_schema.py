@@ -11,6 +11,9 @@ from geniai.domain.attachments import MAX_DESCRIPTION_LEN
 from geniai.domain.types import InterpretedTurn
 from geniai.json_types import JsonInt
 
+MAX_HANDOFF_REPLY_LEN = 300
+"""A longer handoff reply is not a short sentence: the code's fixed text goes instead."""
+
 
 class _TurnOutput(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -27,6 +30,8 @@ class _TurnOutput(BaseModel):
     faq_answer_found: StrictBool = False
     image_descriptions: object = None
     """Read leniently (see _descriptions): a bad value here never costs the turn."""
+    handoff_reply: object = None
+    """Read leniently (see _handoff_reply), like image_descriptions."""
 
 
 def _descriptions(raw: object) -> tuple[str, ...]:
@@ -34,6 +39,14 @@ def _descriptions(raw: object) -> tuple[str, ...]:
     if not isinstance(raw, list):
         return ()
     return tuple(item.strip()[:MAX_DESCRIPTION_LEN] if isinstance(item, str) else "" for item in raw)
+
+
+def _handoff_reply(raw: object) -> str:
+    """The sentence the LLM wrote for a handoff; "" when absent, not text or too long."""
+    if not isinstance(raw, str):
+        return ""
+    text = raw.strip()
+    return text if len(text) <= MAX_HANDOFF_REPLY_LEN else ""
 
 
 def parse_turn_output(raw: object, category_ids: Collection[int], faq_item_ids: Collection[int]) -> InterpretedTurn:
@@ -54,4 +67,5 @@ def parse_turn_output(raw: object, category_ids: Collection[int], faq_item_ids: 
         reply=out.reply,
         faq_answer_found=out.faq_answer_found,
         image_descriptions=_descriptions(out.image_descriptions),
+        handoff_reply=_handoff_reply(out.handoff_reply),
     )

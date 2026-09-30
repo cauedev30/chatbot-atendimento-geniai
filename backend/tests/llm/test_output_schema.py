@@ -121,3 +121,18 @@ def test_reads_the_description_of_each_image_sent() -> None:
 )
 def test_an_odd_image_description_never_invalidates_the_output(value: object, expected: tuple[str, ...]) -> None:
     assert parse(VALID | {"image_descriptions": value}).image_descriptions == expected
+
+
+def test_reads_the_handoff_reply_and_leaves_it_empty_when_absent() -> None:
+    turn = parse(VALID | {"human_requested": True, "handoff_reply": "  Vou te encaminhar para a equipe de suporte.  "})
+    assert turn.handoff_reply == "Vou te encaminhar para a equipe de suporte."
+    assert parse(VALID).handoff_reply == ""
+
+
+@pytest.mark.parametrize("value", [None, 3, True, ["Vou te encaminhar."], {"text": "Vou te encaminhar."}, "x" * 301])
+def test_an_odd_or_long_handoff_reply_is_empty_and_never_invalidates_the_output(value: object) -> None:
+    assert parse(VALID | {"handoff_reply": value}).handoff_reply == ""
+
+
+def test_a_handoff_reply_of_300_characters_is_kept() -> None:
+    assert parse(VALID | {"handoff_reply": "x" * 300}).handoff_reply == "x" * 300

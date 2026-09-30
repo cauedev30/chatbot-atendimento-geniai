@@ -17,8 +17,16 @@ from typing import Annotated
 from pydantic import AnyHttpUrl, BaseModel, Field, TypeAdapter, ValidationError
 
 from geniai.domain.rules import DEFAULT_RULES
-from geniai.eval.cases import CASES, FAQ_QUESTION_CASES, build_catalog, context_for, question_context_for
-from geniai.eval.score import CaseRun, ModelReport, score_faq_questions, score_runs
+from geniai.eval.cases import (
+    CASES,
+    FAQ_QUESTION_CASES,
+    IMAGE_CASES,
+    build_catalog,
+    context_for,
+    image_context_for,
+    question_context_for,
+)
+from geniai.eval.score import CaseRun, ModelReport, score_faq_questions, score_images, score_runs
 from geniai.llm.interpret import interpret_turn
 from geniai.llm.openai_compatible import OpenAiCompatibleConfig, create_openai_compatible_llm
 
@@ -31,6 +39,8 @@ class Candidate(BaseModel):
     model: NonEmpty
     apiKeyEnv: NonEmpty
     extraBody: dict[str, object] | None = None
+    readsImages: bool = False
+    """Only a candidate that reads images runs IMAGE_CASES."""
 
 
 _CANDIDATES: TypeAdapter[list[Candidate]] = TypeAdapter(Annotated[list[Candidate], Field(min_length=1)])
@@ -50,7 +60,7 @@ def load_candidates(env: dict[str, str] | os._Environ[str]) -> list[Candidate]:
     except (json.JSONDecodeError, ValidationError) as err:
         raise EvalConfigError(
             "EVAL_CANDIDATES must be a non-empty JSON list of "
-            '{"label", "baseUrl", "model", "apiKeyEnv", "extraBody"?} objects; see .env.example.'
+            '{"label", "baseUrl", "model", "apiKeyEnv", "extraBody"?, "readsImages"?} objects; see .env.example.'
         ) from err
 
 
@@ -65,6 +75,8 @@ async def run_candidate(candidate: Candidate, api_key: str) -> list[CaseRun]:
     print(f"{candidate.label} ", end="", flush=True)
     contexts = [(c.id, context_for(c, catalog)) for c in CASES]
     contexts += [(c.id, question_context_for(c, catalog)) for c in FAQ_QUESTION_CASES]
+    if candidate.readsImages:
+        contexts += [(c.id, image_context_for(c, catalog)) for c in IMAGE_CASES]
     for case_id, ctx in contexts:
         started = time.perf_counter()
         result = await interpret_turn(llm, ctx, EVAL_RULES)
@@ -81,7 +93,7 @@ def _pct(n: float) -> str:
 
 def print_table(reports: list[ModelReport]) -> None:
     header = ["model", "human (model)", "human (model+keywords)", "gate", "false positives", "category", "faq"]
-    header += ["faq questions"]
+    header += ["faq questions", "images"]
     header += ["p50 ms", "p95 ms", "failures"]
     rows = [
         [
@@ -93,6 +105,7 @@ def print_table(reports: list[ModelReport]) -> None:
             _pct(r.category_accuracy),
             _pct(r.faq_accuracy),
             "-" if r.faq_question_accuracy is None else _pct(r.faq_question_accuracy),
+            "-" if r.image_accuracy is None else _pct(r.image_accuracy),
             str(r.latency_p50_ms),
             str(r.latency_p95_ms),
             str(r.failures),
@@ -114,10 +127,16 @@ async def evaluate(
         runs = await run_candidate(candidate, keys[candidate.apiKeyEnv])
         all_runs[candidate.label] = runs
         questions = {c.id for c in FAQ_QUESTION_CASES}
-        conversations = [r for r in runs if r.case_id not in questions]
+        images = {c.id for c in IMAGE_CASES}
+        conversations = [r for r in runs if r.case_id not in questions | images]
         report = score_runs(candidate.label, CASES, conversations, catalog)
         accuracy = score_faq_questions(FAQ_QUESTION_CASES, [r for r in runs if r.case_id in questions])
-        reports.append(replace(report, faq_question_accuracy=accuracy))
+        image_accuracy = (
+            score_images(IMAGE_CASES, [r for r in runs if r.case_id in images], catalog)
+            if candidate.readsImages
+            else None
+        )
+        reports.append(replace(report, faq_question_accuracy=accuracy, image_accuracy=image_accuracy))
     return reports, all_runs
 
 

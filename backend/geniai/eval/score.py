@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from geniai.domain.human_request import mentions_human_request
 from geniai.domain.types import InterpretedTurn
-from geniai.eval.cases import EvalCase, EvalCatalog, FaqQuestionCase
+from geniai.eval.cases import EvalCase, EvalCatalog, FaqQuestionCase, ImageCase
 
 
 @dataclass(frozen=True)
@@ -39,6 +39,8 @@ class ModelReport:
     latency_p95_ms: int | None
     faq_question_accuracy: float | None = None
     """Share of FAQ_QUESTION_CASES read right (see score_faq_questions); None when not run."""
+    image_accuracy: float | None = None
+    """Share of IMAGE_CASES read right (see score_images); None when the model does not read images."""
 
 
 def percentile(values: list[int], p: float) -> int | None:
@@ -67,6 +69,23 @@ def score_faq_questions(cases: list[FaqQuestionCase], runs: list[CaseRun]) -> fl
         if turn is None or turn.faq_feedback != "question":
             continue
         if turn.faq_answer_found == c.answer_found and (turn.reply.strip() != "") == c.answer_found:
+            hits += 1
+    return _rate(hits, len(cases))
+
+
+def score_images(cases: list[ImageCase], runs: list[CaseRun], catalog: EvalCatalog) -> float:
+    """An image is read right when the category and the FAQ entry match and the model described it. A
+    failed run counts as wrong."""
+    category_ids = {c.label: c.id for c in catalog.categories}
+    faq_ids = {f.title: f.id for f in catalog.faq_items}
+    turns = {r.case_id: r.turn for r in reversed(runs)}
+    hits = 0
+    for c in cases:
+        turn = turns.get(c.id)
+        if turn is None or turn.category_id != category_ids.get(c.expected.category, _MISSING):
+            continue
+        expected_faq = None if c.expected.faq is None else faq_ids.get(c.expected.faq, _MISSING)
+        if turn.faq_item_id == expected_faq and any(d != "" for d in turn.image_descriptions):
             hits += 1
     return _rate(hits, len(cases))
 

@@ -1,7 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Final
 
+from geniai.app.ports import ImageData
 from geniai.db.fixtures import FICTITIOUS
+from geniai.domain import attachments as label
 from geniai.domain.rules import DEFAULT_RULES
 from geniai.domain.texts import TEXT, category_label
 from geniai.domain.types import TriageState
@@ -182,3 +185,37 @@ def question_context_for(c: FaqQuestionCase, catalog: EvalCatalog) -> TurnContex
         ),
         max_faq_questions=DEFAULT_RULES.max_faq_questions,
     )
+
+
+IMAGES_DIR: Final = Path(__file__).parent / "images"
+
+
+@dataclass(frozen=True)
+class ImageCase:
+    """The customer answers the greeting with an image, and a caption when there is one."""
+
+    id: str
+    image: str
+    """A PNG in IMAGES_DIR, drawn by scripts/make_eval_images.py."""
+    expected: Expected
+    caption: str = ""
+
+
+IMAGE_CASES: Final[list[ImageCase]] = [
+    ImageCase("i1", "painel-senha-incorreta.png", Expected(False, LOGIN, PASSWORD)),
+    ImageCase("i2", "painel-relatorio-vazio.png", Expected(False, REPORT, BLANK_REPORT)),
+    ImageCase("i3", "whatsapp-desconectado.png", Expected(False, WA_DOWN, RECONNECT)),
+    ImageCase("i4", "paisagem.png", Expected(False, OTHER, None)),
+]
+"""Invented screenshots sent alone, for models that read images: the category and FAQ entry must come
+from the image. i4 is a drawn landscape, nothing to do with support."""
+
+
+def load_image(c: ImageCase) -> ImageData:
+    return ImageData((IMAGES_DIR / c.image).read_bytes(), "image/png")
+
+
+def image_context_for(c: ImageCase, catalog: EvalCatalog) -> TurnContext:
+    text = " ".join(part for part in (label.image_sent(1), c.caption) if part)
+    base = context_for(EvalCase(id=c.id, customer=[text], expected=c.expected), catalog)
+    return replace(base, images=(load_image(c),))

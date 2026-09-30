@@ -3,8 +3,8 @@ from typing import Any
 import pytest
 
 from geniai.domain.types import InterpretedTurn
-from geniai.eval.cases import EvalCase, Expected, FaqQuestionCase, build_catalog
-from geniai.eval.score import CaseRun, percentile, score_faq_questions, score_runs
+from geniai.eval.cases import EvalCase, Expected, FaqQuestionCase, ImageCase, build_catalog
+from geniai.eval.score import CaseRun, percentile, score_faq_questions, score_images, score_runs
 
 CATALOG = build_catalog()
 
@@ -103,3 +103,21 @@ def test_scores_questions_on_the_feedback_whether_the_answer_was_found_and_the_r
     ]
     assert score_faq_questions(cases, runs) == pytest.approx(2 / 4)
     assert score_faq_questions([], []) == 1
+
+
+def test_scores_images_on_the_category_the_faq_entry_and_a_description() -> None:
+    login, password = id_of("Painel / Não consegue entrar"), faq_of("Redefinir senha do painel")
+    cases = [
+        ImageCase("i1", "a.png", Expected(False, "Painel / Não consegue entrar", "Redefinir senha do painel")),
+        ImageCase("i2", "b.png", Expected(False, "Painel / Não consegue entrar", "Redefinir senha do painel")),
+        ImageCase("i3", "c.png", Expected(False, "Painel / Não consegue entrar", "Redefinir senha do painel")),
+        ImageCase("i4", "d.png", Expected(False, "Geral / Outros", None)),
+    ]
+    runs = [
+        CaseRun("i1", 1, turn(category_id=login, faq_item_id=password, image_descriptions=("Erro de senha.",))),
+        CaseRun("i2", 1, turn(category_id=login, faq_item_id=password)),
+        CaseRun("i3", 1, turn(category_id=login, faq_item_id=None, image_descriptions=("Erro.",))),
+        CaseRun("i4", 1, None, "timeout"),
+    ]
+    assert score_images(cases, runs, CATALOG) == pytest.approx(1 / 4)
+    assert score_images([], [], CATALOG) == 1

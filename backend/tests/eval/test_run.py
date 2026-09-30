@@ -14,3 +14,10 @@ def test_reads_the_documented_json_shape() -> None:
     [candidate] = load_candidates({"EVAL_CANDIDATES": raw})
     assert (candidate.label, candidate.model, candidate.apiKeyEnv) == ("candidate-a", "model-a", "KEY_A")
     assert candidate.extraBody is None
+    assert candidate.readsImages is False
+
+
+def test_a_candidate_may_declare_that_it_reads_images() -> None:
+    raw = '[{"label":"a","baseUrl":"https://llm.example.com/v1","model":"m","apiKeyEnv":"K","readsImages":true}]'
+    [candidate] = load_candidates({"EVAL_CANDIDATES": raw})
+    assert candidate.readsImages is True

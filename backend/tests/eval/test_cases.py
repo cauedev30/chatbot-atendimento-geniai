@@ -1,5 +1,14 @@
 from geniai.db.fixtures import FICTITIOUS
-from geniai.eval.cases import CASES, FAQ_QUESTION_CASES, build_catalog, context_for, question_context_for
+from geniai.eval.cases import (
+    CASES,
+    FAQ_QUESTION_CASES,
+    IMAGE_CASES,
+    build_catalog,
+    context_for,
+    image_context_for,
+    load_image,
+    question_context_for,
+)
 
 
 def test_has_30_cases_with_unique_ids_and_at_least_10_human_requests() -> None:
@@ -53,3 +62,23 @@ def test_builds_a_question_context_after_the_faq_entry_was_sent() -> None:
     )
     assert entry["answer_text"] in ctx.messages[-1].text
     assert [m.text for m in ctx.new_messages] == [case.question]
+
+
+def test_has_four_image_cases_on_invented_pngs_one_unrelated_to_support() -> None:
+    catalog = build_catalog()
+    assert len({c.id for c in IMAGE_CASES}) == len(IMAGE_CASES) == 4
+    assert {c.expected.category for c in IMAGE_CASES} <= {c.label for c in catalog.categories}
+    assert [c.expected.faq is None for c in IMAGE_CASES].count(True) == 1
+    for c in IMAGE_CASES:
+        image = load_image(c)
+        assert image.content_type == "image/png"
+        assert image.data.startswith(b"\x89PNG\r\n\x1a\n")
+        assert len(image.data) < 100_000, c.image
+
+
+def test_builds_an_image_context_with_the_image_alone_as_the_customer_answer() -> None:
+    case = IMAGE_CASES[0]
+    ctx = image_context_for(case, build_catalog())
+    assert [m.author for m in ctx.messages] == ["bot"]
+    assert [m.text for m in ctx.new_messages] == ["[imagem 1]"]
+    assert ctx.images == (load_image(case),)

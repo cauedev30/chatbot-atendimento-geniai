@@ -64,3 +64,19 @@ def decide_turn(state: TriageState, turn: InterpretedTurn, rules: TriageRules) -
     if turn.needs_clarification and state.clarifications_asked < rules.max_clarifications:
         return AskClarification()
     return Handoff("no_faq_match")
+
+
+def handoff_text(turn: InterpretedTurn | None, fallback: str) -> str:
+    """The sentence for a handoff: the LLM's, only when its own reading hands the customer over (the cases
+    the prompt gives it); otherwise, e.g. at a limit only the code knows, or when it wrote none, `fallback`."""
+    if turn is None:
+        return fallback
+    reads_as_handoff = (
+        turn.human_requested
+        or turn.registration_mismatch
+        or turn.off_topic
+        or turn.faq_feedback in ("not_resolved", "unclear")
+        or (turn.faq_feedback == "question" and not turn.faq_answer_found)
+        or (turn.faq_feedback is None and turn.faq_item_id is None and not turn.needs_clarification)
+    )
+    return (turn.handoff_reply.strip() if reads_as_handoff else "") or fallback

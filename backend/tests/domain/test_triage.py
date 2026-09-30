@@ -1,8 +1,10 @@
 from dataclasses import replace
 from typing import Any
 
+import pytest
+
 from geniai.domain.rules import DEFAULT_RULES
-from geniai.domain.triage import PreLlmSignals, decide_turn, pre_llm_decision
+from geniai.domain.triage import PreLlmSignals, decide_turn, handoff_text, pre_llm_decision
 from geniai.domain.types import (
     AnswerFaqQuestion,
     AskClarification,
@@ -223,3 +225,37 @@ def test_decision_kinds_are_stable_names() -> None:
         "ask_for_text",
         "answer_faq_question",
     ]
+
+
+@pytest.mark.parametrize(
+    "reading",
+    [
+        {"human_requested": True},
+        {"registration_mismatch": True},
+        {"off_topic": True},
+        {"faq_feedback": "not_resolved"},
+        {"faq_feedback": "unclear"},
+        {"faq_feedback": "question", "faq_answer_found": False},
+        {},
+    ],
+)
+def test_a_handoff_the_llm_read_as_one_uses_its_sentence(reading: dict[str, Any]) -> None:
+    assert handoff_text(turn(**reading, handoff_reply=" Vou te encaminhar. "), "fixo") == "Vou te encaminhar."
+    assert handoff_text(turn(**reading), "fixo") == "fixo"
+
+
+@pytest.mark.parametrize(
+    "reading",
+    [
+        {"needs_clarification": True},
+        {"faq_feedback": "question", "faq_answer_found": True, "reply": "Resposta."},
+        {"faq_item_id": 10},
+        {"faq_feedback": "resolved"},
+    ],
+)
+def test_a_handoff_only_the_code_decided_keeps_the_fixed_text(reading: dict[str, Any]) -> None:
+    assert handoff_text(turn(**reading, handoff_reply="Vou te encaminhar."), "fixo") == "fixo"
+
+
+def test_a_handoff_without_the_llm_keeps_the_fixed_text() -> None:
+    assert handoff_text(None, "fixo") == "fixo"

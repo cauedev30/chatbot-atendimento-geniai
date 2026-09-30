@@ -38,7 +38,7 @@ from geniai.app.tickets_repo import (
 from geniai.app.turn_scheduler import TurnScheduler
 from geniai.domain.human_request import mentions_human_request
 from geniai.domain.texts import TEXT, truncate, with_unanswered_question
-from geniai.domain.triage import PreLlmSignals, decide_turn, pre_llm_decision
+from geniai.domain.triage import PreLlmSignals, decide_turn, handoff_text, pre_llm_decision
 from geniai.domain.types import (
     AnswerFaqQuestion,
     AskClarification,
@@ -273,7 +273,9 @@ async def _write_decision(
     match decision:
         case Handoff(reason=reason):
             moved = await move_ticket(conn, t.id, "awaiting_human", "bot", now, {"handoff_reason": reason})
-            return _Written("handoff", TEXT.handoff, (moved.from_, "awaiting_human"), reason)
+            # The code decided the handoff; the LLM, when it read the turn as one, words it.
+            reply = handoff_text(turn, TEXT.handoff)
+            return _Written("handoff", reply, (moved.from_, "awaiting_human"), reason)
         case SendFaq(faq_item_id=faq_item_id):
             faq = await get_faq_item(conn, faq_item_id)
             if faq is None:

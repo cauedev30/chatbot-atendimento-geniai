@@ -23,6 +23,7 @@ from tests.support.fakes import StatusSet, texts, turn_json
 
 _message_ids = itertools.count(1)
 _conversations = itertools.count(100)
+PHRASE = "Para um atendimento mais preciso, vou te encaminhar para a equipe de suporte."
 
 
 class Chat:
@@ -62,7 +63,13 @@ class Chat:
         return conversation_id
 
     async def asks(
-        self, conversation_id: int, text: str, reply: str = "", found: bool = True, summary: str = "Resumo de teste"
+        self,
+        conversation_id: int,
+        text: str,
+        reply: str = "",
+        found: bool = True,
+        summary: str = "Resumo de teste",
+        handoff_reply: str = "",
     ) -> TurnOutcome | None:
         """The customer asks a question about the FAQ entry sent; the LLM answers it from the knowledge base or not."""
         self.h.llm.push(
@@ -72,6 +79,7 @@ class Chat:
                 faq_answer_found=found,
                 reply=reply,
                 summary=summary,
+                handoff_reply=handoff_reply,
             )
         )
         return await self.customer(conversation_id, text)
@@ -169,21 +177,23 @@ async def test_closes_as_resolved_by_bot_when_the_customer_confirms(h: Harness, 
 
 async def test_hands_over_when_the_faq_did_not_help(h: Harness, chat: Chat) -> None:
     conversation_id = await chat.faq_sent()
-    h.llm.push(turn_json(category_id=h.seed.categories["login"], faq_feedback="not_resolved"))
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], faq_feedback="not_resolved", handoff_reply=PHRASE))
     assert await chat.customer(conversation_id, "não resolveu") == "handoff"
     t = await chat.ticket_of(conversation_id)
     assert (t.column, t.handoff_reason) == ("awaiting_human", "faq_not_resolved")
+    assert chat.last_sent() == PHRASE
 
 
 async def test_asks_again_once_on_an_unclear_answer_then_hands_over(h: Harness, chat: Chat) -> None:
     conversation_id = await chat.faq_sent()
     h.llm.push(
-        turn_json(category_id=h.seed.categories["login"], faq_feedback="unclear"),
-        turn_json(category_id=h.seed.categories["login"], faq_feedback="unclear"),
+        turn_json(category_id=h.seed.categories["login"], faq_feedback="unclear", handoff_reply=PHRASE),
+        turn_json(category_id=h.seed.categories["login"], faq_feedback="unclear", handoff_reply=PHRASE),
     )
     assert await chat.customer(conversation_id, "hmm") == "reask_feedback"
     assert chat.last_sent() == TEXT.reask_feedback
     assert await chat.customer(conversation_id, "sei lá") == "handoff"
+    assert chat.last_sent() == PHRASE
     t = await chat.ticket_of(conversation_id)
     assert (t.handoff_reason, t.unclear_feedback_reasks) == ("faq_not_resolved", 1)
 
@@ -192,23 +202,34 @@ async def test_asks_at_most_two_clarifying_questions_then_hands_over(h: Harness,
     conversation_id = await chat.greeted()
     for _ in range(3):
         h.llm.push(
-            turn_json(category_id=h.seed.categories["other"], needs_clarification=True, reply="Em qual sistema?")
+            turn_json(
+                category_id=h.seed.categories["other"],
+                needs_clarification=True,
+                reply="Em qual sistema?",
+                handoff_reply=PHRASE,
+            )
         )
     assert await chat.customer(conversation_id, "deu problema") == "ask_clarification"
     assert chat.last_sent() == "Em qual sistema?"
     assert await chat.customer(conversation_id, "no sistema") == "ask_clarification"
     assert await chat.customer(conversation_id, "aquele lá") == "handoff"
+    # A limit only the code knows: the LLM's reading asked for a clarification, so the fixed text goes.
+    assert chat.last_sent() == TEXT.handoff
     t = await chat.ticket_of(conversation_id)
     assert (t.handoff_reason, t.clarifications_asked) == ("no_faq_match", 2)
 
 
 async def test_honors_a_human_request_keyword_without_letting_the_llm_decide(h: Harness, chat: Chat) -> None:
     conversation_id = await chat.greeted()
-    h.llm.push(turn_json(category_id=h.seed.categories["login"], faq_item_id=h.seed.faq["password"]))
+    h.llm.push(
+        turn_json(category_id=h.seed.categories["login"], faq_item_id=h.seed.faq["password"], handoff_reply=PHRASE)
+    )
     assert await chat.customer(conversation_id, "me passa pra um atendente") == "handoff"
     t = await chat.ticket_of(conversation_id)
     assert (t.handoff_reason, t.faq_attempted) == ("human_requested", False)
     assert len(h.llm.requests) == 1
+    # The handoff came before any LLM reading (its only call is for the card summary): the fixed text goes.
+    assert texts(h.chatwoot.sent)[-1] == TEXT.handoff
 
 
 async def test_hands_over_with_llm_failure_when_the_llm_fails_twice(h: Harness, chat: Chat) -> None:
@@ -235,9 +256,26 @@ async def test_asks_for_text_on_media_then_hands_over_on_media_again(h: Harness,
 
 async def test_hands_over_on_a_registration_mismatch(h: Harness, chat: Chat) -> None:
     conversation_id = await chat.greeted()
-    h.llm.push(turn_json(category_id=h.seed.categories["login"], registration_mismatch=True))
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], registration_mismatch=True, handoff_reply=PHRASE))
     assert await chat.customer(conversation_id, "não sou a Ana, sou de outra unidade") == "handoff"
     assert (await chat.ticket_of(conversation_id)).handoff_reason == "registration_mismatch"
+    assert chat.last_sent() == PHRASE
+
+
+async def test_a_handoff_when_no_faq_entry_fits_sends_the_llm_sentence(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.greeted()
+    h.llm.push(turn_json(category_id=h.seed.categories["other"], handoff_reply=f"  {PHRASE}  "))
+    assert await chat.customer(conversation_id, "preciso mudar o plano") == "handoff"
+    assert (await chat.ticket_of(conversation_id)).handoff_reason == "no_faq_match"
+    assert chat.last_sent() == PHRASE
+
+
+async def test_a_handoff_the_llm_wrote_no_sentence_for_sends_the_fixed_text(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.greeted()
+    h.llm.push(turn_json(category_id=h.seed.categories["other"], handoff_reply="   "))
+    assert await chat.customer(conversation_id, "é outra coisa") == "handoff"
+    assert (await chat.ticket_of(conversation_id)).handoff_reason == "no_faq_match"
+    assert chat.last_sent() == TEXT.handoff
 
 
 async def test_processes_a_burst_as_one_turn(h: Harness, chat: Chat) -> None:
@@ -413,7 +451,9 @@ async def test_answers_three_questions_and_hands_the_fourth_over(h: Harness, cha
     conversation_id = await chat.faq_sent()
     for n in range(3):
         assert await chat.asks(conversation_id, f"dúvida {n}", reply=f"Resposta {n}.") == "answer_faq_question"
-    outcome = await chat.asks(conversation_id, "e o e-mail muda?", reply="Não muda.", summary="Esqueceu a senha.")
+    outcome = await chat.asks(
+        conversation_id, "e o e-mail muda?", reply="Não muda.", summary="Esqueceu a senha.", handoff_reply=PHRASE
+    )
     assert outcome == "handoff"
     t = await chat.ticket_of(conversation_id)
     assert (t.column, t.handoff_reason, t.faq_questions_answered) == ("awaiting_human", "faq_not_resolved", 3)
@@ -425,11 +465,13 @@ async def test_hands_over_a_question_the_knowledge_base_does_not_answer_keeping_
     h: Harness, chat: Chat
 ) -> None:
     conversation_id = await chat.faq_sent()
-    outcome = await chat.asks(conversation_id, "dá pra trocar o e-mail do login?", found=False, summary="Senha.")
+    outcome = await chat.asks(
+        conversation_id, "dá pra trocar o e-mail do login?", found=False, summary="Senha.", handoff_reply=PHRASE
+    )
     assert outcome == "handoff"
     t = await chat.ticket_of(conversation_id)
     assert (t.column, t.handoff_reason) == ("awaiting_human", "faq_not_resolved")
-    assert texts(h.chatwoot.sent)[-1] == TEXT.handoff
+    assert texts(h.chatwoot.sent)[-1] == PHRASE
     assert "dá pra trocar o e-mail do login?" in t.summary
     assert t.summary.startswith("Senha.")
 

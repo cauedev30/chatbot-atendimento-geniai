@@ -6,8 +6,9 @@ from urllib.parse import urljoin, urlsplit
 
 import httpx
 
-from geniai.app.ports import FetchFailure, ImageData, MediaFetcher
+from geniai.app.ports import FetchFailure, ImageData
 from geniai.chatwoot.http import ChatwootHttpConfig
+from geniai.http_client import pooled_client
 
 ACCEPTED_IMAGE_TYPES: Final = frozenset({"image/jpeg", "image/png", "image/webp"})
 MAX_REDIRECTS: Final = 3
@@ -33,37 +34,41 @@ def _declared_size(res: httpx.Response) -> int | None:
     return int(raw) if raw is not None and raw.isdigit() else None
 
 
-class _ChatwootMedia:
+class ChatwootMedia:
     """Only a link on the configured Chatwoot (same scheme, host and port) is downloaded. The API token
     goes only to that origin: Chatwoot's file links usually redirect to the storage, another host, which
     gets no token. At most MAX_REDIRECTS redirects, never from https to http. The size is read as a
-    stream and the download stops once it passes the limit; the whole download has one time limit."""
+    stream and the download stops once it passes the limit; the whole download has one time limit.
+
+    Keeps one HTTP client until aclose() (see main.py). The token is never one of its default headers:
+    each request carries it only when it goes to Chatwoot (see _follow)."""
 
     def __init__(self, cfg: ChatwootHttpConfig, max_bytes: int, timeout_ms: int) -> None:
         self._cfg = cfg
         self._chatwoot = _origin(cfg.base_url)
         self._max_bytes = max_bytes
         self._timeout_s = timeout_ms / 1000
+        self._client = pooled_client(cfg.transport, timeout=self._timeout_s)
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
 
     async def fetch_image(self, url: str) -> ImageData | FetchFailure:
         if self._chatwoot is None or _origin(url) != self._chatwoot:
             return FetchFailure("host")
         try:
-            async with (
-                asyncio.timeout(self._timeout_s),
-                httpx.AsyncClient(transport=self._cfg.transport, timeout=self._timeout_s) as client,
-            ):
-                return await self._follow(client, url)
+            async with asyncio.timeout(self._timeout_s):
+                return await self._follow(url)
         except (TimeoutError, httpx.TimeoutException):
             return FetchFailure("timeout")
         except Exception:
             return FetchFailure("error")
 
-    async def _follow(self, client: httpx.AsyncClient, url: str) -> ImageData | FetchFailure:
+    async def _follow(self, url: str) -> ImageData | FetchFailure:
         for _ in range(MAX_REDIRECTS + 1):
             origin = _origin(url)
             headers = {"api_access_token": self._cfg.api_token} if origin == self._chatwoot else {}
-            async with client.stream("GET", url, headers=headers) as res:
+            async with self._client.stream("GET", url, headers=headers) as res:
                 if not res.is_redirect:
                     return await self._read(res)
                 url = urljoin(url, res.headers["location"])
@@ -91,5 +96,5 @@ class _ChatwootMedia:
         return ImageData(bytes(data), content_type)
 
 
-def create_chatwoot_media(cfg: ChatwootHttpConfig, *, max_bytes: int, timeout_ms: int) -> MediaFetcher:
-    return _ChatwootMedia(cfg, max_bytes, timeout_ms)
+def create_chatwoot_media(cfg: ChatwootHttpConfig, *, max_bytes: int, timeout_ms: int) -> ChatwootMedia:
+    return ChatwootMedia(cfg, max_bytes, timeout_ms)

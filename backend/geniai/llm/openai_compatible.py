@@ -6,7 +6,8 @@ from typing import Annotated
 import httpx
 from pydantic import BaseModel, Field
 
-from geniai.app.ports import ImageData, LlmPort, LlmRequest
+from geniai.app.ports import ImageData, LlmRequest
+from geniai.http_client import pooled_client
 
 
 @dataclass(frozen=True)
@@ -46,10 +47,17 @@ def _user_content(request: LlmRequest) -> str | list[dict[str, object]]:
     return parts
 
 
-class _OpenAiCompatibleLlm:
+class OpenAiCompatibleLlm:
+    """Keeps one HTTP client, and so its connections, until aclose() (see main.py)."""
+
     def __init__(self, cfg: OpenAiCompatibleConfig) -> None:
         self._cfg = cfg
         self._url = f"{cfg.base_url.rstrip('/')}/chat/completions"
+        # Each call passes its own time limit.
+        self._client = pooled_client(cfg.transport, timeout=httpx.Timeout(None))
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
 
     async def complete(self, request: LlmRequest) -> str:
         body: dict[str, object] = {
@@ -64,8 +72,8 @@ class _OpenAiCompatibleLlm:
         }
         timeout_s = request.timeout_ms / 1000
         # asyncio.timeout bounds the whole call (connect, send and read), not each step.
-        async with asyncio.timeout(timeout_s), httpx.AsyncClient(transport=self._cfg.transport) as client:
-            res = await client.post(
+        async with asyncio.timeout(timeout_s):
+            res = await self._client.post(
                 self._url,
                 json=body,
                 headers={"authorization": f"Bearer {self._cfg.api_key}"},
@@ -79,5 +87,5 @@ class _OpenAiCompatibleLlm:
         return content
 
 
-def create_openai_compatible_llm(cfg: OpenAiCompatibleConfig) -> LlmPort:
-    return _OpenAiCompatibleLlm(cfg)
+def create_openai_compatible_llm(cfg: OpenAiCompatibleConfig) -> OpenAiCompatibleLlm:
+    return OpenAiCompatibleLlm(cfg)

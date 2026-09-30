@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from geniai.chatwoot.http import REQUEST_TIMEOUT, ChatwootHttpConfig, create_chatwoot_http
+from tests.support.http import TrackedTransport
 
 
 def recording_transport(statuses: list[int]) -> tuple[httpx.MockTransport, list[httpx.Request]]:
@@ -107,3 +108,17 @@ async def test_throws_after_the_last_retry() -> None:
 def test_waits_30_s_for_an_answer() -> None:
     assert REQUEST_TIMEOUT.read == 30
     assert REQUEST_TIMEOUT.connect is not None and REQUEST_TIMEOUT.connect <= 10
+
+
+async def test_reuses_one_client_across_calls_and_closes_it_on_aclose() -> None:
+    mock, calls = recording_transport([200, 200])
+    transport = TrackedTransport(mock)
+    chatwoot = create_chatwoot_http(
+        ChatwootHttpConfig(base_url="https://chatwoot.example", account_id=3, api_token="tok", transport=transport)
+    )
+    await chatwoot.send_message(45, "olá")
+    await chatwoot.set_status(45, "open")
+    assert (len(calls), transport.closed) == (2, 0)
+    assert all(c.headers["api_access_token"] == "tok" for c in calls)
+    await chatwoot.aclose()
+    assert transport.closed == 1

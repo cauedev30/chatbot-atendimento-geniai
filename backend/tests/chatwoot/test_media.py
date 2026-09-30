@@ -7,6 +7,7 @@ import pytest
 from geniai.app.ports import FetchFailure, ImageData, MediaFetcher
 from geniai.chatwoot.http import ChatwootHttpConfig
 from geniai.chatwoot.media import create_chatwoot_media
+from tests.support.http import TrackedTransport
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 PHOTO = "https://chatwoot.example/rails/active_storage/blobs/redirect/abc123/foto.png"
@@ -154,3 +155,25 @@ async def test_gives_up_after_the_time_limit() -> None:
 
     media, _ = fetcher(hang, timeout_ms=20)
     assert await media.fetch_image(PHOTO) == FetchFailure("timeout")
+
+
+async def test_reuses_one_client_without_carrying_the_token_or_cookies_to_the_storage() -> None:
+    calls: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if request.url.host == "chatwoot.example":
+            return httpx.Response(302, headers={"location": STORAGE, "set-cookie": "cw=1; Path=/"})
+        return httpx.Response(200, content=PNG, headers={"content-type": "image/png", "set-cookie": "st=1; Path=/"})
+
+    transport = TrackedTransport(httpx.MockTransport(handle))
+    cfg = ChatwootHttpConfig(base_url="https://chatwoot.example/", account_id=3, api_token="tok", transport=transport)
+    media = create_chatwoot_media(cfg, max_bytes=1024, timeout_ms=2000)
+    assert await media.fetch_image(PHOTO) == ImageData(PNG, "image/png")
+    assert await media.fetch_image(PHOTO) == ImageData(PNG, "image/png")
+    assert [r.url.host for r in calls] == ["chatwoot.example", "storage.example"] * 2
+    assert [r.headers.get("api_access_token") for r in calls] == ["tok", None, "tok", None]
+    assert all("cookie" not in r.headers for r in calls)
+    assert transport.closed == 0
+    await media.aclose()
+    assert transport.closed == 1

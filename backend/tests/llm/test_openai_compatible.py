@@ -7,6 +7,7 @@ import pytest
 
 from geniai.app.ports import ImageData, LlmRequest
 from geniai.llm.openai_compatible import OpenAiCompatibleConfig, create_openai_compatible_llm
+from tests.support.http import TrackedTransport
 
 Handler = Callable[[httpx.Request], Awaitable[httpx.Response]]
 
@@ -106,3 +107,19 @@ async def test_aborts_after_the_timeout() -> None:
     llm = create_openai_compatible_llm(config(transport))
     with pytest.raises(TimeoutError):
         await llm.complete(LlmRequest(system="s", user="u", timeout_ms=20))
+
+
+async def test_reuses_one_client_across_calls_and_closes_it_on_aclose() -> None:
+    async def ok(_: httpx.Request) -> httpx.Response:
+        return completion('{"ok":true}')
+
+    mock, calls = recording_transport(ok)
+    transport = TrackedTransport(mock)
+    llm = create_openai_compatible_llm(
+        OpenAiCompatibleConfig(base_url="https://llm.example/v1", api_key="k", model="m", transport=transport)
+    )
+    await llm.complete(LlmRequest(system="s", user="u", timeout_ms=1000))
+    await llm.complete(LlmRequest(system="s", user="u", timeout_ms=1000))
+    assert (len(calls), transport.closed) == (2, 0)
+    await llm.aclose()
+    assert transport.closed == 1

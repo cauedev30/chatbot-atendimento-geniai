@@ -77,12 +77,15 @@ async def run_candidate(candidate: Candidate, api_key: str) -> list[CaseRun]:
     contexts += [(c.id, question_context_for(c, catalog)) for c in FAQ_QUESTION_CASES]
     if candidate.readsImages:
         contexts += [(c.id, image_context_for(c, catalog)) for c in IMAGE_CASES]
-    for case_id, ctx in contexts:
-        started = time.perf_counter()
-        result = await interpret_turn(llm, ctx, EVAL_RULES)
-        latency_ms = round((time.perf_counter() - started) * 1000)
-        runs.append(CaseRun(case_id, latency_ms, result.turn, None if result.ok else result.error))
-        print("." if result.ok else "x", end="", flush=True)
+    try:
+        for case_id, ctx in contexts:
+            started = time.perf_counter()
+            result = await interpret_turn(llm, ctx, EVAL_RULES)
+            latency_ms = round((time.perf_counter() - started) * 1000)
+            runs.append(CaseRun(case_id, latency_ms, result.turn, None if result.ok else result.error))
+            print("." if result.ok else "x", end="", flush=True)
+    finally:
+        await llm.aclose()
     print()
     return runs
 

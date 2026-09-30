@@ -6,7 +6,7 @@ Run it with `python -m geniai` (see __main__.py).
 import re
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
@@ -46,57 +46,73 @@ def loggable_path(path: str) -> str:
 
 def _lifespan(state: AppState) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     """Migrates, builds the real adapters, schedules turns under the queue, resumes pending turns and
-    sweeps silent tickets every 5 minutes; stops everything on shutdown."""
+    sweeps silent tickets every 5 minutes; stops everything on shutdown. Each HTTP adapter keeps its
+    client, and so its open connections, until then: it is closed after the work that uses it stopped."""
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        config = state.config
-        log = ConsoleLogger()
-        engine = create_engine(config.database_url)
-        applied = await migrate(engine)
-        if applied:
-            log.info({"applied": applied}, "migrations applied")
-        deps = Deps(
-            engine=engine,
-            llm=create_openai_compatible_llm(config.llm),
-            chatwoot=create_chatwoot_http(config.chatwoot),
-            rules=config.rules,
-            now=lambda: datetime.now(UTC),
-            log=log,
-            bot_only_phones=config.bot_only_phones,
-            media=create_chatwoot_media(
-                config.chatwoot,
-                max_bytes=config.rules.max_image_bytes,
-                timeout_ms=config.rules.image_download_timeout_ms,
+        async with AsyncExitStack() as clients:
+            config = state.config
+            log = ConsoleLogger()
+            engine = create_engine(config.database_url)
+            clients.push_async_callback(engine.dispose)
+            applied = await migrate(engine)
+            if applied:
+                log.info({"applied": applied}, "migrations applied")
+            llm = create_openai_compatible_llm(config.llm)
+            clients.push_async_callback(llm.aclose)
+            chatwoot = create_chatwoot_http(config.chatwoot)
+            clients.push_async_callback(chatwoot.aclose)
+            media = None
+            if config.llm_reads_images:
+                media = create_chatwoot_media(
+                    config.chatwoot,
+                    max_bytes=config.rules.max_image_bytes,
+                    timeout_ms=config.rules.image_download_timeout_ms,
+                )
+                clients.push_async_callback(media.aclose)
+            deps = Deps(
+                engine=engine,
+                llm=llm,
+                chatwoot=chatwoot,
+                rules=config.rules,
+                now=lambda: datetime.now(UTC),
+                log=log,
+                bot_only_phones=config.bot_only_phones,
+                media=media,
             )
-            if config.llm_reads_images
-            else None,
-        )
-
-        async def turn(conversation_id: int) -> None:
-            await run_turn(state.queue, deps, conversation_id, scheduler)
-
-        def on_error(err: BaseException, conversation_id: int) -> None:
-            log.error({"err": err, "conversationId": conversation_id}, "turn processing failed")
-
-        scheduler = DebouncedScheduler(config.rules.burst_window_ms, turn, on_error)
-        state.deps, state.scheduler = deps, scheduler
-        resumed = await resume_pending_turns(deps, scheduler)
-        if resumed:
-            log.info({"resumed": resumed}, "pending turns rescheduled")
-        # Starts by sending what a previous run left pending.
-        outbox_worker = OutboxWorker(deps)
-        outbox_worker.start()
-        sweeper = start_sweeper(deps, SWEEP_INTERVAL_S)
-        try:
-            yield
-        finally:
-            sweeper.cancel()
-            await scheduler.stop()
-            await outbox_worker.stop()
-            await engine.dispose()
+            async with _running(state, deps):
+                yield
 
     return lifespan
+
+
+@asynccontextmanager
+async def _running(state: AppState, deps: Deps) -> AsyncIterator[None]:
+    """The bot's background work: turns under the queue, the outbox and the silence sweeper."""
+    log = deps.log
+
+    async def turn(conversation_id: int) -> None:
+        await run_turn(state.queue, deps, conversation_id, scheduler)
+
+    def on_error(err: BaseException, conversation_id: int) -> None:
+        log.error({"err": err, "conversationId": conversation_id}, "turn processing failed")
+
+    scheduler = DebouncedScheduler(state.config.rules.burst_window_ms, turn, on_error)
+    state.deps, state.scheduler = deps, scheduler
+    resumed = await resume_pending_turns(deps, scheduler)
+    if resumed:
+        log.info({"resumed": resumed}, "pending turns rescheduled")
+    # Starts by sending what a previous run left pending.
+    outbox_worker = OutboxWorker(deps)
+    outbox_worker.start()
+    sweeper = start_sweeper(deps, SWEEP_INTERVAL_S)
+    try:
+        yield
+    finally:
+        sweeper.cancel()
+        await scheduler.stop()
+        await outbox_worker.stop()
 
 
 def create_app(

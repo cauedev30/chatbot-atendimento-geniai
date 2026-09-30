@@ -213,6 +213,14 @@ attachments, and no image that opened) gets one "please type it" reply, then han
 handoff that happens before any LLM result gets its summary from one more LLM call after the
 customer was answered, or from the customer's own words.
 
+The code decides every handoff; the sentence the customer gets depends on who read the turn. When the
+LLM's own reading points to a handoff (a request for a person, a registration mismatch, off-topic, FAQ
+feedback "not resolved" or unclear, a question it found no answer for, or no entry fits and nothing is
+left to clarify), the LLM writes it in `handoff_reply`: one short sentence that fits the conversation
+(`domain/triage.py`, `handoff_text`). Otherwise the fixed text of `texts.py` goes: a handoff before
+the LLM (keyword, media, unidentified, LLM failure), a limit only the code knows (the fourth question,
+the third clarification) or an empty sentence.
+
 ## Data model
 
 One PostgreSQL database; the DDL is `backend/geniai/db/migrations/0001_init.sql`.

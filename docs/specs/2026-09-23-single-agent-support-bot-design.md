@@ -204,7 +204,8 @@ input):
   "faq_answer_found": false,
   "needs_clarification": false,
   "summary": "Não consegue entrar no painel; diz que a senha está errada.",
-  "reply": "Veja se isto resolve:"
+  "reply": "Veja se isto resolve:",
+  "handoff_reply": ""
 }
 ```
 
@@ -217,6 +218,15 @@ input):
 - `summary` (1–1000 characters) is what the kanban card shows; `reply` (0–1000) is framing text, never
   an FAQ procedure, or the answer to a question about the entry sent, written only from `sent_faq`.
   It is empty when the answer was not found. Booleans are strict: `"true"` is not a boolean.
+- `handoff_reply` (optional, default `""`) is the sentence to the customer when the turn hands the
+  ticket to the team, written only when the model's own reading points to a handoff (a request for a
+  person, a registration mismatch, off-topic, FAQ feedback "not resolved" or unclear, a question whose
+  answer was not found, or no FAQ entry fits and no clarification is needed). It is short, fits the
+  conversation, answers nothing, asks nothing and promises no time. It is read leniently: a value that
+  is not text, or longer than 300 characters, becomes `""` and never rejects the output. The code still
+  decides whether there is a handoff; it uses this sentence only when the model read the turn as one,
+  and otherwise (a handoff before the LLM, a limit only the code knows, an empty sentence) sends its
+  fixed text.
 
 There is **no action field**: the LLM has no way to ask for anything to be executed. The model runs
 without its reasoning mode, to keep latency within the target.

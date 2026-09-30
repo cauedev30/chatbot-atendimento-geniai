@@ -121,3 +121,14 @@ async def test_stop_waits_a_limited_time_and_leaves_the_rest_pending(h: Harness)
     await asyncio.sleep(0.05)
     await asyncio.wait_for(worker.stop(timeout_s=0.1), timeout=2)
     assert await states(h) == [("pending", None)]
+
+
+async def test_logs_how_long_each_chatwoot_call_took(h: Harness) -> None:
+    async with h.begin() as conn:
+        await enqueue_message(conn, 7, "olá")
+        await enqueue_status(conn, 7, "open")
+    await deliver_pending(h.deps)
+    lines = [e.obj for e in h.logger.infos if e.msg == "Chatwoot call sent"]
+    assert [(line["conversationId"], line["kind"]) for line in lines] == [(7, "message"), (7, "status")]
+    assert all(isinstance(line["ms"], int) and isinstance(line["outboxId"], int) for line in lines)
+    assert "olá" not in repr(lines)

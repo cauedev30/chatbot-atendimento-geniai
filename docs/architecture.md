@@ -288,7 +288,11 @@ by default.
   conversation. The lanes live in the process, so the backend runs a single worker. Reopening a card whose conversation
   already has an open ticket is refused with a message, not an error page.
 - **Board:** a refused move keeps the card where it was and shows the backend's message.
-- **Logs:** one JSON line per event on stdout; errors keep their message and stack.
+- **Logs:** one JSON line per event on stdout; errors keep their message and stack. Each turn whose
+  reply reaches the outbox logs `turn timing`: the wait from the last customer message to the turn,
+  the image downloads, each LLM attempt with how it ended, and the time until the reply was queued.
+  Each Chatwoot call logs its own time (`Chatwoot call sent`, with the conversation id). Neither line
+  has the text, the phone or a link.
 
 ## Security
 

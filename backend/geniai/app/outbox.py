@@ -4,6 +4,7 @@ process stops. A worker sends the pending rows in order per conversation and mar
 failed after the adapter's own retry rule (chatwoot/http.py)."""
 
 import asyncio
+import time
 from typing import TYPE_CHECKING, Final, Literal
 
 from sqlalchemy import func, insert, select, update
@@ -81,7 +82,10 @@ async def _finish(deps: "Deps", row_id: int, state: Literal["sent", "failed"], e
 
 
 async def _deliver_conversation(deps: "Deps", rows: list[tuple[int, str, str, int]]) -> None:
+    """Logs how long each Chatwoot call took, with the adapter's own retries; never the payload."""
     for row_id, kind, payload, conversation_id in rows:
+        started = time.perf_counter()
+        line: dict[str, object] = {"outboxId": row_id, "conversationId": conversation_id, "kind": kind}
         try:
             if kind == "message":
                 await deps.chatwoot.send_message(conversation_id, payload)
@@ -89,9 +93,12 @@ async def _deliver_conversation(deps: "Deps", rows: list[tuple[int, str, str, in
                 await deps.chatwoot.set_status(conversation_id, payload)  # type: ignore[arg-type]
         except Exception as err:
             # Final: the adapter already repeated what was safe to repeat. The next rows still go out.
-            deps.log.error({"err": err, "outboxId": row_id, "conversationId": conversation_id}, "Chatwoot call failed")
+            line["ms"] = round((time.perf_counter() - started) * 1000)
+            deps.log.error({"err": err, **line}, "Chatwoot call failed")
             await _finish(deps, row_id, "failed", str(err)[:500])
             continue
+        line["ms"] = round((time.perf_counter() - started) * 1000)
+        deps.log.info(line, "Chatwoot call sent")
         await _finish(deps, row_id, "sent")
 
 

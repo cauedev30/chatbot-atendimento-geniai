@@ -1,6 +1,6 @@
 import httpx
 
-from geniai.http_client import pooled_client
+from geniai.http_client import KEEPALIVE_S, pooled_client
 from tests.support.http import TrackedTransport
 
 
@@ -33,3 +33,10 @@ async def test_closes_its_transport_only_when_closed() -> None:
     assert transport.closed == 0
     await client.aclose()
     assert transport.closed == 1
+
+
+async def test_keeps_an_idle_connection_open_between_the_turns_of_a_conversation() -> None:
+    # httpx's default (5 s) drops it before a customer answers, even after the 4-5 s burst window.
+    client = pooled_client(None, timeout=1.0)
+    assert client._transport._pool._keepalive_expiry == KEEPALIVE_S == 50  # type: ignore[attr-defined]
+    await client.aclose()

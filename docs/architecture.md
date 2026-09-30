@@ -32,12 +32,16 @@ flowchart LR
 - `domain/` holds pure rules with no I/O: the ticket columns and the moves each actor may make
   (`transitions.py`), the turn precedence (`triage.py`), the 24 h silence rule (`silence.py`), phone
   normalization (`phone.py`), which conversations the bot serves (`audience.py`), the human-request keyword check (`human_request.py`), the fixed customer
-  texts in Portuguese (`texts.py`) and every tunable in one place (`rules.py`).
+  texts in Portuguese (`texts.py`), the labels that name attachments for the LLM (`attachments.py`)
+  and every tunable in one place (`rules.py`).
 - `app/` holds the use cases. They depend on **ports** (`app/ports.py`): `LlmPort`, `ChatwootPort`,
-  a `Logger` and the database engine, bundled in `Deps`. Tests swap the ports for fakes.
+  `MediaFetcher` (absent when image reading is off), a `Logger` and the database engine, bundled in
+  `Deps`. Tests swap the ports for fakes. `app/attachments.py` decides what a turn does with the
+  attachments (see "Attachments" below).
 - `llm/` builds the prompt, validates the model's JSON (`output_schema.py`) and retries once
   (`interpret.py`). `openai_compatible.py` talks to any OpenAI-compatible chat completions API.
-- `chatwoot/` parses webhook events (`webhook.py`) and calls the Chatwoot API with retries (`http.py`).
+- `chatwoot/` parses webhook events (`webhook.py`), calls the Chatwoot API with retries (`http.py`)
+  and downloads customer images (`media.py`).
 - `db/` has the SQLAlchemy Core schema, the SQL migrations with a small runner, the fictitious seed and
   the loader of the FAQ file (`faq_file.py`, run by `python -m geniai.db.cli load-faq`).
 - `api/` has the FastAPI routers and the JSON response models (`schemas.py`).
@@ -66,7 +70,10 @@ sequenceDiagram
     B-->>CW: 200 at once (Chatwoot calls follow in the background)
     Note over B: ~5 s without new messages
     B->>B: read the ticket and its pending messages
-    alt keyword asks for a person, or media rule applies
+    opt image reading on, the turn may reach the LLM
+        B->>CW: download the unread images (at most 4)
+    end
+    alt keyword asks for a person, or nothing in the turn is legible
         B->>B: decide in code, no LLM call
     else otherwise
         B->>L: one call: context in, JSON out (validated, one retry)
@@ -95,14 +102,16 @@ sequenceDiagram
      conversation is not `pending`, it is set back to `pending` so the bot keeps it.
 
    Every Chatwoot call is written as a row of the `outbox` table in the same transaction as the ticket
-   change that causes it (see "Outbox" below). The webhook never waits for a turn or for Chatwoot.
+   change that causes it (see "Outbox" below). The webhook never waits for a turn or for Chatwoot, and
+   downloads nothing.
 2. **Burst window** (`turn_scheduler.py`): each message restarts a timer per conversation; when it
    fires, the turn runs under the conversation's turn lane, one turn at a time.
 3. **Turn** (`process_turn.py`). The pending customer messages (those after the last one a turn has
    read, `ticket.last_consumed_message_id`) form one turn. A message stored while a turn is running
    stays pending for the next turn. The first turn gets the greeting, written by code, unless it already asks for a
-   person. Later turns are decided in code first (keyword request for a person, media), then by the
-   LLM through the precedence rules. Once the FAQ entry was sent, the LLM also gets that entry's text
+   person. Later turns are decided in code first (keyword request for a person, a turn with nothing
+   legible), then by the LLM through the precedence rules; images and other attachments are
+   described below. Once the FAQ entry was sent, the LLM also gets that entry's text
    and knowledge base (`sent_faq`); a question about it is answered from them, up to
    `max_faq_questions` (3) times, each answer followed by the "did it help?" question again. The LLM
    runs outside any database transaction; the decision, the summary and category, and the bot's
@@ -117,6 +126,47 @@ sequenceDiagram
 5. **Restart**: timers live in memory, so on start the backend reschedules every triage conversation
    that has unanswered customer messages. Chatwoot calls left pending in the outbox go out when the
    worker starts.
+
+### Attachments
+
+A customer message may carry files: a photo, an audio, a video, a document. Their path:
+
+1. **Webhook** (`chatwoot/webhook.py`, `attachment_of`): each attachment becomes a kind (`image`,
+   `audio`, `video`; any other or missing `file_type` is a `file`) and Chatwoot's link (`data_url`,
+   when present). The mapping is in that one function; the real payload of the WhatsApp connector is
+   still to be checked with a photo.
+2. **Database** (`triage_message.attachments`, JSONB, migration `0006`): the message keeps its caption
+   as its text and the list of attachments (kind and link). A message with attachments and no text is
+   stored with `is_media` and the text `[mídia]`, like any media-only message; one stored
+   before the column existed has no attachments and is treated as a file the bot cannot open.
+3. **Download in the turn** (`app/attachments.py`, `chatwoot/media.py`), outside any transaction and
+   only when the turn may reach the LLM (not for the greeting or a request for a person). The unread
+   images of the ticket's customer messages are downloaded, the most recent
+   `max_images_per_turn` (4) of them; older ones are past the limit. An image is downloaded only from
+   the configured Chatwoot (same scheme, host and port as `CHATWOOT_BASE_URL`); the API token goes
+   only to that origin, and up to 3 redirects are followed (Chatwoot usually redirects to its
+   storage, which gets no token), never from https to http. At most `max_image_bytes` (5 MB), read as
+   a stream and cut when it passes, within `image_download_timeout_ms` (15 s), and only JPEG, PNG or
+   WebP. A failure never stops the turn: the image counts as not opened. The bytes stay in memory.
+   With `LLM_READS_IMAGES=false` nothing is downloaded and every image counts as not opened.
+4. **LLM** (`llm/prompt.py`, `llm/openai_compatible.py`): each message reaches the LLM as the labels of
+   its attachments followed by its caption: `[imagem 1]` (sent with this call, in order),
+   `[imagem: <description>]` (seen in an earlier turn), `[imagem — não foi possível abrir]`,
+   `[imagem — além do limite, não vista]`, `[áudio — o bot não ouve]`, `[vídeo — o bot não abre]`,
+   `[arquivo — o bot não abre]`. The prompt explains them, counts what an image shows as what the
+   customer wrote, and forbids saying an attachment did not arrive or asking for it again. With
+   images, the user message goes in parts: the text, then each image as a base64 data URI; without,
+   the request is plain text, as for a text-only model.
+5. **Description**: the LLM returns `image_descriptions`, one short description per image sent. The
+   turn stores on each image its outcome (`seen`, `failed`, `over_limit`) and, when seen, the
+   description (`[imagem vista pelo bot]` when the LLM gave none); later turns show the description
+   and never send the image again. An image in a turn decided before the LLM stays unread, so the
+   next LLM turn reads it: a photo sent as the first message is read in the turn after the greeting.
+
+A turn with nothing legible (no text and no image that opened) gets one request for text, then a
+handoff (`media`). The request says what the bot could not read: "Não consegui abrir a imagem" when
+only images failed; audio, video or files when there was one; the general text (audio, images or files) when image
+reading is off. Logs name each image by type, size and failure reason, never by its link or content.
 
 ### Outbox
 
@@ -158,8 +208,8 @@ For each turn the first rule that applies wins (`domain/triage.py`):
 6. the problem is still vague and fewer than two questions were asked → ask;
 7. otherwise → handoff (`no_faq_match`).
 
-Before the LLM: a keyword request for a person hands over; a media-only turn gets one "please type
-it" reply, then hands over. If the LLM fails twice, the ticket is handed over (`llm_failure`). A
+Before the LLM: a keyword request for a person hands over; a turn with nothing legible (only
+attachments, and no image that opened) gets one "please type it" reply, then hands over. If the LLM fails twice, the ticket is handed over (`llm_failure`). A
 handoff that happens before any LLM result gets its summary from one more LLM call after the
 customer was answered, or from the customer's own words.
 
@@ -176,7 +226,7 @@ One PostgreSQL database; the DDL is `backend/geniai/db/migrations/0001_init.sql`
 | `team_member` | People who can take a ticket |
 | `ticket` | The ticket (below) |
 | `ticket_move` | Column history: `from_column`, `to_column`, `at`, `actor` (`bot` / `human`) |
-| `triage_message` | The conversation while in triage: `author`, `text`, `is_media`, `chatwoot_message_id` (unique, for dedupe) |
+| `triage_message` | The conversation while in triage: `author`, `text` (a caption, for a message with attachments), `is_media` (attachments and no text), `chatwoot_message_id` (unique, for dedupe), `attachments` (JSONB list: kind, link and, for an image an LLM turn read, its outcome and description) |
 | `schema_migration` | Applied migration files |
 
 `ticket` keeps the attendant and a snapshot of the unit, the phone, the column, the current
@@ -229,6 +279,8 @@ by default.
   504 answer. A read timeout (30 s) or any other answer ends it at once, because repeating a POST that
   Chatwoot did process would send the customer the same message twice. A final failure is logged,
   never raised into the flow.
+- **Images:** a download that fails (host, redirects, status, type, size, time) leaves the image
+  "not opened" and the turn goes on with what is legible; it is logged with the reason.
 - **Duplicates:** a Chatwoot message id is stored once (with the ticket's messages, or on the outbox
   row of a conversation handed to the team); a repeated delivery answers `duplicate`.
 - **Races:** the webhooks of a conversation run one at a time in its webhook lane and its turns in its
@@ -263,6 +315,9 @@ by default.
   entry's text and knowledge base; the prompt forbids general knowledge and asking for or sending
   passwords. The LLM never sees another entry's text or knowledge base. Code answers at most three
   questions, and hands over when the LLM reports no answer or writes an empty one.
+- **Images:** downloaded only from the configured Chatwoot, with the token only there; kept in
+  memory for the turn and sent to the configured LLM provider, never written to disk or to the
+  database (only the LLM's short description is). Off unless `LLM_READS_IMAGES=true`.
 - **Data:** the tests use invented data only. The FAQ file holds the support team's instructions and
   no unit, person, phone number or password.
 
@@ -270,7 +325,8 @@ by default.
 
 - **Backend** (`backend/tests`, pytest on a real PostgreSQL database): pure domain rules; the schema
   and migrations; the ticket repository; the LLM contract, prompt payload and retry; the OpenAI and
-  Chatwoot HTTP clients (on `httpx.MockTransport`); inbound messages, burst window, turns, silence and
+  Chatwoot HTTP clients and the image download (on `httpx.MockTransport`); turns with images and
+  other attachments; inbound messages, burst window, turns, silence and
   restart (with a scripted LLM, a fake Chatwoot and a clock the test controls); board and indicators;
   who the bot serves (groups, test mode) and the silent hand-over; the HTTP API, login and webhook (through `httpx.ASGITransport`); configuration; and a check that
   `openapi.json` is current. The gate adds ruff and strict mypy.
@@ -281,5 +337,6 @@ by default.
   (`geniai_e2e`, or `E2E_DATABASE_URL`), created when missing; login, the board,
   a real drag between columns that survives a reload, and the indicators.
 - **Evaluation set** (`backend/geniai/eval`): 30 fictitious conversations, plus 8 questions about an
-  FAQ entry already sent (half answered by its knowledge base, half not), run against real models to
-  choose one; human-request detection must be 100%.
+  FAQ entry already sent (half answered by its knowledge base, half not), and, for models that read
+  images, 4 invented screenshots, run against real models to choose one; human-request detection
+  must be 100%.

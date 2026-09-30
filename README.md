@@ -33,7 +33,14 @@ each problem.
 - Asks at most two clarifying questions, then summarizes and hands over.
 - Hands over immediately on any request for a person, detected by keywords in code even if the LLM
   is down, and by the LLM.
-- Asks media-only messages to be typed once, then hands over.
+- Reads the customer's images when `LLM_READS_IMAGES=true`: a photo or screenshot, alone or with a
+  caption, counts as what the customer wrote. Up to four images per turn are sent to the LLM, which
+  also describes each one; later turns and the ticket summary use that description. The image goes
+  to the configured LLM provider and is never stored.
+- Cannot hear audio nor open videos or files (nor images, with image reading off). With text
+  beside them, the LLM knows there was an attachment it cannot open; alone, the bot asks once for
+  the problem in text, then hands over. It never says an attachment did not arrive nor asks for it
+  again.
 - Closes a triage conversation that stays silent for 24 h as "No response".
 - Never executes anything in customer systems: the LLM output has no action field.
 
@@ -81,13 +88,14 @@ backend/
     db/          SQLAlchemy schema, SQL migrations, fictitious seed, FAQ file loader, CLI
     app/         use cases: inbound messages, turns, silence sweeper, board, indicators
     llm/         LLM contract (prompt, output schema, one-retry interpretation), OpenAI-compatible adapter
-    chatwoot/    webhook parsing and HTTP client
+    chatwoot/    webhook parsing, HTTP client and image download
     api/         FastAPI routers: auth, board, indicators, webhook; response models
-    eval/        30 fictitious conversations and the model comparison runner
+    eval/        fictitious conversations, invented screenshots and the model comparison runner
     config.py    environment configuration
     main.py      the FastAPI app and its background work
   faq/faq.json   the FAQ: categories, entries and their knowledge bases (loaded with load-faq)
   tests/         pytest suite, mirroring geniai/
+  scripts/       make_eval_images.py, which draws the evaluation screenshots (needs Pillow)
   openapi.json   the API schema the frontend types are generated from
 frontend/
   src/app/         routes: login, board, indicators
@@ -264,9 +272,12 @@ at once, with no reply and no ticket:
 ## Choosing the model
 
 `python -m geniai.eval.run` runs 30 fictitious conversations, plus 8 questions about an FAQ entry
-already sent, against every candidate in `EVAL_CANDIDATES`. It reports, per model: human-request
-detection (must be 100%), category and FAQ accuracy, how many questions it read right (answered only
-when the entry's knowledge base has the answer), and p50/p95 latency, and saves the full result under
+already sent, against every candidate in `EVAL_CANDIDATES`; a candidate with `"readsImages": true`
+also gets 4 invented screenshots sent alone (`backend/geniai/eval/images/`, drawn by
+`backend/scripts/make_eval_images.py`). It reports, per model: human-request detection (must be
+100%), category and FAQ accuracy, how many questions it read right (answered only when the entry's
+knowledge base has the answer), how many screenshots it read right (category and FAQ entry from the
+image, with a description), and p50/p95 latency, and saves the full result under
 `backend/eval-results/`. Each candidate names the environment variable that holds its API key, so keys
 never appear in files. Run it from a machine in Brazil so the latency matches production.
 
@@ -286,7 +297,9 @@ never appear in files. Run it from a machine in Brazil so the latency matches pr
 The bot, the board and the indicators are implemented and tested, with fictitious data. The FAQ
 content and category list are in `backend/faq/faq.json`. Still open (spec §13):
 
-- The model choice, by the evaluation set.
+- The model choice, by the evaluation set; reading images and hearing audio count in it.
+- Confirming the link Chatwoot sends for a WhatsApp photo (`data_url`) and that the download works
+  on the real inbox.
 - Confirming that the WhatsApp connector delivers the real phone number, not an internal id, and how
   it shows a group conversation.
 - Confirming which Chatwoot webhook carries conversation status changes.
@@ -298,4 +311,4 @@ content and category list are in `backend/faq/faq.json`. Still open (spec §13):
 
 The repository is public. Apart from the FAQ file, which holds the support team's instructions, it
 contains only invented data: no real phone numbers, unit names, people or account ids, here or in
-the FAQ.
+the FAQ. The evaluation screenshots are drawn by a script, with invented screens.

@@ -73,12 +73,16 @@ class OpenAiCompatibleLlm:
         timeout_s = request.timeout_ms / 1000
         # asyncio.timeout bounds the whole call (connect, send and read), not each step.
         async with asyncio.timeout(timeout_s):
-            res = await self._client.post(
-                self._url,
-                json=body,
-                headers={"authorization": f"Bearer {self._cfg.api_key}"},
-                timeout=timeout_s,
-            )
+            try:
+                res = await self._client.post(
+                    self._url,
+                    json=body,
+                    headers={"authorization": f"Bearer {self._cfg.api_key}"},
+                    timeout=timeout_s,
+                )
+            except httpx.TimeoutException as err:
+                # The same time limit, reached by httpx first: one kind of error for the caller.
+                raise TimeoutError(str(err)) from err
             if not res.is_success:
                 raise RuntimeError(f"LLM HTTP {res.status_code}: {res.text[:200]}")
             content = _Completion.model_validate(res.json()).choices[0].message.content

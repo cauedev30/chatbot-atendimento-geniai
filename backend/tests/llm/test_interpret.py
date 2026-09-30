@@ -203,3 +203,12 @@ async def test_gives_a_turn_with_images_the_longer_time_limit() -> None:
     image = ImageData(b"PNG", "image/png")
     await interpret_turn(llm, replace(CTX, images=(image,)), rules)
     assert [r.timeout_ms for r in llm.requests] == [111, 222]
+
+
+async def test_times_each_attempt_and_says_how_it_ended() -> None:
+    llm = ScriptedLlm()
+    llm.push(TimeoutError(), RuntimeError("HTTP 500"), "not json", turn_json(category_id=99), turn_json(category_id=2))
+    result = await interpret_turn(llm, CTX, replace(DEFAULT_RULES, llm_retries=4))
+    assert result.outcomes == ("timeout", "error", "invalid", "invalid", "ok")
+    assert len(result.attempts_ms) == 5
+    assert all(isinstance(ms, int) and ms >= 0 for ms in result.attempts_ms)

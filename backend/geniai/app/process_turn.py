@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -53,10 +54,38 @@ from geniai.domain.types import (
     SendFaq,
     TriageState,
 )
-from geniai.llm.interpret import interpret_turn
+from geniai.llm.interpret import InterpretResult, interpret_turn
 from geniai.llm.prompt import PromptCategory, PromptFaqItem, PromptMessage, PromptSentFaq, TurnContext
 
 TurnOutcome = Literal["greeting"] | DecisionKind
+
+
+def _ms_since(started: float) -> int:
+    return round((time.perf_counter() - started) * 1000)
+
+
+@dataclass
+class _Timing:
+    """How long the steps of a turn took, logged in one line once its reply is in the outbox: never the
+    content nor the phone. The Chatwoot send has its own line (app/outbox.py)."""
+
+    started: float = field(default_factory=time.perf_counter)
+    wait_ms: int = 0
+    """From the last customer message to the start of the turn: the burst window and any queue."""
+    images_ms: int | None = None
+    """Downloading the turn's images, when there was any download."""
+    llm: InterpretResult | None = None
+
+    def log(self, deps: Deps, ticket_id: int, outcome: TurnOutcome) -> None:
+        line: dict[str, object] = {"ticketId": ticket_id, "outcome": outcome, "waitMs": self.wait_ms}
+        if self.images_ms is not None:
+            line["imagesMs"] = self.images_ms
+        if self.llm is not None:
+            line["llmMs"] = list(self.llm.attempts_ms)
+            line["llmOutcomes"] = list(self.llm.outcomes)
+            line["llmRetried"] = len(self.llm.outcomes) > 1
+        line["toOutboxMs"] = _ms_since(self.started)
+        deps.log.info(line, "turn timing")
 
 
 def pending_customer_messages(messages: list[MessageRow], consumed_id: int | None) -> list[MessageRow]:
@@ -162,6 +191,7 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
     """
     decision: Decision | None = None
     greeting: str | None = None
+    timing = _Timing()
     async with deps.engine.connect() as conn:
         t = await find_open_ticket(conn, conversation_id)
         if t is None or t.column != "in_triage":
@@ -171,6 +201,7 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
         if not pending:
             return None
         consumed_id = pending[-1].id
+        timing.wait_ms = max(0, round((deps.now() - pending[-1].at).total_seconds() * 1000))
 
         text = "\n".join(m.text for m in pending if not m.is_media)
         keyword_human_request = mentions_human_request(text)
@@ -195,28 +226,35 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
             await add_message(conn, NewMessage(ticket_id=t.id, author="bot", text=greeting, at=deps.now()))
             await enqueue_message(conn, conversation_id, greeting)
         deps.outbox.wake()
+        timing.log(deps, t.id, "greeting")
         return "greeting"
 
     if decision is not None:
-        return await _apply(deps, t, messages, consumed_id, decision, None)
+        return await _apply(deps, t, messages, consumed_id, decision, None, timing)
 
-    images = await read_images(deps, t.id, messages) if may_be_legible(pending) else TurnImages()
+    images = TurnImages()
+    if may_be_legible(pending):
+        downloads = time.perf_counter()
+        images = await read_images(deps, t.id, messages)
+        if deps.media is not None and (images.images or images.failed):
+            timing.images_ms = _ms_since(downloads)
     if not is_legible(pending, images):
         signals = PreLlmSignals(False, nothing_legible=True, unread=unread_media(pending, deps.media is not None))
         decision = pre_llm_decision(_state_of(t), signals, deps.rules)
         assert decision is not None
-        return await _apply(deps, t, messages, consumed_id, decision, None)
+        return await _apply(deps, t, messages, consumed_id, decision, None, timing)
 
     async with deps.engine.connect() as conn:
         ctx = await build_turn_context(deps, conn, t, messages, images)
         await conn.rollback()
     result = await interpret_turn(deps.llm, ctx, deps.rules)
+    timing.llm = result
     if not result.ok or result.turn is None:
         deps.log.warn({"ticketId": t.id, "error": result.error}, "LLM failed; handing over")
-        return await _apply(deps, t, messages, consumed_id, Handoff("llm_failure"), None)
+        return await _apply(deps, t, messages, consumed_id, Handoff("llm_failure"), None, timing)
     turn = result.turn
     decision = decide_turn(_state_of(t), turn, deps.rules)
-    return await _apply(deps, t, messages, consumed_id, decision, turn, images)
+    return await _apply(deps, t, messages, consumed_id, decision, turn, timing, images)
 
 
 @dataclass(frozen=True)
@@ -273,6 +311,7 @@ async def _apply(
     consumed_id: int,
     decision: Decision,
     turn: InterpretedTurn | None,
+    timing: _Timing,
     images: TurnImages | None = None,
 ) -> TurnOutcome | None:
     """With the LLM's turn, records what it saw of the turn's images."""
@@ -304,6 +343,7 @@ async def _apply(
         if written.kind == "resolved_by_bot":
             await _carry_late_messages(deps, conn, t, consumed_id)
     deps.outbox.wake()
+    timing.log(deps, t.id, written.kind)
     summary = turn.summary if turn is not None else t.summary
     if written.handoff_reason is not None and summary == "":
         await _fill_missing_summary(deps, t, messages, written.handoff_reason)

@@ -268,3 +268,21 @@ async def test_a_handoff_before_the_llm_gets_its_summary_with_the_images(h: Harn
     assert await chat.customer(conversation_id, "quero falar com um atendente", image) == "handoff"
     assert h.llm.requests[-1].images == (served(h, image),)
     assert (await chat.ticket_of(conversation_id)).summary == "Pede atendente; print de erro de senha."
+
+
+async def test_the_timing_line_has_the_image_download_time(h: Harness, chat: Chat) -> None:
+    h.reads_images()
+    conversation_id = await chat.greeted()
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], needs_clarification=True, reply="Qual erro?"))
+    await chat.customer(conversation_id, "", photo(h))
+    [_, line] = [e.obj for e in h.logger.infos if e.msg == "turn timing"]
+    assert isinstance(line["imagesMs"], int)
+    assert "chatwoot.example" not in repr(line)
+
+
+async def test_the_timing_line_has_no_download_time_when_image_reading_is_off(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.greeted()
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], needs_clarification=True, reply="Qual erro?"))
+    await chat.customer(conversation_id, "deu erro", photo(h))
+    [_, line] = [e.obj for e in h.logger.infos if e.msg == "turn timing"]
+    assert "imagesMs" not in line

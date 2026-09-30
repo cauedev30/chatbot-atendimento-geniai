@@ -470,3 +470,39 @@ async def test_a_ticket_silent_after_an_answered_question_goes_to_no_response(h:
     h.advance(24 * 3_600_000)
     assert await sweep_silent_tickets(h.deps) == [t.id]
     assert (await chat.ticket_of(conversation_id)).column == "no_response"
+
+
+def timing_lines(h: Harness) -> list[dict[str, object]]:
+    return [e.obj for e in h.logger.infos if e.msg == "turn timing"]
+
+
+async def test_logs_how_long_each_step_of_a_turn_took_without_its_content(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.greeted()
+    [greeting] = timing_lines(h)
+    assert (greeting["outcome"], "llmMs" in greeting) == ("greeting", False)
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], faq_item_id=h.seed.faq["password"]))
+    await chat.receive(conversation_id, "esqueci a senha")
+    h.advance(4_200)
+    assert await process_turn(h.deps, conversation_id) == "send_faq"
+    [_, line] = timing_lines(h)
+    t = await chat.ticket_of(conversation_id)
+    assert {k: v for k, v in line.items() if k not in ("llmMs", "toOutboxMs")} == {
+        "ticketId": t.id,
+        "outcome": "send_faq",
+        "waitMs": 4_200,
+        "llmOutcomes": ["ok"],
+        "llmRetried": False,
+    }
+    llm_ms, to_outbox_ms = line["llmMs"], line["toOutboxMs"]
+    assert isinstance(llm_ms, list) and len(llm_ms) == 1
+    assert isinstance(to_outbox_ms, int) and to_outbox_ms >= llm_ms[0]
+    assert "senha" not in repr(line)
+    assert h.seed.attendants["ana"].phone not in repr(line)
+
+
+async def test_the_timing_line_says_when_the_llm_was_tried_again(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.greeted()
+    h.llm.push(TimeoutError(), turn_json(category_id=h.seed.categories["login"], faq_item_id=h.seed.faq["password"]))
+    await chat.customer(conversation_id, "esqueci a senha")
+    line = timing_lines(h)[-1]
+    assert (line["llmOutcomes"], line["llmRetried"]) == (["timeout", "ok"], True)

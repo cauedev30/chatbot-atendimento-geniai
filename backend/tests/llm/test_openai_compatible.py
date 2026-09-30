@@ -123,3 +123,13 @@ async def test_reuses_one_client_across_calls_and_closes_it_on_aclose() -> None:
     assert (len(calls), transport.closed) == (2, 0)
     await llm.aclose()
     assert transport.closed == 1
+
+
+async def test_an_http_timeout_is_a_timeout_error() -> None:
+    async def slow(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("slow", request=request)
+
+    transport, _ = recording_transport(slow)
+    llm = create_openai_compatible_llm(config(transport))
+    with pytest.raises(TimeoutError):
+        await llm.complete(LlmRequest(system="s", user="u", timeout_ms=1000))

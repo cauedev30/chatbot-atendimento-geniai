@@ -32,7 +32,7 @@ class TriageRules:
     max_image_bytes: int
     """OWNER-UNCONFIRMED: largest image the bot downloads; a bigger one is treated as one that did not open."""
     image_download_timeout_ms: int
-    """Time limit of one image download from Chatwoot."""
+    """OWNER-UNCONFIRMED: time limit of one image download from Chatwoot."""
 
 
 DEFAULT_RULES = TriageRules(

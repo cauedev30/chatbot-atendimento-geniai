@@ -147,7 +147,18 @@ async def test_stores_media_without_text_as_a_media_message(h: Harness, schedule
     await handle_inbound_message(h.deps, scheduler, inbound(h, text="", attachments=(Attachment("audio"),)))
     async with h.begin() as conn:
         [m] = (await conn.execute(select(triage_message))).all()
-    assert (m.is_media, m.text) == (True, MEDIA_PLACEHOLDER)
+    assert (m.is_media, m.text, m.attachments) == (True, MEDIA_PLACEHOLDER, [{"kind": "audio"}])
+
+
+async def test_stores_a_photo_with_a_caption_as_the_caption_and_its_attachment(
+    h: Harness, scheduler: RecordingScheduler
+) -> None:
+    photo = Attachment("image", "https://chatwoot.example/rails/active_storage/blobs/redirect/abc123/foto.jpg")
+    await handle_inbound_message(h.deps, scheduler, inbound(h, text="deu esse erro", attachments=(photo,)))
+    [t] = await tickets_of(h, 50)
+    async with h.begin() as conn:
+        [m] = await list_messages(conn, t.id)
+    assert (m.text, m.is_media, m.attachments) == ("deu esse erro", False, (photo,))
 
 
 async def test_stays_silent_on_a_ticket_that_is_with_a_human(h: Harness, scheduler: RecordingScheduler) -> None:

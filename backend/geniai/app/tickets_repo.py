@@ -8,7 +8,17 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from geniai.db.schema import attendant, category, faq_item, ticket, ticket_move, triage_message, unit
 from geniai.domain.transitions import TicketTimes, can_move, times_after_move
-from geniai.domain.types import Actor, Column, HandoffReason, MessageAuthor
+from geniai.domain.types import (
+    ATTACHMENT_KINDS,
+    IMAGE_OUTCOMES,
+    Actor,
+    Attachment,
+    AttachmentKind,
+    Column,
+    HandoffReason,
+    ImageOutcome,
+    MessageAuthor,
+)
 
 
 @dataclass(frozen=True)
@@ -48,6 +58,7 @@ class MessageRow:
     is_media: bool
     at: datetime
     chatwoot_message_id: int | None
+    attachments: tuple[Attachment, ...] = ()
 
 
 TicketPatch = dict[str, object]
@@ -201,6 +212,38 @@ class NewMessage:
     at: datetime
     is_media: bool = False
     chatwoot_message_id: int | None = None
+    attachments: tuple[Attachment, ...] = ()
+
+
+def _attachment_json(a: Attachment) -> dict[str, str]:
+    fields = {"kind": a.kind, "url": a.url, "outcome": a.outcome, "description": a.description}
+    return {k: v for k, v in fields.items() if v is not None}
+
+
+def _attachments_from_json(raw: object) -> tuple[Attachment, ...]:
+    """Reads the stored list leniently: an unknown kind is a file, an odd field is dropped."""
+    if not isinstance(raw, list):
+        return ()
+    found: list[Attachment] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        kind: AttachmentKind = next((k for k in ATTACHMENT_KINDS if k == item.get("kind")), "file")
+        outcome: ImageOutcome | None = next((o for o in IMAGE_OUTCOMES if o == item.get("outcome")), None)
+        url, description = item.get("url"), item.get("description")
+        found.append(
+            Attachment(
+                kind,
+                url if isinstance(url, str) else None,
+                outcome,
+                description if isinstance(description, str) else None,
+            )
+        )
+    return tuple(found)
+
+
+def _message(row: Any) -> MessageRow:
+    return MessageRow(**{**row._mapping, "attachments": _attachments_from_json(row.attachments)})
 
 
 async def add_message(conn: AsyncConnection, m: NewMessage) -> bool:
@@ -214,6 +257,7 @@ async def add_message(conn: AsyncConnection, m: NewMessage) -> bool:
             is_media=m.is_media,
             chatwoot_message_id=m.chatwoot_message_id,
             at=m.at,
+            attachments=[_attachment_json(a) for a in m.attachments],
         )
         .on_conflict_do_nothing()
         .returning(triage_message.c.id)
@@ -223,7 +267,13 @@ async def add_message(conn: AsyncConnection, m: NewMessage) -> bool:
 
 async def list_messages(conn: AsyncConnection, ticket_id: int) -> list[MessageRow]:
     query = select(triage_message).where(triage_message.c.ticket_id == ticket_id).order_by(triage_message.c.id)
-    return [MessageRow(**row._mapping) for row in await conn.execute(query)]
+    return [_message(row) for row in await conn.execute(query)]
+
+
+async def set_message_attachments(conn: AsyncConnection, message_id: int, attachments: tuple[Attachment, ...]) -> None:
+    """Rewrites a message's attachments, to record what a turn did with its images."""
+    values = [_attachment_json(a) for a in attachments]
+    await conn.execute(update(triage_message).where(triage_message.c.id == message_id).values(attachments=values))
 
 
 async def move_messages(conn: AsyncConnection, message_ids: list[int], to_ticket_id: int) -> None:

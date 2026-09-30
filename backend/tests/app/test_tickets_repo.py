@@ -17,10 +17,12 @@ from geniai.app.tickets_repo import (
     list_messages,
     message_exists,
     move_ticket,
+    set_message_attachments,
     update_ticket,
 )
 from geniai.db.fixtures import FICTITIOUS
-from geniai.db.schema import ticket_move
+from geniai.db.schema import ticket_move, triage_message
+from geniai.domain.types import Attachment
 from tests.conftest import Harness
 
 
@@ -87,6 +89,35 @@ async def test_ignores_duplicate_chatwoot_message_ids(h: Harness) -> None:
         assert await add_message(conn, message) is False
         assert await message_exists(conn, 500) is True
         assert len(await list_messages(conn, t.id)) == 1
+
+
+PHOTO = "https://chatwoot.example/rails/active_storage/blobs/redirect/abc123/foto.jpg"
+
+
+async def test_stores_a_caption_with_its_attachments_and_records_what_the_llm_saw(h: Harness) -> None:
+    t = await new_triage_ticket(h)
+    sent = (Attachment("image", PHOTO), Attachment("audio"))
+    message = NewMessage(ticket_id=t.id, author="customer", text="deu isso", at=h.now, attachments=sent)
+    async with h.begin() as conn:
+        await add_message(conn, message)
+        [stored] = await list_messages(conn, t.id)
+        assert (stored.text, stored.is_media, stored.attachments) == ("deu isso", False, sent)
+        seen = (Attachment("image", PHOTO, "seen", "Tela de login com erro de senha."), Attachment("audio"))
+        await set_message_attachments(conn, stored.id, seen)
+        [stored] = await list_messages(conn, t.id)
+    assert stored.attachments == seen
+
+
+async def test_reads_a_message_without_attachments_and_tolerates_odd_stored_ones(h: Harness) -> None:
+    t = await new_triage_ticket(h)
+    async with h.begin() as conn:
+        await add_message(conn, NewMessage(ticket_id=t.id, author="customer", text="oi", at=h.now))
+        await add_message(conn, NewMessage(ticket_id=t.id, author="customer", text="[mídia]", at=h.now))
+        odd = [{"kind": "sticker"}, {"kind": "image", "url": 3, "outcome": "odd", "description": 5}, "x"]
+        await conn.execute(triage_message.update().where(triage_message.c.text == "[mídia]").values(attachments=odd))
+        plain, stored = await list_messages(conn, t.id)
+    assert plain.attachments == ()
+    assert stored.attachments == (Attachment("file"), Attachment("image"))
 
 
 async def test_finds_only_open_tickets_of_a_conversation(h: Harness) -> None:

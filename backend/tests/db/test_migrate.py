@@ -87,6 +87,7 @@ async def test_applies_pending_migrations_once_and_seeds_system_categories(scrat
         "0003_outbox.sql",
         "0004_faq_knowledge_base.sql",
         "0005_outbox_source_message.sql",
+        "0006_message_attachments.sql",
     ]
     assert await migrate(scratch_engine) == []
     async with scratch_engine.connect() as conn:
@@ -129,10 +130,14 @@ async def test_marks_what_existing_tickets_already_answered(scratch_engine: Asyn
         "0003_outbox.sql",
         "0004_faq_knowledge_base.sql",
         "0005_outbox_source_message.sql",
+        "0006_message_attachments.sql",
     ]
     async with scratch_engine.connect() as conn:
         rows = (await conn.exec_driver_sql("SELECT id, last_consumed_message_id FROM ticket ORDER BY id")).all()
+        attachments = (await conn.exec_driver_sql("SELECT DISTINCT attachments::text FROM triage_message")).all()
     assert [tuple(r) for r in rows] == [(1, 1), (2, None)]
+    # Messages stored before attachments were kept have none.
+    assert [tuple(r) for r in attachments] == [("[]",)]
 
 
 async def test_adds_the_faq_knowledge_base_and_the_question_counter_with_empty_defaults(engine: AsyncEngine) -> None:

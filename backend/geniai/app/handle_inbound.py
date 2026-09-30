@@ -93,6 +93,7 @@ async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: Inco
     is opened for the team, with no reply, no ticket and no turn. An open ticket keeps its flow.
     """
     now = deps.now()
+    # A caption is the message's text; a message with attachments and no text keeps the "[mídia]" text.
     is_media = msg.has_media and msg.text.strip() == ""
     text = MEDIA_PLACEHOLDER if is_media else msg.text.strip()
 
@@ -104,6 +105,7 @@ async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: Inco
             is_media=is_media,
             chatwoot_message_id=msg.message_id,
             at=now,
+            attachments=msg.attachments,
         )
 
     outcome: InboundOutcome

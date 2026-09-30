@@ -1,6 +1,7 @@
 """Mirror of geniai/db/migrations/*.sql. The SQL files are the source of truth for DDL."""
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB
 
 from geniai.domain.types import COLUMNS, HANDOFF_REASONS
 
@@ -122,6 +123,7 @@ triage_message = sa.Table(
     sa.Column("is_media", sa.Boolean, nullable=False, server_default=sa.false()),
     sa.Column("at", _tz(), nullable=False, server_default=sa.func.now()),
     sa.Column("chatwoot_message_id", sa.Integer, unique=True),
+    sa.Column("attachments", JSONB, nullable=False, server_default=sa.text("'[]'::jsonb")),
 )
 
 outbox_kind_enum = sa.Enum("message", "status", name="outbox_kind", create_type=False)

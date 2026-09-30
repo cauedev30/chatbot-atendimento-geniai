@@ -28,6 +28,7 @@ from geniai.app.process_turn import run_turn
 from geniai.app.silence_sweeper import resume_pending_turns, start_sweeper
 from geniai.app.turn_scheduler import DebouncedScheduler, TurnScheduler
 from geniai.chatwoot.http import create_chatwoot_http
+from geniai.chatwoot.media import create_chatwoot_media
 from geniai.config import AppConfig, load_config
 from geniai.db.engine import create_engine
 from geniai.db.migrate import migrate
@@ -63,6 +64,13 @@ def _lifespan(state: AppState) -> Callable[[FastAPI], AbstractAsyncContextManage
             now=lambda: datetime.now(UTC),
             log=log,
             bot_only_phones=config.bot_only_phones,
+            media=create_chatwoot_media(
+                config.chatwoot,
+                max_bytes=config.rules.max_image_bytes,
+                timeout_ms=config.rules.image_download_timeout_ms,
+            )
+            if config.llm_reads_images
+            else None,
         )
 
         async def turn(conversation_id: int) -> None:

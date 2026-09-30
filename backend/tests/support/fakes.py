@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from geniai.app.ports import ChatwootStatus, LlmRequest
+from geniai.app.ports import ChatwootStatus, FetchFailure, ImageData, LlmRequest
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,18 @@ class FakeChatwoot:
 
     def conversation_url(self, conversation_id: int) -> str:
         return f"https://chatwoot.example/app/accounts/1/conversations/{conversation_id}"
+
+
+class FakeMedia:
+    """Serves the images put in `images` by link; any other link fails as Chatwoot would with a 404."""
+
+    def __init__(self) -> None:
+        self.images: dict[str, ImageData | FetchFailure] = {}
+        self.fetched: list[str] = []
+
+    async def fetch_image(self, url: str) -> ImageData | FetchFailure:
+        self.fetched.append(url)
+        return self.images.get(url, FetchFailure("status"))
 
 
 class ScriptedLlm:

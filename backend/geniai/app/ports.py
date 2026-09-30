@@ -10,10 +10,21 @@ from geniai.domain.rules import TriageRules
 
 
 @dataclass(frozen=True)
+class ImageData:
+    """An image in memory, never written to disk or to the database."""
+
+    data: bytes
+    content_type: str
+    """image/jpeg, image/png or image/webp."""
+
+
+@dataclass(frozen=True)
 class LlmRequest:
     system: str
     user: str
     timeout_ms: int
+    images: tuple[ImageData, ...] = ()
+    """Sent with the user message, in the order of the "[imagem N]" labels of its text."""
 
 
 class LlmPort(Protocol):
@@ -31,6 +42,25 @@ class ChatwootPort(Protocol):
     async def set_status(self, conversation_id: int, status: ChatwootStatus) -> None: ...
 
     def conversation_url(self, conversation_id: int) -> str: ...
+
+
+FetchFailureReason = Literal["host", "redirects", "status", "type", "size", "empty", "timeout", "error"]
+
+
+@dataclass(frozen=True)
+class FetchFailure:
+    """Why an image was not downloaded, for the log: never the link nor the bytes."""
+
+    reason: FetchFailureReason
+    content_type: str | None = None
+    size: int | None = None
+    """Bytes, when known."""
+
+
+class MediaFetcher(Protocol):
+    """Downloads a customer's image from Chatwoot for the turn. Never raises: a failure is a result."""
+
+    async def fetch_image(self, url: str) -> ImageData | FetchFailure: ...
 
 
 class Logger(Protocol):
@@ -54,3 +84,5 @@ class Deps:
     outbox: Outbox = field(default_factory=Outbox)
     bot_only_phones: frozenset[str] = frozenset()
     """Test mode (BOT_ONLY_PHONES): when not empty, the only phones the bot serves; see domain/audience.py."""
+    media: MediaFetcher | None = None
+    """Downloads customer images for the LLM; None when image reading is off (LLM_READS_IMAGES=false)."""

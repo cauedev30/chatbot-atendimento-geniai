@@ -17,7 +17,7 @@ from geniai.db.engine import create_engine
 from geniai.db.fixtures import SeedResult, seed_fictitious
 from geniai.db.migrate import migrate
 from geniai.domain.rules import DEFAULT_RULES
-from tests.support.fakes import FakeChatwoot, RecordingLogger, ScriptedLlm
+from tests.support.fakes import FakeChatwoot, FakeMedia, RecordingLogger, ScriptedLlm
 
 RESET_SQL = (
     "TRUNCATE outbox, ticket_move, triage_message, ticket, faq_item, attendant, unit, team_member "
@@ -80,6 +80,8 @@ class Harness:
     chatwoot: FakeChatwoot = field(default_factory=FakeChatwoot)
     llm: ScriptedLlm = field(default_factory=ScriptedLlm)
     logger: RecordingLogger = field(default_factory=RecordingLogger)
+    media: FakeMedia = field(default_factory=FakeMedia)
+    """Chatwoot's images; the bot reads them only after reads_images() (LLM_READS_IMAGES is off by default)."""
     deps: Deps = field(init=False)
 
     def __post_init__(self) -> None:
@@ -95,6 +97,9 @@ class Harness:
     async def settle(self) -> None:
         """Sends the pending outbox rows, as the worker would."""
         await deliver_pending(self.deps)
+
+    def reads_images(self) -> None:
+        self.deps.media = self.media
 
     def advance(self, ms: int) -> None:
         self.now = self.now + timedelta(milliseconds=ms)

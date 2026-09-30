@@ -12,6 +12,7 @@ from geniai.domain.types import (
     ResolvedByBot,
     SendFaq,
     TriageState,
+    UnreadMedia,
 )
 
 
@@ -19,17 +20,19 @@ from geniai.domain.types import (
 class PreLlmSignals:
     keyword_human_request: bool
     """Result of mentions_human_request() on the turn's text."""
-    only_media: bool
-    """The turn has only media (audio, image, document) and no text."""
+    nothing_legible: bool
+    """The turn has attachments and nothing the LLM can read: no text and no image that opened."""
+    unread: UnreadMedia = "media"
+    """With nothing_legible: what the bot could not read, which picks the reply."""
 
 
 def pre_llm_decision(state: TriageState, signals: PreLlmSignals, rules: TriageRules) -> Decision | None:
     """Rules decided in code before calling the LLM. None means: call the LLM."""
     if signals.keyword_human_request:
         return Handoff("human_requested")
-    if signals.only_media:
+    if signals.nothing_legible:
         # OWNER-UNCONFIRMED: media asks for text max_media_prompts times, then hands over.
-        return AskForText() if state.media_prompts < rules.max_media_prompts else Handoff("media")
+        return AskForText(signals.unread) if state.media_prompts < rules.max_media_prompts else Handoff("media")
     return None
 
 

@@ -47,28 +47,34 @@ def turn(**overrides: Any) -> InterpretedTurn:
 
 
 def test_hands_over_on_a_human_request_keyword_even_with_media() -> None:
-    signals = PreLlmSignals(keyword_human_request=True, only_media=True)
+    signals = PreLlmSignals(keyword_human_request=True, nothing_legible=True)
     assert pre_llm_decision(state(), signals, DEFAULT_RULES) == Handoff("human_requested")
 
 
 def test_asks_for_text_on_the_first_media_only_turn() -> None:
-    signals = PreLlmSignals(keyword_human_request=False, only_media=True)
+    signals = PreLlmSignals(keyword_human_request=False, nothing_legible=True)
     assert pre_llm_decision(state(), signals, DEFAULT_RULES) == AskForText()
 
 
+def test_asks_for_text_naming_what_the_bot_could_not_read() -> None:
+    for unread in ("media", "image", "other"):
+        signals = PreLlmSignals(keyword_human_request=False, nothing_legible=True, unread=unread)
+        assert pre_llm_decision(state(), signals, DEFAULT_RULES) == AskForText(unread)
+
+
 def test_hands_over_on_media_after_the_media_prompt_was_used() -> None:
-    signals = PreLlmSignals(keyword_human_request=False, only_media=True)
+    signals = PreLlmSignals(keyword_human_request=False, nothing_legible=True)
     assert pre_llm_decision(state(media_prompts=1), signals, DEFAULT_RULES) == Handoff("media")
 
 
 def test_returns_none_when_the_llm_must_be_called() -> None:
-    signals = PreLlmSignals(keyword_human_request=False, only_media=False)
+    signals = PreLlmSignals(keyword_human_request=False, nothing_legible=False)
     assert pre_llm_decision(state(), signals, DEFAULT_RULES) is None
 
 
 def test_follows_max_media_prompts() -> None:
     rules = replace(DEFAULT_RULES, max_media_prompts=0)
-    signals = PreLlmSignals(keyword_human_request=False, only_media=True)
+    signals = PreLlmSignals(keyword_human_request=False, nothing_legible=True)
     assert pre_llm_decision(state(), signals, rules) == Handoff("media")
 
 

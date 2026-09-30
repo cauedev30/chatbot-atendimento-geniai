@@ -30,3 +30,13 @@ def test_customer_texts_are_exactly_the_approved_wording() -> None:
         "Ainda não consigo ouvir áudios nem abrir imagens ou arquivos. Pode escrever o problema em texto, por favor?"
     )
     assert TEXT.clarify_fallback == "Pode me contar um pouco mais sobre o problema?"
+    assert TEXT.ask_for_text_image == "Não consegui abrir a imagem. Pode escrever o problema em texto, por favor?"
+    assert TEXT.ask_for_text_other == (
+        "Ainda não consigo ouvir áudios nem abrir vídeos ou arquivos. Pode escrever o problema em texto, por favor?"
+    )
+
+
+def test_the_request_for_text_names_what_the_bot_could_not_read() -> None:
+    assert TEXT.ask_for_text_for("media") == TEXT.ask_for_text
+    assert TEXT.ask_for_text_for("image") == TEXT.ask_for_text_image
+    assert TEXT.ask_for_text_for("other") == TEXT.ask_for_text_other

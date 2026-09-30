@@ -123,9 +123,15 @@ class ResolvedByBot:
     kind: ClassVar[Literal["resolved_by_bot"]] = "resolved_by_bot"
 
 
+UnreadMedia = Literal["media", "image", "other"]
+"""What a turn with nothing legible had: "media" when image reading is off (any attachment), "image" when
+only images that did not open, "other" when an audio, a video or a file."""
+
+
 @dataclass(frozen=True)
 class AskForText:
     kind: ClassVar[Literal["ask_for_text"]] = "ask_for_text"
+    unread: UnreadMedia = "media"
 
 
 @dataclass(frozen=True)

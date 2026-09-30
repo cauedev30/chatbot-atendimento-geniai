@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Final
 
+from geniai.domain.types import UnreadMedia
+
 
 @dataclass(frozen=True)
 class _Texts:
@@ -14,7 +16,17 @@ class _Texts:
     ask_for_text: str = (
         "Ainda não consigo ouvir áudios nem abrir imagens ou arquivos. Pode escrever o problema em texto, por favor?"
     )
+    """Image reading off (LLM_READS_IMAGES=false)."""
+    ask_for_text_image: str = "Não consegui abrir a imagem. Pode escrever o problema em texto, por favor?"
+    """OWNER-UNCONFIRMED wording: only images, none of which opened."""
+    ask_for_text_other: str = (
+        "Ainda não consigo ouvir áudios nem abrir vídeos ou arquivos. Pode escrever o problema em texto, por favor?"
+    )
+    """OWNER-UNCONFIRMED wording: an audio, a video or a file, with image reading on."""
     clarify_fallback: str = "Pode me contar um pouco mais sobre o problema?"
+
+    def ask_for_text_for(self, unread: UnreadMedia) -> str:
+        return {"media": self.ask_for_text, "image": self.ask_for_text_image, "other": self.ask_for_text_other}[unread]
 
     @staticmethod
     def greeting(name: str, unit: str) -> str:

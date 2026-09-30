@@ -3,6 +3,15 @@ from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from geniai.app.attachments import (
+    TurnImages,
+    is_legible,
+    may_be_legible,
+    message_text,
+    read_images,
+    unread_media,
+    with_outcomes,
+)
 from geniai.app.handle_inbound import acknowledge_unidentified, open_ticket_for
 from geniai.app.keyed_queue import KeyedQueue, turn_key
 from geniai.app.notify import enqueue_message, enqueue_status, enqueue_status_after_move
@@ -22,6 +31,7 @@ from geniai.app.tickets_repo import (
     list_messages,
     move_messages,
     move_ticket,
+    set_message_attachments,
     update_ticket,
 )
 from geniai.app.turn_scheduler import TurnScheduler
@@ -66,7 +76,7 @@ def _state_of(t: TicketRow) -> TriageState:
 
 
 async def build_turn_context(
-    deps: Deps, conn: AsyncConnection, t: TicketRow, messages: list[MessageRow]
+    deps: Deps, conn: AsyncConnection, t: TicketRow, messages: list[MessageRow], images: TurnImages
 ) -> TurnContext:
     if t.attendant_id is None:
         raise ValueError(f"ticket {t.id} has no attendant")
@@ -91,12 +101,15 @@ async def build_turn_context(
             PromptFaqItem(id=f.id, category_id=f.category_id, title=f.title, applies_when=f.applies_when)
             for f in faq_items
         ],
-        messages=[PromptMessage(author=m.author, text=m.text) for m in messages if m.id not in new_ids],
-        new_messages=[PromptMessage(author=m.author, text=m.text) for m in new],
+        messages=[
+            PromptMessage(author=m.author, text=message_text(m, images)) for m in messages if m.id not in new_ids
+        ],
+        new_messages=[PromptMessage(author=m.author, text=message_text(m, images)) for m in new],
         state=_state_of(t),
         max_clarifications=deps.rules.max_clarifications,
         sent_faq=sent_faq,
         max_faq_questions=deps.rules.max_faq_questions,
+        images=images.images,
     )
 
 
@@ -130,7 +143,7 @@ async def _carry_late_messages(deps: Deps, conn: AsyncConnection, t: TicketRow, 
     if not late:
         return
     now = deps.now()
-    first_text = next((m.text for m in late if not m.is_media), late[0].text)
+    first_text = next((m.text for m in late if not m.is_media), message_text(late[0]))
     opened = await open_ticket_for(conn, t.chatwoot_conversation_id, t.phone_e164, first_text, now)
     await move_messages(conn, [m.id for m in late], opened.ticket_id)
     if opened.identified:
@@ -144,10 +157,11 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
     """Processes the pending customer messages of a conversation as one turn (spec §5.1 steps 3-10).
     Reads, then decides (the LLM runs outside any open transaction), then writes the state with the
     bot message stored first, then sends (spec §10). Returns None when there was nothing to do or the
-    decision no longer applied (see _claim).
+    decision no longer applied (see _claim). Images are downloaded outside any transaction too, and only
+    when the LLM may be called (see app/attachments.py).
     """
-    ctx: TurnContext | None = None
     decision: Decision | None = None
+    greeting: str | None = None
     async with deps.engine.connect() as conn:
         t = await find_open_ticket(conn, conversation_id)
         if t is None or t.column != "in_triage":
@@ -169,15 +183,12 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
                     raise ValueError(f"ticket {t.id} has no attendant")
                 who = await get_attendant_with_unit(conn, t.attendant_id)
                 greeting = TEXT.greeting(who.name, who.unit_name)
-        else:
-            state = _state_of(t)
-            only_media = all(m.is_media for m in pending)
-            decision = pre_llm_decision(state, PreLlmSignals(keyword_human_request, only_media), deps.rules)
-            if decision is None:
-                ctx = await build_turn_context(deps, conn, t, messages)
+        elif keyword_human_request:
+            # Before any download: a request for a person needs nothing from the images.
+            decision = pre_llm_decision(_state_of(t), PreLlmSignals(True, nothing_legible=False), deps.rules)
         await conn.rollback()
 
-    if decision is None and ctx is None:
+    if greeting is not None:
         async with deps.engine.begin() as conn:
             if not await _claim(conn, t, consumed_id):
                 return None
@@ -189,13 +200,23 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
     if decision is not None:
         return await _apply(deps, t, messages, consumed_id, decision, None)
 
-    assert ctx is not None
+    images = await read_images(deps, t.id, messages) if may_be_legible(pending) else TurnImages()
+    if not is_legible(pending, images):
+        signals = PreLlmSignals(False, nothing_legible=True, unread=unread_media(pending, deps.media is not None))
+        decision = pre_llm_decision(_state_of(t), signals, deps.rules)
+        assert decision is not None
+        return await _apply(deps, t, messages, consumed_id, decision, None)
+
+    async with deps.engine.connect() as conn:
+        ctx = await build_turn_context(deps, conn, t, messages, images)
+        await conn.rollback()
     result = await interpret_turn(deps.llm, ctx, deps.rules)
     if not result.ok or result.turn is None:
         deps.log.warn({"ticketId": t.id, "error": result.error}, "LLM failed; handing over")
         return await _apply(deps, t, messages, consumed_id, Handoff("llm_failure"), None)
     turn = result.turn
-    return await _apply(deps, t, messages, consumed_id, decide_turn(_state_of(t), turn, deps.rules), turn)
+    decision = decide_turn(_state_of(t), turn, deps.rules)
+    return await _apply(deps, t, messages, consumed_id, decision, turn, images)
 
 
 @dataclass(frozen=True)
@@ -231,9 +252,9 @@ async def _write_decision(
         case ReaskFeedback():
             await update_ticket(conn, t.id, {"unclear_feedback_reasks": t.unclear_feedback_reasks + 1})
             return _Written("reask_feedback", TEXT.reask_feedback, None, None)
-        case AskForText():
+        case AskForText(unread=unread):
             await update_ticket(conn, t.id, {"media_prompts": t.media_prompts + 1})
-            return _Written("ask_for_text", TEXT.ask_for_text, None, None)
+            return _Written("ask_for_text", TEXT.ask_for_text_for(unread), None, None)
         case ResolvedByBot():
             moved = await move_ticket(conn, t.id, "resolved_by_bot", "bot", now)
             return _Written("resolved_by_bot", TEXT.resolved_thanks, (moved.from_, "resolved_by_bot"), None)
@@ -252,16 +273,22 @@ async def _apply(
     consumed_id: int,
     decision: Decision,
     turn: InterpretedTurn | None,
+    images: TurnImages | None = None,
 ) -> TurnOutcome | None:
+    """With the LLM's turn, records what it saw of the turn's images."""
     async with deps.engine.begin() as conn:
         if not await _claim(conn, t, consumed_id):
             return None
         if turn is not None:
+            read = {m.id: m for m in with_outcomes(messages, images, turn.image_descriptions)} if images else {}
+            for m in read.values():
+                await set_message_attachments(conn, m.id, m.attachments)
             summary = turn.summary
             if turn.faq_feedback == "question" and isinstance(decision, Handoff):
-                # The team gets the question the bot did not answer, in the customer's words.
+                # The team gets the question the bot did not answer, in the customer's words; an image by
+                # what the LLM saw in it.
                 pending = pending_customer_messages(messages, t.last_consumed_message_id)
-                question = " / ".join(m.text for m in pending if not m.is_media)
+                question = " / ".join(message_text(read.get(m.id, m)) for m in pending)
                 summary = with_unanswered_question(summary, question)
             patch: dict[str, object] = {
                 "summary": summary,
@@ -288,8 +315,9 @@ async def _fill_missing_summary(deps: Deps, t: TicketRow, messages: list[Message
     after the customer was already answered; on failure fall back to the customer's own words.
     """
     if reason != "llm_failure":
+        images = await read_images(deps, t.id, messages)
         async with deps.engine.connect() as conn:
-            ctx = await build_turn_context(deps, conn, t, messages)
+            ctx = await build_turn_context(deps, conn, t, messages, images)
             await conn.rollback()
         result = await interpret_turn(deps.llm, ctx, deps.rules)
         if result.ok and result.turn is not None:
@@ -301,7 +329,7 @@ async def _fill_missing_summary(deps: Deps, t: TicketRow, messages: list[Message
                 }
                 await update_ticket(conn, t.id, patch)
             return
-    words = " / ".join(m.text for m in messages if m.author == "customer")
+    words = " / ".join(message_text(m) for m in messages if m.author == "customer")
     async with deps.engine.begin() as conn:
         other = await get_category_id_by_key(conn, "other")
         await update_ticket(conn, t.id, {"summary": truncate(words, 280), "category_id": other})

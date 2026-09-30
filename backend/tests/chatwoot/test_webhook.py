@@ -1,6 +1,7 @@
 from typing import Any
 
 from geniai.chatwoot.webhook import ConversationResolved, Ignored, IncomingMessage, parse_chatwoot_event
+from geniai.domain.types import Attachment
 
 INCOMING: dict[str, Any] = {
     "event": "message_created",
@@ -20,7 +21,6 @@ def test_reads_an_incoming_text_message() -> None:
         conversation_id=45,
         phone="+5511900000001",
         text="meu número caiu",
-        has_media=False,
         conversation_status="pending",
     )
 
@@ -65,10 +65,54 @@ def test_accepts_the_numeric_incoming_message_type() -> None:
     assert isinstance(parse_chatwoot_event(INCOMING | {"message_type": 0}), IncomingMessage)
 
 
+def attachment(file_type: object, name: str = "foto.jpg", **fields: object) -> dict[str, object]:
+    """An attachment in the documented Chatwoot shape, on an invented host."""
+    return {
+        "id": 77,
+        "message_id": 901,
+        "file_type": file_type,
+        "account_id": 1,
+        "extension": None,
+        "data_url": f"https://chatwoot.example/rails/active_storage/blobs/redirect/abc123/{name}",
+        "thumb_url": f"https://chatwoot.example/rails/active_storage/representations/redirect/abc123/{name}",
+        "file_size": 48213,
+        **fields,
+    }
+
+
 def test_flags_media_without_text() -> None:
-    event = parse_chatwoot_event(INCOMING | {"content": None, "attachments": [{"file_type": "audio"}]})
+    event = parse_chatwoot_event(INCOMING | {"content": None, "attachments": [attachment("audio", "audio.ogg")]})
     assert isinstance(event, IncomingMessage)
     assert (event.text, event.has_media) == ("", True)
+    assert event.attachments == (
+        Attachment("audio", "https://chatwoot.example/rails/active_storage/blobs/redirect/abc123/audio.ogg"),
+    )
+
+
+def test_reads_each_attachment_with_its_kind_and_link_next_to_the_caption() -> None:
+    files = [attachment("image"), attachment("video", "v.mp4"), attachment("file", "nota.pdf")]
+    event = parse_chatwoot_event(INCOMING | {"content": "deu esse erro", "attachments": files})
+    assert isinstance(event, IncomingMessage)
+    assert event.text == "deu esse erro"
+    assert [(a.kind, a.url) for a in event.attachments] == [
+        ("image", "https://chatwoot.example/rails/active_storage/blobs/redirect/abc123/foto.jpg"),
+        ("video", "https://chatwoot.example/rails/active_storage/blobs/redirect/abc123/v.mp4"),
+        ("file", "https://chatwoot.example/rails/active_storage/blobs/redirect/abc123/nota.pdf"),
+    ]
+
+
+def test_an_unknown_or_missing_file_type_is_a_file_and_the_link_may_be_missing() -> None:
+    files = [attachment("location"), attachment(None), {"id": 78}, attachment("image", data_url=None)]
+    event = parse_chatwoot_event(INCOMING | {"content": "", "attachments": files})
+    assert isinstance(event, IncomingMessage)
+    assert [a.kind for a in event.attachments] == ["file", "file", "file", "image"]
+    assert (event.attachments[2].url, event.attachments[3].url) == (None, None)
+
+
+def test_a_malformed_attachment_link_is_dropped_not_the_message() -> None:
+    event = parse_chatwoot_event(INCOMING | {"attachments": [attachment(3, data_url=42)]})
+    assert isinstance(event, IncomingMessage)
+    assert event.attachments == (Attachment("file", None),)
 
 
 def test_ignores_outgoing_messages_and_private_notes() -> None:

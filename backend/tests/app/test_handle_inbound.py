@@ -11,6 +11,7 @@ from geniai.app.turn_scheduler import RecordingScheduler
 from geniai.chatwoot.webhook import IncomingMessage
 from geniai.db.schema import ticket, triage_message
 from geniai.domain.texts import MEDIA_PLACEHOLDER, TEXT
+from geniai.domain.types import Attachment
 from tests.conftest import Harness
 from tests.support.fakes import Sent, StatusSet
 
@@ -31,7 +32,6 @@ def inbound(h: Harness, **overrides: Any) -> IncomingMessage:
         "conversation_id": 50,
         "phone": h.seed.attendants["ana"].phone,
         "text": "oi",
-        "has_media": False,
         "conversation_status": None,
     }
     return IncomingMessage(**(fields | overrides))
@@ -144,7 +144,7 @@ async def test_attaches_follow_up_messages_to_the_triage_ticket_and_restarts_the
 
 
 async def test_stores_media_without_text_as_a_media_message(h: Harness, scheduler: RecordingScheduler) -> None:
-    await handle_inbound_message(h.deps, scheduler, inbound(h, text="", has_media=True))
+    await handle_inbound_message(h.deps, scheduler, inbound(h, text="", attachments=(Attachment("audio"),)))
     async with h.begin() as conn:
         [m] = (await conn.execute(select(triage_message))).all()
     assert (m.is_media, m.text) == (True, MEDIA_PLACEHOLDER)

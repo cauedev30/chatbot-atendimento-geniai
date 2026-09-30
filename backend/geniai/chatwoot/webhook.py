@@ -3,6 +3,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, ValidationError, field_validator
 
+from geniai.domain.types import ATTACHMENT_KINDS, Attachment, AttachmentKind
 from geniai.json_types import JsonInt
 
 
@@ -13,12 +14,17 @@ class IncomingMessage:
     conversation_id: int
     phone: str | None
     text: str
-    has_media: bool
+    """The message text, or the caption of its attachments; "" when there is none."""
     conversation_status: str | None
     """Chatwoot conversation status at delivery ("pending" while the bot handles it); None when absent."""
     contact_identifier: str | None = None
     """The contact's identifier in Chatwoot (a WhatsApp connector may put the chat id here, which ends in
     "@g.us" for a group); None when absent."""
+    attachments: tuple[Attachment, ...] = ()
+
+    @property
+    def has_media(self) -> bool:
+        return len(self.attachments) > 0
 
 
 @dataclass(frozen=True)
@@ -52,7 +58,23 @@ class _Conversation(BaseModel):
 
 
 class _Attachment(BaseModel):
-    file_type: StrictStr | None = None
+    """Only what the bot reads of Chatwoot's attachment (id, message_id, file_type, account_id, extension,
+    data_url, thumb_url, file_size). Loose on purpose: an odd attachment must not drop the message."""
+
+    file_type: object = None
+    data_url: object = None
+
+
+def attachment_of(raw: _Attachment) -> Attachment:
+    """The one place that maps a Chatwoot attachment: `file_type` image, audio or video is that kind,
+    anything else (or nothing) is a file; the link is `data_url`. The real payload of the WhatsApp
+    connector is still to be checked with a photo."""
+    kind: AttachmentKind = "file"
+    for known in ATTACHMENT_KINDS:
+        if raw.file_type == known:
+            kind = known
+    url = raw.data_url if isinstance(raw.data_url, str) and raw.data_url != "" else None
+    return Attachment(kind, url)
 
 
 class _MessageCreated(BaseModel):
@@ -101,8 +123,8 @@ def parse_chatwoot_event(body: object) -> ChatwootEvent:
         if m.private is True:
             return Ignored("private note")
         text = (m.content or "").strip()
-        has_media = len(m.attachments or []) > 0
-        if text == "" and not has_media:
+        attachments = tuple(attachment_of(a) for a in m.attachments or [])
+        if text == "" and not attachments:
             return Ignored("empty message")
         meta_sender = m.conversation.meta.sender if m.conversation.meta else None
         phone = m.sender.phone_number if m.sender else None
@@ -116,9 +138,9 @@ def parse_chatwoot_event(body: object) -> ChatwootEvent:
             conversation_id=m.conversation.id,
             phone=phone,
             text=text,
-            has_media=has_media,
             conversation_status=m.conversation.status,
             contact_identifier=identifier,
+            attachments=attachments,
         )
 
     try:

@@ -45,6 +45,26 @@ MessageAuthor = Literal["customer", "bot"]
 FaqFeedback = Literal["resolved", "not_resolved", "question", "unclear"]
 
 
+AttachmentKind = Literal["image", "audio", "video", "file"]
+ATTACHMENT_KINDS: Final[tuple[AttachmentKind, ...]] = get_args(AttachmentKind)
+
+ImageOutcome = Literal["seen", "failed", "over_limit"]
+"""What became of an image once an LLM turn read its message: the LLM saw it, it did not open, or it was
+past the per-turn limit. None until then."""
+IMAGE_OUTCOMES: Final[tuple[ImageOutcome, ...]] = get_args(ImageOutcome)
+
+
+@dataclass(frozen=True)
+class Attachment:
+    """A file sent with a customer message. `url` is Chatwoot's link to it, when there is one."""
+
+    kind: AttachmentKind
+    url: str | None = None
+    outcome: ImageOutcome | None = None
+    description: str | None = None
+    """With outcome "seen": the LLM's short description of the image, shown in later turns instead of it."""
+
+
 @dataclass(frozen=True)
 class InterpretedTurn:
     """The LLM output (spec §6) after validation, in code naming."""

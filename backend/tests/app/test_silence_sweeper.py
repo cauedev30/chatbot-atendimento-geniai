@@ -24,7 +24,6 @@ async def open_triage(h: Harness, conversation_id: int) -> TicketRow:
         conversation_id=conversation_id,
         phone=h.seed.attendants["ana"].phone,
         text="oi",
-        has_media=False,
         conversation_status=None,
     )
     await handle_inbound_message(h.deps, RecordingScheduler(), msg)

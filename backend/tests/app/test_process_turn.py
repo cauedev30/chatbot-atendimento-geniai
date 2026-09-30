@@ -17,7 +17,7 @@ from geniai.chatwoot.webhook import IncomingMessage
 from geniai.db.fixtures import FICTITIOUS
 from geniai.db.schema import attendant, ticket
 from geniai.domain.texts import TEXT
-from geniai.domain.types import MessageAuthor
+from geniai.domain.types import Attachment, MessageAuthor
 from tests.conftest import START, Harness
 from tests.support.fakes import StatusSet, texts, turn_json
 
@@ -32,20 +32,20 @@ class Chat:
         self.h = h
         self.scheduler = RecordingScheduler()
 
-    async def receive(self, conversation_id: int, text: str, has_media: bool = False) -> None:
+    async def receive(self, conversation_id: int, text: str, *attachments: Attachment) -> None:
         msg = IncomingMessage(
             message_id=next(_message_ids),
             conversation_id=conversation_id,
             phone=self.h.seed.attendants["ana"].phone,
             text=text,
-            has_media=has_media,
             conversation_status=None,
+            attachments=attachments,
         )
         await handle_inbound_message(self.h.deps, self.scheduler, msg)
         await self.h.settle()
 
-    async def customer(self, conversation_id: int, text: str, has_media: bool = False) -> TurnOutcome | None:
-        await self.receive(conversation_id, text, has_media)
+    async def customer(self, conversation_id: int, text: str, *attachments: Attachment) -> TurnOutcome | None:
+        await self.receive(conversation_id, text, *attachments)
         outcome = await process_turn(self.h.deps, conversation_id)
         await self.h.settle()
         return outcome
@@ -224,11 +224,11 @@ async def test_hands_over_with_llm_failure_when_the_llm_fails_twice(h: Harness, 
 
 async def test_asks_for_text_on_media_then_hands_over_on_media_again(h: Harness, chat: Chat) -> None:
     conversation_id = await chat.greeted()
-    assert await chat.customer(conversation_id, "", True) == "ask_for_text"
+    assert await chat.customer(conversation_id, "", Attachment("audio")) == "ask_for_text"
     assert chat.last_sent() == TEXT.ask_for_text
     assert h.llm.requests == []
     # The handoff then asks the LLM for a summary; with nothing scripted it falls back to the messages.
-    assert await chat.customer(conversation_id, "", True) == "handoff"
+    assert await chat.customer(conversation_id, "", Attachment("audio")) == "handoff"
     t = await chat.ticket_of(conversation_id)
     assert (t.handoff_reason, t.media_prompts) == ("media", 1)
 

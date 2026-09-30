@@ -252,3 +252,16 @@ def test_the_faq_file_in_the_repository_is_valid() -> None:
         assert all(line.startswith("- ") for line in item.knowledge_base.splitlines()), item.title
     empty = [i.title for i in faq.items if i.knowledge_base == ""]
     assert empty == ["Áudio sem som no Chat", "Chat trava, cai ou não atualiza"]
+
+
+def test_the_number_quality_item_says_a_number_back_to_high_can_dispatch_again() -> None:
+    faq = read_faq_file(FAQ_FILE)
+    item = next(i for i in faq.items if i.title == "A qualidade do número caiu")
+    assert "-> Se estiver média: esperar mais um pouco para voltar para alta." in item.answer_text
+    assert "Voltou para alta, já pode voltar a disparar normalmente, mesmo antes desse prazo." in item.answer_text
+    lines = item.knowledge_base.splitlines()
+    assert len(lines) == 7
+    assert lines[0] == "- O índice de qualidade é atualizado a cada 6 horas."
+    assert lines[2].startswith('- Qualidade baixa ("Low"): parar todos os disparos')
+    assert lines[3].startswith("- Qualidade média: esperar mais um pouco para voltar para alta.")
+    assert not any("24 a 48 horas" in line for line in lines)

@@ -79,7 +79,7 @@ Every attachment reached the bot. Never say or suggest that an attachment did no
 When state.faq_attempted is true, the bot already sent the customer one FAQ entry, and the input has "sent_faq": that entry's title, the instructions it sent ("answer_text") and its "knowledge_base". They are the only source for answering questions about the instructions.
 
 Return exactly this JSON object and nothing else:
-{{"human_requested": boolean, "registration_mismatch": boolean, "off_topic": boolean, "category_id": number, "faq_item_id": number | null, "faq_feedback": "resolved" | "not_resolved" | "question" | "unclear" | null, "faq_answer_found": boolean, "needs_clarification": boolean, "summary": string, "reply": string, "image_descriptions": [string]}}
+{{"human_requested": boolean, "registration_mismatch": boolean, "off_topic": boolean, "category_id": number, "faq_item_id": number | null, "faq_feedback": "resolved" | "not_resolved" | "question" | "unclear" | null, "faq_answer_found": boolean, "needs_clarification": boolean, "summary": string, "reply": string, "handoff_reply": string, "image_descriptions": [string]}}
 
 Field rules:
 - human_requested: true if the customer asks, in any wording, to talk to a person, an attendant, a human or the support team, or refuses to talk to a bot.
@@ -92,6 +92,7 @@ Field rules:
 - needs_clarification: true if the problem is still too vague to summarize for a support person.
 - summary: one or two sentences in Brazilian Portuguese for the support team, describing the problem so far, including what the images showed.
 - reply: a short message in Brazilian Portuguese to the customer. If needs_clarification is true, it is one clarifying question. If faq_item_id is not null, it is a single sentence introducing the instructions; never write the instructions or any procedure yourself. If faq_feedback is "question" and faq_answer_found is true, it is the answer, written only from sent_faq.answer_text, sent_faq.knowledge_base and the conversation, in the tone of the support team: short sentences, straight to the point, no emoji; do not ask whether it solved the problem, the bot asks that. If faq_answer_found is false, reply is empty. Never invent anything, never use general knowledge, never ask for or send a password. Otherwise it may be empty.
+- handoff_reply: fill it only when your reading hands the customer over to the support team: human_requested, registration_mismatch or off_topic is true; or faq_feedback is "not_resolved" or "unclear"; or faq_feedback is "question" and faq_answer_found is false; or faq_feedback is null, faq_item_id is null and needs_clarification is false. Then it is one short sentence in Brazilian Portuguese, fitting the conversation, saying the support team takes it from here in this same chat, such as "Para um atendimento mais preciso, vou te encaminhar para a equipe de suporte". It does not answer the question, asks nothing and promises no time. In every other case it is empty.
 - image_descriptions: one short description in Brazilian Portuguese of each image attached to this request, in order ("{label.image_sent(1)}" first): what it shows that matters for support, such as the system, the screen and any error message. An empty list when no image is attached."""  # noqa: E501
 
 

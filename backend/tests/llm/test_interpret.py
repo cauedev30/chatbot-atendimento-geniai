@@ -152,6 +152,16 @@ def test_the_prompt_limits_answers_to_questions_to_the_entry_sent() -> None:
     assert "password" in SYSTEM_PROMPT
 
 
+def test_the_prompt_asks_for_a_handoff_sentence_only_when_its_reading_hands_over() -> None:
+    assert '"handoff_reply": string' in SYSTEM_PROMPT
+    rule = next(line for line in SYSTEM_PROMPT.splitlines() if line.startswith("- handoff_reply:"))
+    for condition in ("human_requested", '"not_resolved"', '"unclear"', "faq_answer_found is false", "faq_item_id"):
+        assert condition in rule
+    assert "Para um atendimento mais preciso, vou te encaminhar para a equipe de suporte" in rule
+    assert "promises no time" in rule
+    assert "every other case it is empty" in rule
+
+
 async def test_sends_the_images_of_the_turn_and_says_how_many_there_are() -> None:
     llm = ScriptedLlm()
     llm.push(turn_json(category_id=1, image_descriptions=["Tela de login com erro."]))

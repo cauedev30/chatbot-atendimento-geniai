@@ -95,7 +95,9 @@ class Harness:
         )
 
     async def settle(self) -> None:
-        """Sends the pending outbox rows, as the worker would."""
+        """Waits for the card summaries in the background, then sends the pending outbox rows, as the
+        worker would."""
+        await self.deps.summaries.settle()
         await deliver_pending(self.deps)
 
     def reads_images(self) -> None:

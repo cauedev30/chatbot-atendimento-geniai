@@ -1,3 +1,4 @@
+import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import Literal
@@ -348,30 +349,57 @@ async def _apply(
     timing.log(deps, t.id, written.kind)
     summary = turn.summary if turn is not None else t.summary
     if written.handoff_reason is not None and summary == "":
-        await _fill_missing_summary(deps, t, messages, written.handoff_reason)
+        # Its own task: the turn ends here, and the summary waits for the LLM to be free.
+        deps.summaries.start(_fill_missing_summary(deps, t, messages, written.handoff_reason))
     return written.kind
 
 
 async def _fill_missing_summary(deps: Deps, t: TicketRow, messages: list[MessageRow], reason: HandoffReason) -> None:
-    """A handoff before any LLM result leaves the card without a summary. Try the LLM once more for it,
-    after the customer was already answered; on failure fall back to the customer's own words.
+    """A handoff before any LLM result leaves the card without a summary. After the customer was
+    answered, and apart from the turn, it asks the LLM once more, once the LLM is free (see
+    app/card_summaries.py), within summary_deadline_ms counting that wait. Past the deadline, or when the
+    LLM fails, the card gets the customer's own words under "other". Logs `card summary` without the
+    content nor the phone.
     """
-    if reason != "llm_failure":
-        images = await read_images(deps, t.id, messages)
-        async with deps.engine.connect() as conn:
-            ctx = await build_turn_context(deps, conn, t, messages, images)
-            await conn.rollback()
-        result = await interpret_turn(deps.llm, ctx, deps.rules)
-        if result.ok and result.turn is not None:
-            async with deps.engine.begin() as conn:
+    started = time.perf_counter()
+    try:
+        wait_started: float | None = None
+        waited_ms: int | None = None
+        result: InterpretResult | None = None
+        if reason != "llm_failure":
+            try:
+                async with asyncio.timeout(deps.rules.summary_deadline_ms / 1000):
+                    images = await read_images(deps, t.id, messages)
+                    async with deps.engine.connect() as conn:
+                        ctx = await build_turn_context(deps, conn, t, messages, images)
+                        await conn.rollback()
+                    wait_started = time.perf_counter()
+                    async with deps.summaries.llm_turn():
+                        waited_ms = _ms_since(wait_started)
+                        result = await interpret_turn(deps.llm, ctx, deps.rules)
+            except TimeoutError:
+                if waited_ms is None and wait_started is not None:
+                    waited_ms = _ms_since(wait_started)
+        found = result.turn if result is not None and result.ok else None
+        async with deps.engine.begin() as conn:
+            if found is not None:
                 patch: dict[str, object] = {
-                    "summary": result.turn.summary,
-                    "category_id": result.turn.category_id,
-                    "bot_category_id": result.turn.category_id,
+                    "summary": found.summary,
+                    "category_id": found.category_id,
+                    "bot_category_id": found.category_id,
                 }
-                await update_ticket(conn, t.id, patch)
-            return
-    words = " / ".join(message_text(m) for m in messages if m.author == "customer")
-    async with deps.engine.begin() as conn:
-        other = await get_category_id_by_key(conn, "other")
-        await update_ticket(conn, t.id, {"summary": truncate(words, 280), "category_id": other})
+            else:
+                words = " / ".join(message_text(m) for m in messages if m.author == "customer")
+                other = await get_category_id_by_key(conn, "other")
+                patch = {"summary": truncate(words, 280), "category_id": other}
+            await update_ticket(conn, t.id, patch)
+        line: dict[str, object] = {
+            "ticketId": t.id,
+            "waitedMs": waited_ms or 0,
+            "llmMs": list(result.attempts_ms) if result is not None else [],
+            "llmOutcomes": list(result.outcomes) if result is not None else [],
+            "fallback": found is None,
+        }
+        deps.log.info(line, "card summary")
+    except Exception as err:  # reported, never raised into the event loop
+        deps.log.error({"err": err, "ticketId": t.id, "ms": _ms_since(started)}, "card summary failed")

@@ -5,6 +5,7 @@ from typing import Literal, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from geniai.app.card_summaries import CardSummaries
 from geniai.app.outbox import Outbox
 from geniai.domain.rules import TriageRules
 
@@ -82,6 +83,8 @@ class Deps:
     now: Callable[[], datetime]
     log: Logger
     outbox: Outbox = field(default_factory=Outbox)
+    summaries: CardSummaries = field(default_factory=CardSummaries)
+    """The card summaries written in the background, once the LLM is free (see app/card_summaries.py)."""
     bot_only_phones: frozenset[str] = frozenset()
     """Test mode (BOT_ONLY_PHONES): when not empty, the only phones the bot serves; see domain/audience.py."""
     media: MediaFetcher | None = None

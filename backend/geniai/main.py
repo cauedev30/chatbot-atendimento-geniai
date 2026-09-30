@@ -89,7 +89,8 @@ def _lifespan(state: AppState) -> Callable[[FastAPI], AbstractAsyncContextManage
 
 @asynccontextmanager
 async def _running(state: AppState, deps: Deps) -> AsyncIterator[None]:
-    """The bot's background work: turns under the queue, the outbox and the silence sweeper."""
+    """The bot's background work: turns under the queue, the card summaries (which wait until the
+    scheduler says the LLM is free), the outbox and the silence sweeper."""
     log = deps.log
 
     async def turn(conversation_id: int) -> None:
@@ -99,6 +100,7 @@ async def _running(state: AppState, deps: Deps) -> AsyncIterator[None]:
         log.error({"err": err, "conversationId": conversation_id}, "turn processing failed")
 
     scheduler = DebouncedScheduler(state.config.rules.burst_window_ms, turn, on_error)
+    deps.summaries.llm_free = scheduler.wait_idle
     state.deps, state.scheduler = deps, scheduler
     resumed = await resume_pending_turns(deps, scheduler)
     if resumed:
@@ -112,6 +114,8 @@ async def _running(state: AppState, deps: Deps) -> AsyncIterator[None]:
     finally:
         sweeper.cancel()
         await scheduler.stop()
+        # After the turns, which may start one; a summary still waiting or running is dropped.
+        await deps.summaries.stop()
         await outbox_worker.stop()
 
 

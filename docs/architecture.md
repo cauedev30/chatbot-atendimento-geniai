@@ -211,7 +211,7 @@ For each turn the first rule that applies wins (`domain/triage.py`):
 Before the LLM: a keyword request for a person hands over; a turn with nothing legible (only
 attachments, and no image that opened) gets one "please type it" reply, then hands over. If the LLM fails twice, the ticket is handed over (`llm_failure`). A
 handoff that happens before any LLM result gets its summary from one more LLM call after the
-customer was answered, or from the customer's own words.
+customer was answered, or from the customer's own words (see "Card summary" under Error handling).
 
 The code decides every handoff; the sentence the customer gets depends on who read the turn. When the
 LLM's own reading points to a handoff (a request for a person, a registration mismatch, off-topic, FAQ
@@ -282,6 +282,15 @@ by default.
 - **LLM:** 5 s timeout in a turn with text only and 8 s in a turn with images, one retry, then the
   ticket goes to a person (`llm_failure`) and the customer is told the team will take over. The LLM output is validated: an unknown category rejects
   it, an unknown FAQ id becomes none, extra fields are dropped.
+- **Card summary** (`app/card_summaries.py`): the summary of a handoff decided before any LLM result
+  (a keyword, media, an LLM failure) runs as its own task once the turn has queued its reply: it holds
+  neither the conversation's turn lane nor a place among the running turns, and stopping the app
+  cancels it. It calls the LLM only when the LLM is free, which the burst scheduler knows: no
+  conversation in its burst window and no turn running (`DebouncedScheduler.wait_idle`); summaries go
+  one at a time. A customer's turn never waits for a summary, and the burst window (4 to 5 s) lets a
+  summary that started just before a message (1.5 to 3 s) finish first. The whole summary, wait
+  included, has 30 s (`summary_deadline_ms`); past it, or when the LLM fails (and at once after
+  `llm_failure`), the card gets the customer's words (up to 280 characters) in the `other` category.
 - **Chatwoot:** the ticket and the bot's message are stored before any send. A call is repeated (twice,
   with a growing delay) only when it surely was not processed: a connection failure or a 502, 503 or
   504 answer. A read timeout (30 s) or any other answer ends it at once, because repeating a POST that
@@ -299,8 +308,10 @@ by default.
 - **Logs:** one JSON line per event on stdout; errors keep their message and stack. Each turn whose
   reply reaches the outbox logs `turn timing`: the wait from the last customer message to the turn,
   the image downloads, each LLM attempt with how it ended, and the time until the reply was queued.
-  Each Chatwoot call logs its own time (`Chatwoot call sent`, with the conversation id). Neither line
-  has the text, the phone or a link.
+  Each Chatwoot call logs its own time (`Chatwoot call sent`, with the conversation id). Each card
+  summary logs `card summary`: the ticket id, the wait for the LLM to be free (`waitedMs`), each LLM
+  attempt with how it ended (`llmMs`, `llmOutcomes`) and whether the customer's words went instead
+  (`fallback`). None of these lines has the text, the phone or a link.
 
 ## Security
 

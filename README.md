@@ -161,7 +161,8 @@ burst timers, are kept in memory. The service logs each request as a JSON line w
 masked; uvicorn's own access log is off because it would print the token. If you start uvicorn
 yourself (`uvicorn geniai.main:create_app --factory`), pass `--no-access-log` and no `--workers`.
 Tunable conversation rules (burst window, silence timeout, re-ask counts, how many questions about
-the FAQ entry are answered (`max_faq_questions`, 3), whether "take" asks who) live in
+the FAQ entry are answered (`max_faq_questions`, 3), whether "take" asks who, the card summary's
+30 s deadline) live in
 `backend/geniai/domain/rules.py`; the ones marked `OWNER-UNCONFIRMED` still await the owner's
 confirmation.
 

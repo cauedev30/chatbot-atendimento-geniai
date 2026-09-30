@@ -30,6 +30,7 @@ def test_loads_a_valid_environment_with_defaults() -> None:
     assert config.enable_api_docs is False
     assert config.trusted_proxies == (ip_network("127.0.0.1/32"), ip_network("::1/128"))
     assert config.bot_only_phones == frozenset()
+    assert config.llm_reads_images is False
 
 
 def test_reads_the_test_mode_phones_normalized_like_the_contact_phone() -> None:
@@ -56,6 +57,7 @@ def test_applies_overrides() -> None:
             "LLM_EXTRA_BODY_JSON": '{"thinking":{"type":"disabled"}}',
             "ENABLE_API_DOCS": "true",
             "TRUSTED_PROXY_IPS": "10.0.0.5, 172.17.0.0/16",
+            "LLM_READS_IMAGES": "true",
         }
     )
     assert config.port == 8080
@@ -65,6 +67,7 @@ def test_applies_overrides() -> None:
     assert config.llm.extra_body == {"thinking": {"type": "disabled"}}
     assert config.enable_api_docs is True
     assert config.trusted_proxies == (ip_network("10.0.0.5/32"), ip_network("172.17.0.0/16"))
+    assert config.llm_reads_images is True
 
 
 def test_treats_empty_strings_as_missing_and_names_missing_variables_without_their_values() -> None:
@@ -98,6 +101,7 @@ def test_rejects_a_short_cookie_secret() -> None:
         ("LLM_EXTRA_BODY_JSON", '{"x": {"y": -Infinity}}'),
         ("TRUSTED_PROXY_IPS", "10.0.0.300"),
         ("TRUSTED_PROXY_IPS", "proxy.local"),
+        ("LLM_READS_IMAGES", "yes"),
     ],
 )
 def test_names_an_invalid_variable_and_never_its_value(name: str, value: str) -> None:
@@ -105,3 +109,8 @@ def test_names_an_invalid_variable_and_never_its_value(name: str, value: str) ->
         load_config(VALID | {name: value})
     assert name in str(err.value)
     assert value not in str(err.value)
+
+
+def test_image_reading_limits_are_the_owner_unconfirmed_defaults() -> None:
+    assert (DEFAULT_RULES.max_images_per_turn, DEFAULT_RULES.max_image_bytes) == (4, 5 * 1024 * 1024)
+    assert DEFAULT_RULES.image_download_timeout_ms == 15_000

@@ -27,6 +27,12 @@ class TriageRules:
     llm_timeout_ms: int
     """Spec §10: LLM timeout (~8 s) and one retry."""
     llm_retries: int
+    max_images_per_turn: int
+    """OWNER-UNCONFIRMED: images the LLM reads in one turn, the most recent ones; older ones are only named."""
+    max_image_bytes: int
+    """OWNER-UNCONFIRMED: largest image the bot downloads; a bigger one is treated as one that did not open."""
+    image_download_timeout_ms: int
+    """Time limit of one image download from Chatwoot."""
 
 
 DEFAULT_RULES = TriageRules(
@@ -40,4 +46,7 @@ DEFAULT_RULES = TriageRules(
     max_faq_questions=3,
     llm_timeout_ms=8_000,
     llm_retries=1,
+    max_images_per_turn=4,
+    max_image_bytes=5 * 1024 * 1024,
+    image_download_timeout_ms=15_000,
 )

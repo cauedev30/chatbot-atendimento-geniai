@@ -52,6 +52,7 @@ class _Env(BaseModel):
     ENABLE_API_DOCS: Literal["true", "false"] = "false"
     TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
     BOT_ONLY_PHONES: str | None = None
+    LLM_READS_IMAGES: Literal["true", "false"] = "false"
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,8 @@ class AppConfig:
     """Peers whose X-Forwarded-For is believed: the frontend that proxies /api (see api/login_limit.py)."""
     bot_only_phones: frozenset[str] = frozenset()
     """Test mode: when not empty, the bot serves only these phones (E.164); see domain/audience.py."""
+    llm_reads_images: bool = False
+    """Customer images are downloaded from Chatwoot and sent to the LLM with the turn. Off by default."""
 
 
 def _reject_non_finite(constant: str) -> object:
@@ -144,4 +147,5 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
         enable_api_docs=e.ENABLE_API_DOCS == "true",
         trusted_proxies=trusted_proxies,
         bot_only_phones=bot_only_phones,
+        llm_reads_images=e.LLM_READS_IMAGES == "true",
     )

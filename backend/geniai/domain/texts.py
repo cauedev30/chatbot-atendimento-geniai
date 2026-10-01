@@ -30,9 +30,18 @@ class _Texts:
 
     @staticmethod
     def greeting(name: str, unit: str) -> str:
+        """The first messages are only a greeting (domain/greeting.py): the bot asks for the problem."""
         return (
             f"Olá! Aqui é o suporte da GeniAI. Falo com {name}, da unidade {unit}? "
             "Se for isso mesmo, me conta qual é o problema."
+        )
+
+    @staticmethod
+    def greeting_with_content(name: str, unit: str) -> str:
+        """The first messages already said something (domain/greeting.py): the bot uses it once confirmed."""
+        return (
+            f"Olá! Aqui é o suporte da GeniAI. Falo com {name}, da unidade {unit}? "
+            "Se for isso mesmo, é só confirmar que eu já vejo o que você mandou."
         )
 
 

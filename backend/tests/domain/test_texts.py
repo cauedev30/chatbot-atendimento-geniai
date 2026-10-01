@@ -21,6 +21,10 @@ def test_customer_texts_are_exactly_the_approved_wording() -> None:
     assert TEXT.greeting("N", "U") == (
         "Olá! Aqui é o suporte da GeniAI. Falo com N, da unidade U? Se for isso mesmo, me conta qual é o problema."
     )
+    assert TEXT.greeting_with_content("N", "U") == (
+        "Olá! Aqui é o suporte da GeniAI. Falo com N, da unidade U? "
+        "Se for isso mesmo, é só confirmar que eu já vejo o que você mandou."
+    )
     assert TEXT.unidentified_ack == "Recebemos sua mensagem! A equipe de suporte vai te responder por aqui."
     assert TEXT.handoff == "Certo! Passei sua conversa para a nossa equipe, que vai te responder por aqui."
     assert TEXT.faq_follow_up == "Isso resolveu o seu problema? Responda sim ou não."

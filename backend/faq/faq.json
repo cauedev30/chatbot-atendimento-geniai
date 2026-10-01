@@ -106,7 +106,7 @@
     {
       "category": "access",
       "title": "Não consigo entrar na plataforma",
-      "applies_when": "erro de login, página de login não abre.",
+      "applies_when": "erro de login, página de login não abre. Não se aplica a senha esquecida ou senha inválida: isso vai para humano.",
       "answer_text": "Confira o endereço de cada plataforma:\n-> Chat GeniAI: https://appchatfvk.geniai.online/app/login\n-> Disparador GeniAI: https://app.geniai.online/login\n\nUse pelo computador (pelo celular a tela não funciona bem) e recarregue com Ctrl + Shift + R. Se a senha estiver dando inválida, eu passo para a equipe verificar o seu acesso.",
       "knowledge_base": "- O login do Chat e o do Disparador são separados e as senhas podem ser diferentes.\n- Se ninguém da unidade consegue entrar ou enviar mensagem, pode ser acesso pausado por mensalidade em atraso. Isso é com o financeiro, então passa para humano.\n- O bot nunca envia senha, nem pede senha."
     },

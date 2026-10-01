@@ -265,3 +265,12 @@ def test_the_number_quality_item_says_a_number_back_to_high_can_dispatch_again()
     assert lines[2].startswith('- Qualidade baixa ("Low"): parar todos os disparos')
     assert lines[3].startswith("- Qualidade média: esperar mais um pouco para voltar para alta.")
     assert not any("24 a 48 horas" in line for line in lines)
+
+
+def test_a_forgotten_or_invalid_password_is_not_the_login_item_and_goes_to_a_person() -> None:
+    faq = read_faq_file(FAQ_FILE)
+    item = next(i for i in faq.items if i.title == "Não consigo entrar na plataforma")
+    assert item.applies_when == (
+        "erro de login, página de login não abre. "
+        "Não se aplica a senha esquecida ou senha inválida: isso vai para humano."
+    )

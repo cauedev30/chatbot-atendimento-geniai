@@ -1,6 +1,7 @@
 """Whether the first messages of a ticket are only a greeting (spec §5.1 step 3). The greeting then asks
 for the problem; otherwise the customer already said something, and it only asks to confirm who they are.
-Words are compared in lowercase without accents, punctuation or emoji.
+Words are compared in lowercase without accents, punctuation or emoji, and a letter repeated in a row
+counts as one ("oii", "bom diaa").
 """
 
 import re
@@ -15,6 +16,8 @@ GREETING_WORDS: Final[frozenset[str]] = frozenset(
         "ola",
         "opa",
         "eai",
+        "eae",
+        "iae",
         "e",
         "ai",
         "alo",
@@ -40,12 +43,21 @@ GREETING_WORDS: Final[frozenset[str]] = frozenset(
 
 # Anything but a lowercase ASCII letter or digit (punctuation, emoji, spaces) separates words.
 _SEPARATORS: Final = re.compile(r"[^a-z0-9]+")
+_REPEATED: Final = re.compile(r"(.)\1+")
+
+
+def _squeeze(word: str) -> str:
+    return _REPEATED.sub(r"\1", word)
+
+
+# The list squeezed the same way as the words it is compared with ("hello" -> "helo").
+_SQUEEZED_GREETING_WORDS: Final[frozenset[str]] = frozenset(_squeeze(w) for w in GREETING_WORDS)
 
 
 def _words(text: str) -> list[str]:
     decomposed = unicodedata.normalize("NFD", text)
     plain = "".join(ch for ch in decomposed if not unicodedata.category(ch).startswith("M")).lower()
-    return [w for w in _SEPARATORS.split(plain) if w]
+    return [_squeeze(w) for w in _SEPARATORS.split(plain) if w]
 
 
 def is_bare_greeting(texts: Sequence[str], *, has_media: bool) -> bool:
@@ -53,4 +65,4 @@ def is_bare_greeting(texts: Sequence[str], *, has_media: bool) -> bool:
     video or a file is content."""
     if has_media:
         return False
-    return all(word in GREETING_WORDS for text in texts for word in _words(text))
+    return all(word in _SQUEEZED_GREETING_WORDS for text in texts for word in _words(text))

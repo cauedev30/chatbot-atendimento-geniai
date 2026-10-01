@@ -37,3 +37,21 @@ def test_a_photo_an_audio_or_a_file_is_content_even_with_a_greeting_caption() ->
     assert is_bare_greeting([], has_media=True) is False
     assert is_bare_greeting([""], has_media=True) is False
     assert is_bare_greeting(["oi"], has_media=True) is False
+
+
+@pytest.mark.parametrize(
+    "texts",
+    [["oii"], ["oiee"], ["olaaa"], ["bom diaaa"], ["boaa tarde"], ["Oiii!!"], ["Helloo"]],
+)
+def test_a_repeated_letter_counts_as_one(texts: list[str]) -> None:
+    assert is_bare_greeting(texts, has_media=False) is True
+
+
+@pytest.mark.parametrize("texts", [["eae"], ["Iae, tudo bem?"], ["e aí"], ["opa"], ["eaee"]])
+def test_slang_greetings_are_only_a_greeting(texts: list[str]) -> None:
+    assert is_bare_greeting(texts, has_media=False) is True
+
+
+@pytest.mark.parametrize("texts", [["oii, não consigo entrar"], ["bom diaa, deu erro no disparo"]])
+def test_a_repeated_letter_greeting_with_more_has_content(texts: list[str]) -> None:
+    assert is_bare_greeting(texts, has_media=False) is False

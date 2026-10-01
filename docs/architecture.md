@@ -31,7 +31,8 @@ flowchart LR
 
 - `domain/` holds pure rules with no I/O: the ticket columns and the moves each actor may make
   (`transitions.py`), the turn precedence (`triage.py`), the 24 h silence rule (`silence.py`), phone
-  normalization (`phone.py`), which conversations the bot serves (`audience.py`), the human-request keyword check (`human_request.py`), the fixed customer
+  normalization (`phone.py`), which conversations the bot serves (`audience.py`), the human-request keyword check (`human_request.py`), whether the first
+  messages are only a greeting (`greeting.py`), the fixed customer
   texts in Portuguese (`texts.py`), the labels that name attachments for the LLM (`attachments.py`)
   and every tunable in one place (`rules.py`).
 - `app/` holds the use cases. They depend on **ports** (`app/ports.py`): `LlmPort`, `ChatwootPort`,
@@ -109,7 +110,9 @@ sequenceDiagram
 3. **Turn** (`process_turn.py`). The pending customer messages (those after the last one a turn has
    read, `ticket.last_consumed_message_id`) form one turn. A message stored while a turn is running
    stays pending for the next turn. The first turn gets the greeting, written by code, unless it already asks for a
-   person. Later turns are decided in code first (keyword request for a person, a turn with nothing
+   person. The greeting asks the customer to confirm the registered name and unit; it also asks for the
+   problem only when the first messages are just a greeting (`domain/greeting.py`). Otherwise they stay
+   in the conversation the LLM reads, and the turn that confirms takes the problem from them. Later turns are decided in code first (keyword request for a person, a turn with nothing
    legible), then by the LLM through the precedence rules; images and other attachments are
    described below. Once the FAQ entry was sent, the LLM also gets that entry's text
    and knowledge base (`sent_faq`); a question about it is answered from them, up to

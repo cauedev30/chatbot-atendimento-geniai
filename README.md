@@ -23,7 +23,8 @@ each problem.
   mobile digit). An unknown number goes straight to a person and never gets the FAQ.
 - Never answers a group, nor a contact without a phone number: those conversations go to the team at
   once, silently. A test mode (`BOT_ONLY_PHONES`) limits the bot to a list of phones.
-- Greets the attendant by registered name and unit and asks for the problem.
+- Greets the attendant by registered name and unit and asks for the problem; when the first message
+  already describes it, only asks to confirm who they are and then uses that message.
 - Groups a burst of short messages into one turn (about 5 s of silence).
 - Sends at most one FAQ entry, verbatim as the team wrote it; the LLM only writes the framing
   sentence. Then asks whether it solved the problem.

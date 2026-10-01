@@ -104,8 +104,12 @@ flowchart LR
      "Unidentified" and handoff reason `unidentified`. The bot replies with a fixed acknowledgement
      only ("recebemos sua mensagem, a equipe de suporte vai te responder por aqui"). No FAQ is ever offered.
    - **Known number:** a ticket is created in the hidden state **in triage**.
-3. **Greeting (code, not the LLM).** It uses the registered name and unit, asks the customer to
-   confirm them and to describe the problem.
+3. **Greeting (code, not the LLM).** It uses the registered name and unit and asks the customer to
+   confirm them. When the first messages are only a greeting ("oi", "bom dia, tudo bem?": every word,
+   in lowercase without accents, punctuation or emoji, is in a short list of greeting words, or there
+   is no text), it also asks for the problem. When they already say something (any other word, or a
+   photo, audio or file), it only asks for the confirmation; the next turn takes the problem from
+   those messages instead of asking for it again.
 4. **Each customer turn** goes to the LLM (§6). Code applies the result using the precedence in §5.3.
 5. **FAQ match:** the bot sends the FAQ entry's **verbatim text**. The LLM writes only the framing
    sentence, never the procedure. Then the bot asks whether it solved the problem.

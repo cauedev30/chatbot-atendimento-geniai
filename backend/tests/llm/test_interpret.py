@@ -234,3 +234,13 @@ async def test_times_each_attempt_and_says_how_it_ended() -> None:
     assert result.outcomes == ("timeout", "error", "invalid", "invalid", "ok")
     assert len(result.attempts_ms) == 5
     assert all(isinstance(ms, int) and ms >= 0 for ms in result.attempts_ms)
+
+
+def test_the_prompt_takes_the_problem_from_the_message_before_the_greeting_when_the_turn_only_confirms() -> None:
+    rule = next(line for line in SYSTEM_PROMPT.splitlines() if "only confirm" in line)
+    assert '"sim", "sou eu"' in rule
+    assert "before the greeting" in rule
+    assert "text or image" in rule
+    for field in ("faq_item_id", "category_id", "summary"):
+        assert field in rule
+    assert "never ask for the problem again" in rule

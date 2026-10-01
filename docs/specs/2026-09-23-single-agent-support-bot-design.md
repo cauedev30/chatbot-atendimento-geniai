@@ -102,7 +102,7 @@ flowchart LR
    including the Brazilian 9th mobile digit, and looked up in the `attendant` table.
    - **Unknown number:** a ticket is created directly in **Awaiting human** with category
      "Unidentified" and handoff reason `unidentified`. The bot replies with a fixed acknowledgement
-     only ("recebemos sua mensagem, a equipe já fala com você"). No FAQ is ever offered.
+     only ("recebemos sua mensagem, a equipe de suporte vai te responder por aqui"). No FAQ is ever offered.
    - **Known number:** a ticket is created in the hidden state **in triage**.
 3. **Greeting (code, not the LLM).** It uses the registered name and unit, asks the customer to
    confirm them and to describe the problem.
@@ -221,8 +221,11 @@ input):
 - `handoff_reply` (optional, default `""`) is the sentence to the customer when the turn hands the
   ticket to the team, written only when the model's own reading points to a handoff (a request for a
   person, a registration mismatch, off-topic, FAQ feedback "not resolved" or unclear, a question whose
-  answer was not found, or no FAQ entry fits and no clarification is needed). It is short, fits the
-  conversation, answers nothing, asks nothing and promises no time. It is read leniently: a value that
+  answer was not found, or no FAQ entry fits and no clarification is needed). It is one or two short
+  sentences that name the customer's subject in their own words and say the conversation went to the
+  support team, which carries on in this chat. It answers nothing, asks nothing, and promises no time,
+  no speed and nothing about what the team will do; the prompt's examples show only the format, so the
+  sentence varies with the subject. It is read leniently: a value that
   is not text, or longer than 300 characters, becomes `""` and never rejects the output. The code still
   decides whether there is a handoff; it uses this sentence only when the model read the turn as one,
   and otherwise (a handoff before the LLM, a limit only the code knows, an empty sentence) sends its

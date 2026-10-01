@@ -216,8 +216,9 @@ customer was answered, or from the customer's own words (see "Card summary" unde
 The code decides every handoff; the sentence the customer gets depends on who read the turn. When the
 LLM's own reading points to a handoff (a request for a person, a registration mismatch, off-topic, FAQ
 feedback "not resolved" or unclear, a question it found no answer for, or no entry fits and nothing is
-left to clarify), the LLM writes it in `handoff_reply`: one short sentence that fits the conversation
-(`domain/triage.py`, `handoff_text`). Otherwise the fixed text of `texts.py` goes: a handoff before
+left to clarify), the LLM writes it in `handoff_reply`: one or two short sentences that name the customer's subject
+and say the support team carries on in this chat, with no promise of speed (`domain/triage.py`,
+`handoff_text`). Otherwise the fixed text of `texts.py` goes: a handoff before
 the LLM (keyword, media, unidentified, LLM failure), a limit only the code knows (the fourth question,
 the third clarification) or an empty sentence.
 

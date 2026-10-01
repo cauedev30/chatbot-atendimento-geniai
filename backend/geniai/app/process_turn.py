@@ -37,6 +37,7 @@ from geniai.app.tickets_repo import (
     update_ticket,
 )
 from geniai.app.turn_scheduler import TurnScheduler
+from geniai.domain.greeting import is_bare_greeting
 from geniai.domain.human_request import mentions_human_request
 from geniai.domain.texts import TEXT, truncate, with_unanswered_question
 from geniai.domain.triage import PreLlmSignals, decide_turn, handoff_text, pre_llm_decision
@@ -214,7 +215,14 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
                 if t.attendant_id is None:
                     raise ValueError(f"ticket {t.id} has no attendant")
                 who = await get_attendant_with_unit(conn, t.attendant_id)
-                greeting = TEXT.greeting(who.name, who.unit_name)
+                # A first message that already says something is kept for the next turn: the greeting
+                # then only asks the customer to confirm who they are.
+                bare = is_bare_greeting(
+                    [m.text for m in pending if not m.is_media],
+                    has_media=any(m.is_media or m.attachments for m in pending),
+                )
+                greet = TEXT.greeting if bare else TEXT.greeting_with_content
+                greeting = greet(who.name, who.unit_name)
         elif keyword_human_request:
             # Before any download: a request for a person needs nothing from the images.
             decision = pre_llm_decision(_state_of(t), PreLlmSignals(True, nothing_legible=False), deps.rules)

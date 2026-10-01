@@ -204,6 +204,7 @@ async def test_an_image_sent_before_the_greeting_is_read_in_the_next_turn(h: Har
     conversation_id = 900
     image = photo(h)
     assert await chat.customer(conversation_id, "", image) == "greeting"
+    assert chat.last_sent() == TEXT.greeting_with_content("Ana Exemplo", "Unidade Exemplo Centro")
     assert h.media.fetched == []
     h.llm.push(turn_json(category_id=h.seed.categories["login"], image_descriptions=["Erro de senha."]))
     assert await chat.customer(conversation_id, "sim, sou eu") == "handoff"

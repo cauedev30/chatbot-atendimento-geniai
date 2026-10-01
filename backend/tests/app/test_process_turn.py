@@ -111,6 +111,28 @@ async def test_greets_with_the_registered_name_and_unit_without_calling_the_llm(
     assert (await chat.ticket_of(conversation_id)).column == "in_triage"
 
 
+async def test_a_first_message_that_is_only_a_greeting_gets_the_greeting_that_asks_for_the_problem(
+    chat: Chat,
+) -> None:
+    await chat.greeted()
+    assert chat.last_sent() == TEXT.greeting("Ana Exemplo", "Unidade Exemplo Centro")
+
+
+async def test_a_first_message_with_the_problem_is_used_once_the_customer_confirms(h: Harness, chat: Chat) -> None:
+    conversation_id = next(_conversations)
+    assert await chat.customer(conversation_id, "oi, esqueci a senha do painel") == "greeting"
+    assert chat.last_sent() == TEXT.greeting_with_content("Ana Exemplo", "Unidade Exemplo Centro")
+    assert h.llm.requests == []
+
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], faq_item_id=h.seed.faq["password"]))
+    assert await chat.customer(conversation_id, "sim") == "send_faq"
+    payload = json.loads(h.llm.requests[-1].user)
+    assert payload["conversation"][0] == {"author": "customer", "text": "oi, esqueci a senha do painel"}
+    assert payload["new_messages"] == ["sim"]
+    t = await chat.ticket_of(conversation_id)
+    assert (t.faq_attempted, t.faq_item_id) == (True, h.seed.faq["password"])
+
+
 async def test_hands_over_at_once_when_the_first_message_asks_for_a_human_then_fills_the_summary(
     h: Harness, chat: Chat
 ) -> None:

@@ -274,3 +274,22 @@ def test_a_forgotten_or_invalid_password_is_not_the_login_item_and_goes_to_a_per
         "erro de login, página de login não abre. "
         "Não se aplica a senha esquecida ou senha inválida: isso vai para humano."
     )
+
+
+def test_the_failed_dispatch_item_checks_the_report_first_and_tests_on_other_contacts() -> None:
+    faq = read_faq_file(FAQ_FILE)
+    item = next(i for i in faq.items if i.title == "Disparo com falha")
+    assert item.applies_when == "o disparo deu erro, não saiu, ou voltou com muitas falhas."
+    assert item.answer_text == (
+        "Vamos conferir 4 coisas antes:\n"
+        "-> Relatório: abra a campanha no Disparador e veja quantos disparos deram certo.\n"
+        "-> Planilha: colunas telefone, nome, variavel_1 em diante. Telefone só com números, nenhuma célula "
+        "vazia nas variáveis e o valor como número, sem R$ (o R$ já está no template).\n"
+        "-> Limite: perto do número, no Disparador, aparece o contador (ex.: 900/2000). O limite volta 24 "
+        "horas depois de cada disparo, então veja se ainda tem saldo.\n"
+        "-> Teste: crie uma nova campanha, com outro template, e dispare para 50 a 100 contatos que não "
+        "estavam no disparo que falhou. Dando certo, dispare o restante dividido em manhã e tarde.\n"
+        "\n"
+        "Se continuar dando erro, me manda o print do erro, a planilha usada e o nome do template que eu vejo "
+        "com a equipe."
+    )

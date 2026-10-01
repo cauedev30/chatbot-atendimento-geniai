@@ -106,8 +106,9 @@ flowchart LR
    - **Known number:** a ticket is created in the hidden state **in triage**.
 3. **Greeting (code, not the LLM).** It uses the registered name and unit and asks the customer to
    confirm them. When the first messages are only a greeting ("oi", "bom dia, tudo bem?": every word,
-   in lowercase without accents, punctuation or emoji, is in a short list of greeting words, or there
-   is no text), it also asks for the problem. When they already say something (any other word, or a
+   in lowercase without accents, punctuation or emoji and with a letter repeated in a row counted as
+   one, so "oii" and "bom diaa" too, is in a short list of greeting words that includes slang such as
+   "eae" and "iae", or there is no text), it also asks for the problem. When they already say something (any other word, or a
    photo, audio or file), it only asks for the confirmation; the next turn takes the problem from
    those messages instead of asking for it again.
 4. **Each customer turn** goes to the LLM (§6). Code applies the result using the precedence in §5.3.

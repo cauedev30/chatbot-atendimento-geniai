@@ -21,8 +21,8 @@ def test_customer_texts_are_exactly_the_approved_wording() -> None:
     assert TEXT.greeting("N", "U") == (
         "Olá! Aqui é o suporte da GeniAI. Falo com N, da unidade U? Se for isso mesmo, me conta qual é o problema."
     )
-    assert TEXT.unidentified_ack == "Recebemos sua mensagem! A equipe de suporte já fala com você."
-    assert TEXT.handoff == "Certo! Vou passar sua conversa para a nossa equipe, que já fala com você por aqui."
+    assert TEXT.unidentified_ack == "Recebemos sua mensagem! A equipe de suporte vai te responder por aqui."
+    assert TEXT.handoff == "Certo! Passei sua conversa para a nossa equipe, que vai te responder por aqui."
     assert TEXT.faq_follow_up == "Isso resolveu o seu problema? Responda sim ou não."
     assert TEXT.reask_feedback == "Só pra eu confirmar: as instruções resolveram o problema? Responda sim ou não."
     assert TEXT.resolved_thanks == "Que bom que resolveu! Se precisar, é só chamar."
@@ -34,6 +34,13 @@ def test_customer_texts_are_exactly_the_approved_wording() -> None:
     assert TEXT.ask_for_text_other == (
         "Ainda não consigo ouvir áudios nem abrir vídeos ou arquivos. Pode escrever o problema em texto, por favor?"
     )
+
+
+def test_the_fixed_handoff_texts_promise_no_speed() -> None:
+    for text in (TEXT.handoff, TEXT.unidentified_ack):
+        assert "já fala" not in text
+        assert "logo" not in text
+        assert "em instantes" not in text
 
 
 def test_the_request_for_text_names_what_the_bot_could_not_read() -> None:

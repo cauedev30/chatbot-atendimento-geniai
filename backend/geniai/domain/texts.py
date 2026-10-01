@@ -8,8 +8,8 @@ from geniai.domain.types import UnreadMedia
 
 @dataclass(frozen=True)
 class _Texts:
-    unidentified_ack: str = "Recebemos sua mensagem! A equipe de suporte já fala com você."
-    handoff: str = "Certo! Vou passar sua conversa para a nossa equipe, que já fala com você por aqui."
+    unidentified_ack: str = "Recebemos sua mensagem! A equipe de suporte vai te responder por aqui."
+    handoff: str = "Certo! Passei sua conversa para a nossa equipe, que vai te responder por aqui."
     faq_follow_up: str = "Isso resolveu o seu problema? Responda sim ou não."
     reask_feedback: str = "Só pra eu confirmar: as instruções resolveram o problema? Responda sim ou não."
     resolved_thanks: str = "Que bom que resolveu! Se precisar, é só chamar."

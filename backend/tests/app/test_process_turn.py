@@ -23,7 +23,7 @@ from tests.support.fakes import StatusSet, texts, turn_json
 
 _message_ids = itertools.count(1)
 _conversations = itertools.count(100)
-PHRASE = "Para um atendimento mais preciso, vou te encaminhar para a equipe de suporte."
+PHRASE = "Entendi, a senha do painel continua dando inválida. Passei sua conversa para a nossa equipe."
 
 
 class Chat:

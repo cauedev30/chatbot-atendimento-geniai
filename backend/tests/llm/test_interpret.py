@@ -157,9 +157,21 @@ def test_the_prompt_asks_for_a_handoff_sentence_only_when_its_reading_hands_over
     rule = next(line for line in SYSTEM_PROMPT.splitlines() if line.startswith("- handoff_reply:"))
     for condition in ("human_requested", '"not_resolved"', '"unclear"', "faq_answer_found is false", "faq_item_id"):
         assert condition in rule
-    assert "Para um atendimento mais preciso, vou te encaminhar para a equipe de suporte" in rule
-    assert "promises no time" in rule
     assert "every other case it is empty" in rule
+
+
+def test_the_handoff_sentence_names_the_customers_subject_and_promises_no_speed() -> None:
+    rule = next(line for line in SYSTEM_PROMPT.splitlines() if line.startswith("- handoff_reply:"))
+    assert "subject" in rule
+    assert "customer's own words" in rule
+    assert "no time and no speed" in rule
+    for word in ('"já"', '"logo"', '"em instantes"'):
+        assert word in rule
+    assert "what the team will do" in rule
+    assert "Para um atendimento mais preciso" not in SYSTEM_PROMPT
+    assert "Entendi, a senha do Disparador continua dando inválida." in rule
+    assert "Essa dúvida sobre aprovar o template precisa da nossa equipe." in rule
+    assert "never repeat them word for word" in rule
 
 
 async def test_sends_the_images_of_the_turn_and_says_how_many_there_are() -> None:

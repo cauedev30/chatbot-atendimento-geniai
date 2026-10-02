@@ -38,7 +38,7 @@ from geniai.app.tickets_repo import (
     set_message_attachments,
     update_ticket,
 )
-from geniai.app.transcription import transcribe_audios
+from geniai.app.transcription import NO_NOTES, TranscriptNotes, transcribe_audios
 from geniai.app.turn_scheduler import TurnScheduler
 from geniai.domain.greeting import is_bare_greeting
 from geniai.domain.human_request import mentions_human_request
@@ -193,10 +193,9 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
     bot message stored first, then sends (spec §10). Returns None when there was nothing to do or the
     decision no longer applied (see _claim). Images are downloaded outside any transaction too, and only
     when the LLM may be called (see app/attachments.py). Audios are transcribed first, outside any
-    transaction, so what the customer said counts as text for every decision (see app/transcription.py).
+    transaction, so what the customer said counts as text for every decision (see app/transcription.py);
+    their private notes go out while the turn decides, and the reply waits for them.
     """
-    decision: Decision | None = None
-    greeting: str | None = None
     timing = _Timing()
     async with deps.engine.connect() as conn:
         t = await find_open_ticket(conn, conversation_id)
@@ -210,7 +209,20 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
     consumed_id = pending[-1].id
     timing.wait_ms = max(0, round((deps.now() - pending[-1].at).total_seconds() * 1000))
 
-    messages = await transcribe_audios(deps, t, messages)
+    messages, notes = await transcribe_audios(deps, t, messages)
+    try:
+        return await _decide(deps, t, messages, consumed_id, timing, notes)
+    finally:
+        # Waited already when the turn answered; this only covers a turn that failed.
+        await notes.wait()
+
+
+async def _decide(
+    deps: Deps, t: TicketRow, messages: list[MessageRow], consumed_id: int, timing: _Timing, notes: TranscriptNotes
+) -> TurnOutcome | None:
+    """The rest of process_turn, once the audios are transcribed: decides, then writes and sends."""
+    decision: Decision | None = None
+    greeting: str | None = None
     pending = pending_customer_messages(messages, t.last_consumed_message_id)
     words = customer_words(pending)
     keyword_human_request = mentions_human_request("\n".join(words))
@@ -234,17 +246,18 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
         decision = pre_llm_decision(_state_of(t), PreLlmSignals(True, nothing_legible=False), deps.rules)
 
     if greeting is not None:
+        await notes.wait()
         async with deps.engine.begin() as conn:
             if not await _claim(conn, t, consumed_id):
                 return None
             await add_message(conn, NewMessage(ticket_id=t.id, author="bot", text=greeting, at=deps.now()))
-            await enqueue_message(conn, conversation_id, greeting)
+            await enqueue_message(conn, t.chatwoot_conversation_id, greeting)
         deps.outbox.wake()
         timing.log(deps, t.id, "greeting")
         return "greeting"
 
     if decision is not None:
-        return await _apply(deps, t, messages, consumed_id, decision, None, timing)
+        return await _apply(deps, t, messages, consumed_id, decision, None, timing, notes=notes)
 
     images = TurnImages()
     if may_be_legible(pending):
@@ -257,7 +270,7 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
         signals = PreLlmSignals(False, nothing_legible=True, unread=unread)
         decision = pre_llm_decision(_state_of(t), signals, deps.rules)
         assert decision is not None
-        return await _apply(deps, t, messages, consumed_id, decision, None, timing)
+        return await _apply(deps, t, messages, consumed_id, decision, None, timing, notes=notes)
 
     async with deps.engine.connect() as conn:
         ctx = await build_turn_context(deps, conn, t, messages, images)
@@ -266,10 +279,10 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
     timing.llm = result
     if not result.ok or result.turn is None:
         deps.log.warn({"ticketId": t.id, "error": result.error}, "LLM failed; handing over")
-        return await _apply(deps, t, messages, consumed_id, Handoff("llm_failure"), None, timing)
+        return await _apply(deps, t, messages, consumed_id, Handoff("llm_failure"), None, timing, notes=notes)
     turn = result.turn
     decision = decide_turn(_state_of(t), turn, deps.rules)
-    return await _apply(deps, t, messages, consumed_id, decision, turn, timing, images)
+    return await _apply(deps, t, messages, consumed_id, decision, turn, timing, images, notes=notes)
 
 
 @dataclass(frozen=True)
@@ -330,8 +343,12 @@ async def _apply(
     turn: InterpretedTurn | None,
     timing: _Timing,
     images: TurnImages | None = None,
+    *,
+    notes: TranscriptNotes = NO_NOTES,
 ) -> TurnOutcome | None:
-    """With the LLM's turn, records what it saw of the turn's images."""
+    """With the LLM's turn, records what it saw of the turn's images. First waits for the turn's
+    transcription notes, so none comes after the reply in Chatwoot."""
+    await notes.wait()
     async with deps.engine.begin() as conn:
         if not await _claim(conn, t, consumed_id):
             return None

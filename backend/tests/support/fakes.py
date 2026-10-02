@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -25,6 +26,8 @@ class FakeChatwoot:
         self.notes: list[Sent] = []
         self.fail_sends = False
         self.fail_notes = False
+        self.hold_notes: asyncio.Event | None = None
+        """When set, each private note waits for this event before it is posted."""
 
     async def send_message(self, conversation_id: int, text: str) -> None:
         if self.fail_sends:
@@ -32,6 +35,8 @@ class FakeChatwoot:
         self.sent.append(Sent(conversation_id, text))
 
     async def send_private_note(self, conversation_id: int, text: str) -> None:
+        if self.hold_notes is not None:
+            await self.hold_notes.wait()
         if self.fail_sends or self.fail_notes:
             raise RuntimeError("chatwoot unavailable")
         self.notes.append(Sent(conversation_id, text))

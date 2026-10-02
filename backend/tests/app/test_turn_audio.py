@@ -1,11 +1,16 @@
 """Turns with the customer's audios: transcribed at the start of the turn, they count as text for every rule;
 too long, not downloaded or not transcribed, they follow the media rule."""
 
+import asyncio
 import itertools
+from collections.abc import Callable
 
 import pytest
+from sqlalchemy import select
 
 from geniai.app.ports import AudioData, FetchFailure, TranscribeFailure
+from geniai.app.process_turn import process_turn
+from geniai.db.schema import outbox
 from geniai.domain.texts import TEXT
 from geniai.domain.types import Attachment, AttachmentKind, UnreadMedia
 from tests.app.test_process_turn import Chat
@@ -232,6 +237,50 @@ async def test_each_transcription_goes_to_the_team_as_a_private_note(h: Harness,
     await chat.customer(conversation_id, "", voice(h, "o painel não abre"))
     assert h.chatwoot.notes == [Sent(conversation_id, "Transcrição do áudio (bot): o painel não abre")]
     assert all("Transcrição" not in s.text for s in h.chatwoot.sent)
+
+
+async def until(check: Callable[[], object]) -> None:
+    for _ in range(500):
+        if check():
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("still waiting after 5 s")
+
+
+async def queued_messages(h: Harness, conversation_id: int) -> list[str]:
+    async with h.begin() as conn:
+        query = select(outbox.c.payload).where(outbox.c.conversation_id == conversation_id, outbox.c.kind == "message")
+        return list((await conn.execute(query)).scalars())
+
+
+async def test_the_note_goes_out_while_the_llm_reads_the_turn_and_before_the_reply(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.greeted()
+    h.chatwoot.hold_notes = asyncio.Event()
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], needs_clarification=True, reply="Qual erro?"))
+    await chat.receive(conversation_id, "", voice(h, "o painel não abre"))
+    turn = asyncio.create_task(process_turn(h.deps, conversation_id))
+    await until(lambda: h.llm.requests)
+    await asyncio.sleep(0.05)
+    assert (turn.done(), h.chatwoot.notes) == (False, [])
+    assert "Qual erro?" not in await queued_messages(h, conversation_id)
+    h.chatwoot.hold_notes.set()
+    assert await turn == "ask_clarification"
+    await h.settle()
+    assert h.chatwoot.notes == [Sent(conversation_id, "Transcrição do áudio (bot): o painel não abre")]
+    assert chat.last_sent() == "Qual erro?"
+
+
+async def test_the_greeting_waits_for_the_note_of_a_first_audio(h: Harness, chat: Chat) -> None:
+    conversation_id = 703
+    h.chatwoot.hold_notes = asyncio.Event()
+    await chat.receive(conversation_id, "", voice(h, "esqueci a senha do painel"))
+    turn = asyncio.create_task(process_turn(h.deps, conversation_id))
+    await until(lambda: h.transcriber.heard)
+    await asyncio.sleep(0.05)
+    assert (turn.done(), await queued_messages(h, conversation_id)) == (False, [])
+    h.chatwoot.hold_notes.set()
+    assert await turn == "greeting"
+    assert len(h.chatwoot.notes) == 1
 
 
 async def test_a_note_that_fails_does_not_stop_the_turn(h: Harness, chat: Chat) -> None:

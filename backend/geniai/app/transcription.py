@@ -3,12 +3,13 @@ the customer said counts as text for every rule (the greeting, a request for a p
 
 An audio is transcribed once. Its outcome (transcribed with its text, too long, or not transcribed) is kept
 on the attachment right away, and later turns use it. Each transcription also goes to the team as a
-private note in the Chatwoot conversation. What the customer said never goes to the log.
+private note in the Chatwoot conversation, posted while the turn decides (see TranscriptNotes). What the
+customer said never goes to the log.
 """
 
 import asyncio
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from geniai.app.ports import AudioData, AudioTranscription, Deps, FetchFailure, TranscribeFailure
 from geniai.app.tickets_repo import MessageRow, TicketRow, set_message_attachments
@@ -80,14 +81,39 @@ async def _post_note(deps: Deps, t: TicketRow, transcript: str) -> None:
         deps.log.error({"err": err, "ticketId": t.id}, "transcript note failed")
 
 
-async def transcribe_audios(deps: Deps, t: TicketRow, messages: list[MessageRow]) -> list[MessageRow]:
-    """Transcribes, together, the customer audios of the ticket no turn tried yet; keeps each outcome on its
-    attachment and posts each transcription as a private note, in order. Returns the messages with their
-    audios' outcomes. With transcription off, nothing happens and the audios stay as they are."""
+async def _post_notes(deps: Deps, t: TicketRow, transcripts: list[str]) -> None:
+    for transcript in transcripts:
+        await _post_note(deps, t, transcript)
+
+
+@dataclass(frozen=True)
+class TranscriptNotes:
+    """The private notes of the transcriptions a turn just made, posted in order in the background while the
+    turn decides. Before anything reaches the customer, the turn waits for them (wait): in Chatwoot a note
+    comes before the reply, and the turn does not add their time to its own."""
+
+    task: asyncio.Task[None] | None = None
+
+    async def wait(self) -> None:
+        """Returns once every note was posted or failed (and logged); at once when there is none."""
+        if self.task is not None:
+            await self.task
+
+
+NO_NOTES = TranscriptNotes()
+
+
+async def transcribe_audios(
+    deps: Deps, t: TicketRow, messages: list[MessageRow]
+) -> tuple[list[MessageRow], TranscriptNotes]:
+    """Transcribes, together, the customer audios of the ticket no turn tried yet, and keeps each outcome on
+    its attachment. Returns the messages with their audios' outcomes, and the private notes of the
+    transcriptions, already on their way. With transcription off, nothing happens and the audios stay as
+    they are."""
     transcription = deps.transcription
     pending = _untranscribed(messages)
     if transcription is None or not pending:
-        return messages
+        return messages, NO_NOTES
     results = await asyncio.gather(*(_hear(deps, transcription, t.id, a) for _, a in pending))
     outcomes = dict(zip((slot for slot, _ in pending), results, strict=True))
     touched = {message_id for message_id, _ in outcomes}
@@ -101,7 +127,7 @@ async def transcribe_audios(deps: Deps, t: TicketRow, messages: list[MessageRow]
         for m in updated:
             if m.id in touched:
                 await set_message_attachments(conn, m.id, m.attachments)
-    for a in results:
-        if a.transcript is not None:
-            await _post_note(deps, t, a.transcript)
-    return updated
+    transcripts = [a.transcript for a in results if a.transcript is not None]
+    if not transcripts:
+        return updated, NO_NOTES
+    return updated, TranscriptNotes(asyncio.create_task(_post_notes(deps, t, transcripts)))

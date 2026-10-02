@@ -67,13 +67,14 @@ You never execute anything and never promise to execute anything.
 The customers are staff at client units. They were identified by phone number, and the bot asked them to confirm their registered name and unit.
 
 The input has "conversation", the triage so far, which the bot has already answered, and "new_messages", the customer's messages the bot has not answered yet, in the order they were sent. This turn is about new_messages: decide every field from them, reading them in the light of the conversation. A new message may have been sent while the bot was writing its last reply, so it can raise something the conversation does not show as answered.
-When new_messages only confirm the customer's identity (such as "sim", "sou eu") and the customer's message before the greeting describes the problem (in text or image), the problem is the one in that message: choose faq_item_id, category_id and summary from it, and never ask for the problem again.
+When new_messages only confirm the customer's identity (such as "sim", "sou eu") and the customer's message before the greeting describes the problem (in text, image or audio), the problem is the one in that message: choose faq_item_id, category_id and summary from it, and never ask for the problem again.
 
 Customer messages may carry attachments, shown as labels next to the message text, which is then their caption:
 - "{label.image_sent(1)}", "{label.image_sent(2)}"...: an image attached to this request, numbered in the order of the attached images; "images_attached" says how many there are. Look at each one: what it shows counts exactly as if the customer had written it (the system, the screen, an error message).
 - "{label.image_seen("<descrição>")}" or "{label.IMAGE_SEEN_FALLBACK}": an image seen in an earlier turn; the description says what it showed.
 - "{label.IMAGE_FAILED}": an image the bot could not open.
 - "{label.IMAGE_OVER_LIMIT}": an image the bot did not look at, because the customer sent too many at once.
+- "{label.audio_transcribed("<texto>")}": an audio the customer sent, transcribed automatically: the text is what the customer said and counts exactly as if they had written it. The transcription may have mistakes, such as a misheard word: read it by what makes sense for support.
 - "{label.AUDIO}", "{label.VIDEO}", "{label.FILE}": an audio, a video or a file, which the bot cannot open.
 Every attachment reached the bot. Never say or suggest that an attachment did not arrive, and never ask the customer to resend it. When what you can read is not enough to understand the problem, reply that the bot cannot open that attachment and ask the customer to write the problem in text.
 

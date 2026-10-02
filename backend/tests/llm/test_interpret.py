@@ -199,6 +199,7 @@ def test_the_prompt_explains_every_attachment_label_and_forbids_asking_to_resend
         "[imagem vista pelo bot]",
         "[imagem — não foi possível abrir]",
         "[imagem — além do limite, não vista]",
+        '[áudio transcrito: "',
         "[áudio — o bot não ouve]",
         "[vídeo — o bot não abre]",
         "[arquivo — o bot não abre]",
@@ -207,6 +208,13 @@ def test_the_prompt_explains_every_attachment_label_and_forbids_asking_to_resend
     assert "image_descriptions" in SYSTEM_PROMPT
     assert "resend" in SYSTEM_PROMPT
     assert "did not arrive" in SYSTEM_PROMPT
+
+
+def test_the_prompt_takes_a_transcribed_audio_as_what_the_customer_said_with_possible_mistakes() -> None:
+    rule = next(line for line in SYSTEM_PROMPT.splitlines() if line.startswith('- "[áudio transcrito: '))
+    assert "transcribed automatically" in rule
+    assert "as if they had written it" in rule
+    assert "mistakes" in rule
 
 
 def test_a_text_turn_waits_5_s_for_the_llm_and_a_turn_with_images_8_s() -> None:
@@ -240,7 +248,7 @@ def test_the_prompt_takes_the_problem_from_the_message_before_the_greeting_when_
     rule = next(line for line in SYSTEM_PROMPT.splitlines() if "only confirm" in line)
     assert '"sim", "sou eu"' in rule
     assert "before the greeting" in rule
-    assert "text or image" in rule
+    assert "text, image or audio" in rule
     for field in ("faq_item_id", "category_id", "summary"):
         assert field in rule
     assert "never ask for the problem again" in rule

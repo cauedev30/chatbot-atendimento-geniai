@@ -80,7 +80,7 @@ sequenceDiagram
         B->>CW: download each audio (up to 2 min)
         B->>T: transcribe them together
         B->>B: keep each outcome and text on its attachment
-        B->>CW: a private note with each transcription
+        B-->>CW: a private note with each transcription, while the turn goes on
     end
     opt image reading on, the turn may reach the LLM
         B->>CW: download the unread images (at most 4)
@@ -170,9 +170,12 @@ A customer message may carry files: a photo, an audio, a video, a document. Thei
    audio's outcome is kept on its attachment at once: `transcribed` with the text (on one line, at most
    3 000 characters), `too_long` or `failed`; later turns use it and never transcribe it again. Each
    transcription is then posted as a private note in the conversation, `Transcrição do áudio (bot):
-   <text>`, straight through the Chatwoot adapter and its retry rule, not the outbox; a note that fails
-   is logged and the turn goes on. The webhook ignores the note (it is outgoing and private). With
-   transcription off nothing is downloaded and every audio stays as it arrived.
+   <text>`, straight through the Chatwoot adapter and its retry rule, not the outbox. The notes go out
+   in order, in the background, while the turn decides (and calls the LLM); the turn waits for them only
+   before it writes its reply, so a note comes before the reply in Chatwoot without adding its time to
+   the turn. A note that fails is logged and the turn goes on. The webhook ignores the note (it is
+   outgoing and private). With transcription off nothing is downloaded and every audio stays as it
+   arrived.
 4. **Image download in the turn** (`app/attachments.py`, `chatwoot/media.py`), outside any transaction and
    only when the turn may reach the LLM (not for the greeting or a request for a person). The unread
    images of the ticket's customer messages are downloaded, the most recent
@@ -203,7 +206,10 @@ A customer message may carry files: a photo, an audio, a video, a document. Thei
 A turn with nothing legible (no text, no transcribed audio and no image that opened) gets one request
 for text, then a handoff (`media`). The request says what the bot could not read: "Não consegui abrir a imagem" when
 only images failed; audio, video or files when there was one; the general text (audio, images or files) when image
-reading is off. Logs name each image by type, size and failure reason, never by its link or content.
+reading is off. With transcription on, no request says the bot cannot hear audio: when only audios were not
+heard it says "Seu áudio passou de 2 minutos…" (one was too long) or "Não consegui ouvir seu áudio…";
+beside anything else the audio part is left out ("Ainda não consigo abrir vídeos ou arquivos…", or "imagens
+ou arquivos" with image reading off; the image text when only images failed besides). Logs name each image by type, size and failure reason, never by its link or content.
 Each audio logs `audio read` (type, size, seconds) or `audio not read` (the download's failure reason),
 then `audio transcribed` (seconds, time taken) or `audio not transcribed` (reason: `too_long`, `timeout`,
 `status` with the provider's HTTP status, `error` or `empty`), never its link nor what was said.

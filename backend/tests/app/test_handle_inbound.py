@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from geniai.app.handle_inbound import handle_inbound_message, open_ticket_for
+from geniai.app.process_turn import process_turn
 from geniai.app.tickets_repo import TicketRow, get_ticket, list_messages, move_ticket
 from geniai.app.turn_scheduler import RecordingScheduler
 from geniai.chatwoot.webhook import IncomingMessage
@@ -141,6 +142,17 @@ async def test_attaches_follow_up_messages_to_the_triage_ticket_and_restarts_the
     [t] = await tickets_of(h, 50)
     assert t.last_customer_message_at == h.now
     assert scheduler.scheduled == [50, 50]
+
+
+async def test_waits_for_the_burst_window_only_until_the_bot_first_replied(
+    h: Harness, scheduler: RecordingScheduler
+) -> None:
+    await handle_inbound_message(h.deps, scheduler, inbound(h))
+    await handle_inbound_message(h.deps, scheduler, inbound(h, text="bom dia"))
+    assert await process_turn(h.deps, 50) == "greeting"
+    await handle_inbound_message(h.deps, scheduler, inbound(h, text="meu número caiu"))
+    assert scheduler.scheduled == [50, 50, 50]
+    assert scheduler.bot_replied == [False, False, True]
 
 
 async def test_stores_media_without_text_as_a_media_message(h: Harness, scheduler: RecordingScheduler) -> None:

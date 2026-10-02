@@ -283,6 +283,12 @@ async def list_messages(conn: AsyncConnection, ticket_id: int) -> list[MessageRo
     return [_message(row) for row in await conn.execute(query)]
 
 
+async def has_bot_message(conn: AsyncConnection, ticket_id: int) -> bool:
+    """Whether the bot already replied in the ticket: what decides the burst window (turn_scheduler.py)."""
+    query = select(triage_message.c.id).where(triage_message.c.ticket_id == ticket_id, triage_message.c.author == "bot")
+    return (await conn.execute(query.limit(1))).first() is not None
+
+
 async def set_message_attachments(conn: AsyncConnection, message_id: int, attachments: tuple[Attachment, ...]) -> None:
     """Rewrites a message's attachments, to record what a turn did with its images."""
     values = [_attachment_json(a) for a in attachments]

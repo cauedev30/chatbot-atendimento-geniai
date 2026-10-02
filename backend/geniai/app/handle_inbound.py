@@ -15,6 +15,7 @@ from geniai.app.tickets_repo import (
     find_attendant_by_phone,
     find_open_ticket,
     get_category_id_by_key,
+    has_bot_message,
     message_exists,
     update_ticket,
 )
@@ -85,7 +86,8 @@ async def acknowledge_unidentified(conn: AsyncConnection, conversation_id: int, 
 
 async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: IncomingMessage) -> InboundOutcome:
     """Spec §5.1 steps 1, 2 and 8. Runs under the conversation's KeyedQueue key, never behind a turn.
-    The customer turn itself is processed later by process_turn, after the burst window.
+    The customer turn itself is processed later by process_turn: after the burst window until the bot's
+    first reply in the ticket, at once after it (see turn_scheduler.py).
     Database writes and the Chatwoot calls they cause (outbox rows) commit in one transaction; the
     outbox worker sends them afterwards, in the background (spec §10).
     A message with no open ticket in its conversation is first checked against domain/audience.py: a
@@ -110,6 +112,7 @@ async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: Inco
 
     outcome: InboundOutcome
     handed_to_team: NotServedReason | None = None
+    bot_replied = False
     async with deps.engine.begin() as conn:
         if await message_exists(conn, msg.message_id) or await outbox_row_for_message(conn, msg.message_id):
             return "duplicate"
@@ -124,6 +127,8 @@ async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: Inco
             await add_message(conn, customer_message(open_ticket.id))
             await update_ticket(conn, open_ticket.id, {"last_customer_message_at": now})
             outcome = "attached_to_triage" if open_ticket.column == "in_triage" else "attached_to_human"
+            if outcome == "attached_to_triage":
+                bot_replied = await has_bot_message(conn, open_ticket.id)
         elif (reason := not_served_reason(msg.phone, msg.contact_identifier, deps.bot_only_phones)) is not None:
             # Not the bot's: straight to the team, silently. With an Agent Bot on the inbox Chatwoot keeps a
             # new conversation "pending", out of the team's view, until it is opened.
@@ -151,5 +156,5 @@ async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: Inco
         )
     deps.outbox.wake()
     if outcome in ("triage_ticket", "attached_to_triage"):
-        scheduler.schedule(msg.conversation_id)
+        scheduler.schedule(msg.conversation_id, bot_replied=bot_replied)
     return outcome

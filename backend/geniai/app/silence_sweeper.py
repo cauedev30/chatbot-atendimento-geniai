@@ -6,6 +6,7 @@ from geniai.app.process_turn import pending_customer_messages
 from geniai.app.tickets_repo import (
     InvalidMoveError,
     get_ticket,
+    has_bot_message,
     list_messages,
     list_tickets_in_column,
     move_ticket,
@@ -52,7 +53,7 @@ async def resume_pending_turns(deps: Deps, scheduler: TurnScheduler) -> int:
         for t in await list_tickets_in_column(conn, "in_triage"):
             if not pending_customer_messages(await list_messages(conn, t.id), t.last_consumed_message_id):
                 continue
-            scheduler.schedule(t.chatwoot_conversation_id)
+            scheduler.schedule(t.chatwoot_conversation_id, bot_replied=await has_bot_message(conn, t.id))
             count += 1
         await conn.rollback()
     return count

@@ -30,6 +30,7 @@ from geniai.app.tickets_repo import (
     get_category_id_by_key,
     get_faq_item,
     get_ticket,
+    has_bot_message,
     list_active_categories,
     list_active_faq_items,
     list_messages,
@@ -154,7 +155,11 @@ async def run_turn(
     closed the ticket may have opened a new one for messages that arrived during it: its turn is due."""
     outcome = await queue.run(turn_key(conversation_id), lambda: process_turn(deps, conversation_id))
     if outcome == "resolved_by_bot" and scheduler is not None:
-        scheduler.schedule(conversation_id)
+        async with deps.engine.connect() as conn:
+            t = await find_open_ticket(conn, conversation_id)
+            bot_replied = t is not None and await has_bot_message(conn, t.id)
+            await conn.rollback()
+        scheduler.schedule(conversation_id, bot_replied=bot_replied)
     return outcome
 
 

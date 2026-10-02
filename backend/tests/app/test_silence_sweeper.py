@@ -79,6 +79,17 @@ async def test_reschedules_a_message_stored_while_the_last_turn_was_running(h: H
     assert await resume_pending_turns(h.deps, scheduler) == 1
 
 
+async def test_a_resumed_turn_waits_for_the_burst_window_only_until_the_bot_first_replied(h: Harness) -> None:
+    await open_triage(h, 1)
+    t = await open_triage(h, 2)
+    assert await process_turn(h.deps, 2) == "greeting"
+    async with h.begin() as conn:
+        await update_ticket(conn, t.id, {"last_consumed_message_id": 0})
+    scheduler = RecordingScheduler()
+    assert await resume_pending_turns(h.deps, scheduler) == 2
+    assert dict(zip(scheduler.scheduled, scheduler.bot_replied, strict=True)) == {1: False, 2: True}
+
+
 async def eventually(check: Callable[[], Awaitable[bool]], attempts: int = 150) -> None:
     """Polls database-backed state (no event to wait on) every 20 ms, up to 3 s."""
     for _ in range(attempts):

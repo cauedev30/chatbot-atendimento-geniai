@@ -73,7 +73,7 @@ async def test_the_summary_waits_for_a_conversation_in_its_window_and_starts_whe
         turn_json(category_id=login, summary="Pede atendente; o painel não abre."),
     )
     await receive(h, 502, "o painel não abre")
-    scheduler.schedule(502)
+    scheduler.schedule(502, bot_replied=False)  # in its window, as before a first reply
 
     await receive(h, 501, "quero falar com um atendente")
     assert await process_turn(h.deps, 501) == "handoff"
@@ -145,7 +145,7 @@ async def test_stopping_the_app_does_not_wait_for_a_summary_waiting_for_the_llm(
     async with asyncio.timeout(2):
         async with _running(state, h.deps):
             assert state.scheduler is not None
-            state.scheduler.schedule(999)  # a conversation in its burst window: the LLM is not free
+            state.scheduler.schedule(999, bot_replied=False)  # in its burst window: the LLM is not free
             await receive(h, 541, "quero falar com um atendente")
             assert await process_turn(h.deps, 541) == "handoff"
             await asyncio.sleep(0.05)

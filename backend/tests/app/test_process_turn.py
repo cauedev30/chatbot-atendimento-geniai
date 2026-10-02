@@ -392,8 +392,8 @@ async def test_closes_the_ticket_and_opens_a_new_one_for_a_message_that_arrived_
         assert "ah, e a impressora também parou" not in [m.text for m in await list_messages(conn, closed)]
     assert chat.last_sent() == TEXT.resolved_thanks
     assert h.chatwoot.statuses[-2:] == [StatusSet(conversation_id, "resolved"), StatusSet(conversation_id, "pending")]
-    # The new ticket's turn is due: it is greeted like any first message.
-    assert chat.scheduler.scheduled[-1] == conversation_id
+    # The new ticket's turn is due: it is greeted like any first message, after the burst window.
+    assert (chat.scheduler.scheduled[-1], chat.scheduler.bot_replied[-1]) == (conversation_id, False)
     assert await process_turn(h.deps, conversation_id) == "greeting"
 
 

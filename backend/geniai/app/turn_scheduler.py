@@ -4,12 +4,16 @@ from typing import Protocol
 
 
 class TurnScheduler(Protocol):
-    def schedule(self, conversation_id: int) -> None: ...
+    def schedule(self, conversation_id: int, *, bot_replied: bool) -> None:
+        """bot_replied: the conversation's ticket already has a bot message (tickets_repo.has_bot_message)."""
+        ...
 
 
 class DebouncedScheduler:
-    """Processes a conversation's turn only after window_ms without new messages, so a burst like
-    "oi" / "tudo bem?" / "meu número caiu" becomes one turn (OWNER-UNCONFIRMED window, see rules.py).
+    """Until the bot's first reply in the ticket, processes a conversation's turn only after window_ms
+    without new messages, so a burst like "oi" / "bom dia" becomes one turn. Once the bot replied, the turn
+    runs at once (owner, 2026-10-02); a message that arrives while a turn prepares its reply makes that
+    reply be dropped instead (see process_turn._claim). Every caller follows this one rule.
     Timers live in memory; after a restart, resume_pending_turns() reschedules what was pending.
     It also knows when the LLM is free for background work (see wait_idle)."""
 
@@ -42,11 +46,12 @@ class DebouncedScheduler:
         while not self._is_idle():
             await self._idle.wait()
 
-    def schedule(self, conversation_id: int) -> None:
+    def schedule(self, conversation_id: int, *, bot_replied: bool) -> None:
         if (old := self._timers.pop(conversation_id, None)) is not None:
             old.cancel()
+        window_s = 0 if bot_replied else self._window_s
         loop = asyncio.get_running_loop()
-        self._timers[conversation_id] = loop.call_later(self._window_s, self._fire, conversation_id)
+        self._timers[conversation_id] = loop.call_later(window_s, self._fire, conversation_id)
         self._update_idle()
 
     def _fire(self, conversation_id: int) -> None:
@@ -80,6 +85,8 @@ class RecordingScheduler:
 
     def __init__(self) -> None:
         self.scheduled: list[int] = []
+        self.bot_replied: list[bool] = []
 
-    def schedule(self, conversation_id: int) -> None:
+    def schedule(self, conversation_id: int, *, bot_replied: bool) -> None:
         self.scheduled.append(conversation_id)
+        self.bot_replied.append(bot_replied)

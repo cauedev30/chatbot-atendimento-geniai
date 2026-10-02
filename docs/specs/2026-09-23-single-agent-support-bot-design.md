@@ -33,7 +33,9 @@ suffer most from a given problem.
 - The bot **never executes anything** in customer systems (no adding or removing users, no changing
   numbers). It identifies, understands, answers from the FAQ, summarizes and hands over.
 - The bot does not troubleshoot beyond the FAQ and does not invent procedures.
-- No audio transcription or image understanding in this version.
+- No video or document understanding. Images and audio were added later, each behind its own setting:
+  the LLM reads images (`LLM_READS_IMAGES`), and audios of up to 2 min are transcribed by a separate
+  endpoint (`TRANSCRIBE_*`) and read as the customer's text (see `docs/architecture.md`, "Attachments").
 - No per-person logins, no report export, no e-mailed reports, no period-over-period comparison.
 
 ## 3. Decisions taken in brainstorming
@@ -136,8 +138,11 @@ flowchart LR
    the ticket out of triage during the turn, the turn sends nothing.
 9. **Silence:** a ticket still in triage, or waiting for FAQ feedback (also after a question was
    answered), with no customer message for **24 h** (configurable) goes to **No response**.
-10. **Media** (audio, image, document): the bot asks the customer to type the problem, once. Media
-    again → **Awaiting human** (`media`).
+10. **Media** the bot cannot read (a video, a document, an image that did not open, an audio longer than
+    2 min or whose transcription failed, or any audio or image with its setting off): the bot asks the
+    customer to type the problem, once. Media again → **Awaiting human** (`media`). A transcribed audio
+    is not media: it counts as the customer's text in every step, transcribed at the start of the turn,
+    and its transcription goes to the team as a private note in the Chatwoot conversation.
 
 ### 5.2 Ticket lifecycle
 

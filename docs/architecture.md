@@ -36,13 +36,17 @@ flowchart LR
   texts in Portuguese (`texts.py`), the labels that name attachments for the LLM (`attachments.py`)
   and every tunable in one place (`rules.py`).
 - `app/` holds the use cases. They depend on **ports** (`app/ports.py`): `LlmPort`, `ChatwootPort`,
-  `MediaFetcher` (absent when image reading is off), a `Logger` and the database engine, bundled in
+  `MediaFetcher` (absent when image reading is off), `AudioTranscription` (an `AudioFetcher` and a
+  `TranscriberPort`, absent when transcription is off), a `Logger` and the database engine, bundled in
   `Deps`. Tests swap the ports for fakes. `app/attachments.py` decides what a turn does with the
-  attachments (see "Attachments" below).
+  attachments and `app/transcription.py` transcribes the audios (see "Attachments" below).
 - `llm/` builds the prompt, validates the model's JSON (`output_schema.py`) and retries once
   (`interpret.py`). `openai_compatible.py` talks to any OpenAI-compatible chat completions API.
-- `chatwoot/` parses webhook events (`webhook.py`), calls the Chatwoot API with retries (`http.py`)
-  and downloads customer images (`media.py`).
+- `chatwoot/` parses webhook events (`webhook.py`), calls the Chatwoot API with retries (`http.py`:
+  messages, private notes, status changes) and downloads customer images and audios (`media.py`).
+- `transcription/` talks to any OpenAI-compatible `/audio/transcriptions` API (`openai_compatible.py`),
+  configured apart from the LLM (`TRANSCRIBE_*`). `geniai/audio.py` lists the audio formats it takes and
+  reads how long an Ogg Opus audio lasts.
 - `db/` has the SQLAlchemy Core schema, the SQL migrations with a small runner, the fictitious seed and
   the loader of the FAQ file (`faq_file.py`, run by `python -m geniai.db.cli load-faq`).
 - `api/` has the FastAPI routers and the JSON response models (`schemas.py`).
@@ -64,6 +68,7 @@ sequenceDiagram
     participant CW as Chatwoot
     participant B as Backend
     participant L as LLM
+    participant T as Transcription
     C->>CW: message
     CW->>B: POST /webhooks/chatwoot/<token>
     B->>B: dedupe by message id, find the open ticket or identify the phone
@@ -71,10 +76,16 @@ sequenceDiagram
     B-->>CW: 200 at once (Chatwoot calls follow in the background)
     Note over B: ~5 s without new messages
     B->>B: read the ticket and its pending messages
+    opt transcription on, the ticket has audios not tried yet
+        B->>CW: download each audio (up to 2 min)
+        B->>T: transcribe them together
+        B->>B: keep each outcome and text on its attachment
+        B->>CW: a private note with each transcription
+    end
     opt image reading on, the turn may reach the LLM
         B->>CW: download the unread images (at most 4)
     end
-    alt keyword asks for a person, or nothing in the turn is legible
+    alt keyword asks for a person (in text or an audio), or nothing in the turn is legible
         B->>B: decide in code, no LLM call
     else otherwise
         B->>L: one call: context in, JSON out (validated, one retry)
@@ -109,7 +120,10 @@ sequenceDiagram
    fires, the turn runs under the conversation's turn lane, one turn at a time.
 3. **Turn** (`process_turn.py`). The pending customer messages (those after the last one a turn has
    read, `ticket.last_consumed_message_id`) form one turn. A message stored while a turn is running
-   stays pending for the next turn. The first turn gets the greeting, written by code, unless it already asks for a
+   stays pending for the next turn. Before any decision, the ticket's audios are transcribed (see
+   "Attachments" below), so what the customer said in one counts as text for everything that follows:
+   an audio asking for a person hands over, and a first audio that describes the problem gets the
+   greeting that only asks to confirm. The first turn gets the greeting, written by code, unless it already asks for a
    person. The greeting asks the customer to confirm the registered name and unit; it also asks for the
    problem only when the first messages are just a greeting (`domain/greeting.py`). Otherwise they stay
    in the conversation the LLM reads, and the turn that confirms takes the problem from them. Later turns are decided in code first (keyword request for a person, a turn with nothing
@@ -142,7 +156,24 @@ A customer message may carry files: a photo, an audio, a video, a document. Thei
    as its text and the list of attachments (kind and link). A message with attachments and no text is
    stored with `is_media` and the text `[mídia]`, like any media-only message; one stored
    before the column existed has no attachments and is treated as a file the bot cannot open.
-3. **Download in the turn** (`app/attachments.py`, `chatwoot/media.py`), outside any transaction and
+3. **Audio, at the start of the turn** (`app/transcription.py`, `chatwoot/media.py`,
+   `transcription/openai_compatible.py`), outside any transaction and before any decision, when
+   `TRANSCRIBE_*` are set. The ticket's customer audios no turn tried yet are downloaded with the same
+   guards as an image (below), at most `max_audio_bytes` (5 MB) within `audio_download_timeout_ms`
+   (15 s), in the formats the transcription API takes (Ogg, MP3, M4A/MP4, WAV, WebM, FLAC; a WhatsApp
+   voice message is `audio/ogg`, Opus). An audio longer than `max_audio_seconds` (120 s) is not
+   transcribed: the duration of an Ogg Opus audio is read from the file (the granule position of its
+   last page, minus the pre-skip, over 48 000); for the other formats, a size over
+   `max_untimed_audio_bytes` (2 MB, about 2 min of a 128 kbps MP3) counts as too long. The rest are
+   transcribed together (`POST {TRANSCRIBE_BASE_URL}/audio/transcriptions`, multipart: the file,
+   `model`, `language=pt`), each within `transcribe_timeout_ms` (15 s); an empty text is a failure. Each
+   audio's outcome is kept on its attachment at once: `transcribed` with the text (on one line, at most
+   3 000 characters), `too_long` or `failed`; later turns use it and never transcribe it again. Each
+   transcription is then posted as a private note in the conversation, `Transcrição do áudio (bot):
+   <text>`, straight through the Chatwoot adapter and its retry rule, not the outbox; a note that fails
+   is logged and the turn goes on. The webhook ignores the note (it is outgoing and private). With
+   transcription off nothing is downloaded and every audio stays as it arrived.
+4. **Image download in the turn** (`app/attachments.py`, `chatwoot/media.py`), outside any transaction and
    only when the turn may reach the LLM (not for the greeting or a request for a person). The unread
    images of the ticket's customer messages are downloaded, the most recent
    `max_images_per_turn` (4) of them; older ones are past the limit. An image is downloaded only from
@@ -152,24 +183,30 @@ A customer message may carry files: a photo, an audio, a video, a document. Thei
    a stream and cut when it passes, within `image_download_timeout_ms` (15 s), and only JPEG, PNG or
    WebP. A failure never stops the turn: the image counts as not opened. The bytes stay in memory.
    With `LLM_READS_IMAGES=false` nothing is downloaded and every image counts as not opened.
-4. **LLM** (`llm/prompt.py`, `llm/openai_compatible.py`): each message reaches the LLM as the labels of
+5. **LLM** (`llm/prompt.py`, `llm/openai_compatible.py`): each message reaches the LLM as the labels of
    its attachments followed by its caption: `[imagem 1]` (sent with this call, in order),
    `[imagem: <description>]` (seen in an earlier turn), `[imagem — não foi possível abrir]`,
-   `[imagem — além do limite, não vista]`, `[áudio — o bot não ouve]`, `[vídeo — o bot não abre]`,
-   `[arquivo — o bot não abre]`. The prompt explains them, counts what an image shows as what the
-   customer wrote, and forbids saying an attachment did not arrive or asking for it again. With
+   `[imagem — além do limite, não vista]`, `[áudio transcrito: "<text>"]`, `[áudio — o bot não ouve]`
+   (too long, not transcribed, or transcription off), `[vídeo — o bot não abre]`,
+   `[arquivo — o bot não abre]`. The prompt explains them, counts what an image shows and what a
+   transcribed audio says as what the customer wrote (allowing for transcription mistakes), and forbids
+   saying an attachment did not arrive or asking for it again. The team's card summary reads the same
+   labels. With
    images, the user message goes in parts: the text, then each image as a base64 data URI; without,
    the request is plain text, as for a text-only model.
-5. **Description**: the LLM returns `image_descriptions`, one short description per image sent. The
+6. **Description**: the LLM returns `image_descriptions`, one short description per image sent. The
    turn stores on each image its outcome (`seen`, `failed`, `over_limit`) and, when seen, the
    description (`[imagem vista pelo bot]` when the LLM gave none); later turns show the description
    and never send the image again. An image in a turn decided before the LLM stays unread, so the
    next LLM turn reads it: a photo sent as the first message is read in the turn after the greeting.
 
-A turn with nothing legible (no text and no image that opened) gets one request for text, then a
-handoff (`media`). The request says what the bot could not read: "Não consegui abrir a imagem" when
+A turn with nothing legible (no text, no transcribed audio and no image that opened) gets one request
+for text, then a handoff (`media`). The request says what the bot could not read: "Não consegui abrir a imagem" when
 only images failed; audio, video or files when there was one; the general text (audio, images or files) when image
 reading is off. Logs name each image by type, size and failure reason, never by its link or content.
+Each audio logs `audio read` (type, size, seconds) or `audio not read` (the download's failure reason),
+then `audio transcribed` (seconds, time taken) or `audio not transcribed` (reason: `too_long`, `timeout`,
+`status` with the provider's HTTP status, `error` or `empty`), never its link nor what was said.
 
 ### Outbox
 
@@ -302,6 +339,9 @@ by default.
   never raised into the flow.
 - **Images:** a download that fails (host, redirects, status, type, size, time) leaves the image
   "not opened" and the turn goes on with what is legible; it is logged with the reason.
+- **Audios:** a download or a transcription that fails, or an audio too long, leaves the audio "not
+  heard": the turn goes on with what is legible, and the media rule applies when nothing is. A private
+  note that fails is logged, never raised into the turn.
 - **Duplicates:** a Chatwoot message id is stored once (with the ticket's messages, or on the outbox
   row of a conversation handed to the team); a repeated delivery answers `duplicate`.
 - **Races:** the webhooks of a conversation run one at a time in its webhook lane and its turns in its

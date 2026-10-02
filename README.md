@@ -38,10 +38,17 @@ each problem.
   caption, counts as what the customer wrote. Up to four images per turn are sent to the LLM, which
   also describes each one; later turns and the ticket summary use that description. The image goes
   to the configured LLM provider and is never stored.
-- Cannot hear audio nor open videos or files (nor images, with image reading off). With text
-  beside them, the LLM knows there was an attachment it cannot open; alone, the bot asks once for
-  the problem in text, then hands over. It never says an attachment did not arrive nor asks for it
-  again.
+- Hears the customer's audios when `TRANSCRIBE_BASE_URL`, `TRANSCRIBE_API_KEY` and `TRANSCRIBE_MODEL`
+  are set: an audio of up to 2 min is transcribed, at the start of the turn, by an OpenAI-compatible
+  transcription endpoint set apart from the LLM's, and what the customer said counts as text for every
+  rule (the greeting, a request for a person, the LLM). Each audio is transcribed once: the text is kept
+  with the message, used by later turns and the ticket summary, and posted as a private note in the
+  Chatwoot conversation for the team. The audio itself is never stored, and the text never goes to the
+  log.
+- Cannot open videos or files, nor an audio longer than 2 min or whose transcription failed (nor any
+  audio with transcription off, nor images with image reading off). With text beside them, the LLM
+  knows there was an attachment it cannot open; alone, the bot asks once for the problem in text, then
+  hands over. It never says an attachment did not arrive nor asks for it again.
 - Closes a triage conversation that stays silent for 24 h as "No response".
 - Never executes anything in customer systems: the LLM output has no action field.
 
@@ -89,7 +96,8 @@ backend/
     db/          SQLAlchemy schema, SQL migrations, fictitious seed, FAQ file loader, CLI
     app/         use cases: inbound messages, turns, silence sweeper, board, indicators
     llm/         LLM contract (prompt, output schema, one-retry interpretation), OpenAI-compatible adapter
-    chatwoot/    webhook parsing, HTTP client and image download
+    chatwoot/    webhook parsing, HTTP client (messages, private notes, status) and image and audio download
+    transcription/ OpenAI-compatible audio transcription adapter
     api/         FastAPI routers: auth, board, indicators, webhook; response models
     eval/        fictitious conversations, invented screenshots and the model comparison runner
     config.py    environment configuration
@@ -163,7 +171,7 @@ masked; uvicorn's own access log is off because it would print the token. If you
 yourself (`uvicorn geniai.main:create_app --factory`), pass `--no-access-log` and no `--workers`.
 Tunable conversation rules (burst window, silence timeout, re-ask counts, how many questions about
 the FAQ entry are answered (`max_faq_questions`, 3), whether "take" asks who, the card summary's
-30 s deadline) live in
+30 s deadline, the audio limits: 2 min, 5 MB, 15 s to download and 15 s to transcribe) live in
 `backend/geniai/domain/rules.py`; the ones marked `OWNER-UNCONFIRMED` still await the owner's
 confirmation.
 
@@ -218,6 +226,7 @@ A test also checks that the committed `backend/openapi.json` matches the API.
 | `TRUSTED_PROXY_IPS` | Addresses or networks (comma-separated) of the frontend that proxies `/api`, whose `X-Forwarded-For` is believed; default `127.0.0.1,::1` |
 | `BOT_ONLY_PHONES` | Optional test mode: comma-separated phone numbers the bot serves; any other conversation is handed to the team at once. Empty serves everyone. Each entry must be a Brazilian phone number |
 | `LLM_READS_IMAGES` | `true` downloads the customer's images from Chatwoot and sends them to the LLM provider with the turn (the model must accept images); `false` (default) does not |
+| `TRANSCRIBE_BASE_URL`, `TRANSCRIBE_API_KEY`, `TRANSCRIBE_MODEL` | Optional: any OpenAI-compatible `/audio/transcriptions` endpoint, apart from the LLM's. With all three, the customer's audios (up to 2 min) are downloaded from Chatwoot and sent to it, in Portuguese; with none, the bot says it cannot hear audio. Only some of them is a configuration error |
 | `BURST_WINDOW_MS` | Optional: silence that closes a burst of messages into one turn |
 | `SILENCE_TIMEOUT_HOURS` | Optional: silence that moves a triage ticket to "No response" |
 | `EVAL_CANDIDATES` | JSON list of `{label, baseUrl, model, apiKeyEnv, extraBody?}` for the evaluation |
@@ -299,7 +308,10 @@ never appear in files. Run it from a machine in Brazil so the latency matches pr
 The bot, the board and the indicators are implemented and tested, with fictitious data. The FAQ
 content and category list are in `backend/faq/faq.json`. Still open (spec §13):
 
-- The model choice, by the evaluation set; reading images and hearing audio count in it.
+- The model choice, by the evaluation set; reading images counts in it (audio goes through the
+  transcription endpoint).
+- Confirming the content type Chatwoot serves for a WhatsApp voice message (`audio/ogg` is expected)
+  and the transcription on the real inbox.
 - Confirming the link Chatwoot sends for a WhatsApp photo (`data_url`) and that the download works
   on the real inbox.
 - Confirming that the WhatsApp connector delivers the real phone number, not an internal id, and how

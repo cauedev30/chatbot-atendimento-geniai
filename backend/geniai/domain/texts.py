@@ -23,10 +23,32 @@ class _Texts:
         "Ainda não consigo ouvir áudios nem abrir vídeos ou arquivos. Pode escrever o problema em texto, por favor?"
     )
     """OWNER-UNCONFIRMED wording: an audio, a video or a file, with image reading on."""
+    ask_for_text_audio_too_long: str = (
+        "Seu áudio passou de 2 minutos e não consegui ouvir. Pode mandar um mais curto ou escrever o problema?"
+    )
+    """Transcription on, only audios not heard, one longer than max_audio_seconds (2 min) (owner, 2026-10-02)."""
+    ask_for_text_audio_failed: str = "Não consegui ouvir seu áudio. Pode escrever o problema em texto, por favor?"
+    """Transcription on, only audios not heard, none of them too long (owner, 2026-10-02)."""
+    ask_for_text_image_or_file: str = (
+        "Ainda não consigo abrir imagens ou arquivos. Pode escrever o problema em texto, por favor?"
+    )
+    """Transcription on, image reading off: ask_for_text without the audio part."""
+    ask_for_text_video_or_file: str = (
+        "Ainda não consigo abrir vídeos ou arquivos. Pode escrever o problema em texto, por favor?"
+    )
+    """Transcription on, image reading on, a video or a file: ask_for_text_other without the audio part."""
     clarify_fallback: str = "Pode me contar um pouco mais sobre o problema?"
 
     def ask_for_text_for(self, unread: UnreadMedia) -> str:
-        return {"media": self.ask_for_text, "image": self.ask_for_text_image, "other": self.ask_for_text_other}[unread]
+        return {
+            "media": self.ask_for_text,
+            "image": self.ask_for_text_image,
+            "other": self.ask_for_text_other,
+            "image_or_file": self.ask_for_text_image_or_file,
+            "video_or_file": self.ask_for_text_video_or_file,
+            "audio_too_long": self.ask_for_text_audio_too_long,
+            "audio_failed": self.ask_for_text_audio_failed,
+        }[unread]
 
     @staticmethod
     def greeting(name: str, unit: str) -> str:

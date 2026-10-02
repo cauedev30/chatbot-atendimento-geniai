@@ -7,7 +7,7 @@ import pytest
 
 from geniai.app.ports import AudioData, FetchFailure, TranscribeFailure
 from geniai.domain.texts import TEXT
-from geniai.domain.types import Attachment
+from geniai.domain.types import Attachment, AttachmentKind, UnreadMedia
 from tests.app.test_process_turn import Chat
 from tests.app.test_turn_images import history, payload, stored_attachments
 from tests.conftest import Harness
@@ -114,7 +114,7 @@ async def test_the_card_summary_without_the_llm_has_what_the_audio_said(h: Harne
 async def test_an_audio_longer_than_two_minutes_asks_for_text_once_then_hands_over(h: Harness, chat: Chat) -> None:
     conversation_id = await chat.greeted()
     assert await chat.customer(conversation_id, "", voice(h, "x", seconds=120.5)) == "ask_for_text"
-    assert chat.last_sent() == TEXT.ask_for_text
+    assert chat.last_sent() == TEXT.ask_for_text_audio_too_long
     assert h.transcriber.heard == []
     [_, [stored]] = await stored_attachments(h, conversation_id)
     assert (stored.outcome, stored.transcript) == ("too_long", None)
@@ -154,14 +154,48 @@ async def test_an_audio_not_heard_follows_the_media_rule_and_is_named_for_the_ll
     h.reads_images()
     conversation_id = await chat.greeted()
     assert await chat.customer(conversation_id, "", voice(h, said, opens=opens)) == "ask_for_text"
-    assert chat.last_sent() == TEXT.ask_for_text_other
+    assert chat.last_sent() == TEXT.ask_for_text_audio_failed
     assert logs(h, line)
     [_, [stored]] = await stored_attachments(h, conversation_id)
     assert stored.outcome == "failed"
     h.llm.push(turn_json(category_id=h.seed.categories["other"], needs_clarification=True, reply="Qual?"))
     await chat.customer(conversation_id, "é sobre o painel")
-    assert history(h)[-2:] == ["[áudio — o bot não ouve]", TEXT.ask_for_text_other]
+    assert history(h)[-2:] == ["[áudio — o bot não ouve]", TEXT.ask_for_text_audio_failed]
     assert len(h.transcriber.heard) == (1 if opens else 0)
+
+
+async def test_an_audio_too_long_beside_one_not_transcribed_asks_for_a_shorter_one(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.greeted()
+    await chat.receive(conversation_id, "", voice(h, TranscribeFailure("error")))
+    assert await chat.customer(conversation_id, "", voice(h, "x", seconds=180)) == "ask_for_text"
+    assert chat.last_sent() == TEXT.ask_for_text_audio_too_long
+
+
+@pytest.mark.parametrize(
+    ("reads_images", "kinds", "expected"),
+    [
+        (True, ("audio", "video"), "video_or_file"),
+        (True, ("audio", "file"), "video_or_file"),
+        (True, ("audio", "image"), "image"),
+        (True, ("video",), "video_or_file"),
+        (False, ("audio", "video"), "image_or_file"),
+        (False, ("audio", "image"), "image_or_file"),
+        (False, ("image",), "image_or_file"),
+    ],
+)
+async def test_with_transcription_on_the_request_for_text_leaves_the_audio_out_beside_other_attachments(
+    h: Harness, chat: Chat, reads_images: bool, kinds: tuple[AttachmentKind, ...], expected: UnreadMedia
+) -> None:
+    if reads_images:
+        h.reads_images()
+    conversation_id = await chat.greeted()
+    attachments = [
+        voice(h, TranscribeFailure("error")) if kind == "audio" else Attachment(kind, "https://chatwoot.example/x")
+        for kind in kinds
+    ]
+    assert await chat.customer(conversation_id, "", *attachments) == "ask_for_text"
+    assert chat.last_sent() == TEXT.ask_for_text_for(expected)
+    assert "ouvir áudios" not in chat.last_sent()
 
 
 async def test_audios_of_one_turn_are_transcribed_together_and_named_in_order(h: Harness, chat: Chat) -> None:

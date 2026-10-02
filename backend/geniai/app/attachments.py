@@ -95,12 +95,21 @@ def is_legible(pending: list[MessageRow], turn: TurnImages) -> bool:
     )
 
 
-def unread_media(pending: list[MessageRow], reads_images: bool) -> UnreadMedia:
-    """For a turn with nothing legible: what to ask the customer to type instead of."""
+def unread_media(pending: list[MessageRow], reads_images: bool, hears_audio: bool) -> UnreadMedia:
+    """For a turn with nothing legible: what to ask the customer to type instead of. With transcription
+    on, an audio is named only when it is all the turn had (see UnreadMedia)."""
+    legacy = any(_is_legacy_media(m) for m in pending)
+    attachments = [a for m in pending for a in m.attachments]
+    if not hears_audio:
+        if not reads_images:
+            return "media"
+        return "other" if legacy or any(a.kind != "image" for a in attachments) else "image"
+    rest = [a for a in attachments if a.kind != "audio"]
+    if not rest and not legacy:
+        return "audio_too_long" if any(a.outcome == "too_long" for a in attachments) else "audio_failed"
     if not reads_images:
-        return "media"
-    others = any(_is_legacy_media(m) or any(a.kind != "image" for a in m.attachments) for m in pending)
-    return "other" if others else "image"
+        return "image_or_file"
+    return "video_or_file" if legacy or any(a.kind != "image" for a in rest) else "image"
 
 
 async def read_images(deps: Deps, ticket_id: int, messages: list[MessageRow]) -> TurnImages:

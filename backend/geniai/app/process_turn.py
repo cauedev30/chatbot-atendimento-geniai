@@ -253,7 +253,8 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
         if deps.media is not None and (images.images or images.failed):
             timing.images_ms = _ms_since(downloads)
     if not is_legible(pending, images):
-        signals = PreLlmSignals(False, nothing_legible=True, unread=unread_media(pending, deps.media is not None))
+        unread = unread_media(pending, deps.media is not None, deps.transcription is not None)
+        signals = PreLlmSignals(False, nothing_legible=True, unread=unread)
         decision = pre_llm_decision(_state_of(t), signals, deps.rules)
         assert decision is not None
         return await _apply(deps, t, messages, consumed_id, decision, None, timing)

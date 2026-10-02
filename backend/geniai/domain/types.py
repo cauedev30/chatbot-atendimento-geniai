@@ -135,9 +135,13 @@ class ResolvedByBot:
     kind: ClassVar[Literal["resolved_by_bot"]] = "resolved_by_bot"
 
 
-UnreadMedia = Literal["media", "image", "other"]
-"""What a turn with nothing legible had: "media" when image reading is off (any attachment), "image" when
-only images that did not open, "other" when an audio, a video or a file."""
+UnreadMedia = Literal["media", "image", "other", "image_or_file", "video_or_file", "audio_too_long", "audio_failed"]
+"""What a turn with nothing legible had, which picks the request for text. With transcription off:
+"media" when image reading is off (any attachment), "image" when only images that did not open, "other"
+when an audio, a video or a file. With transcription on, no request says the bot cannot hear audio:
+"audio_too_long" or "audio_failed" when only audios were not heard (one of them too long, or none
+transcribed); beside anything else the audios are left out, and the rest picks: "image_or_file" when image
+reading is off, "image" when only images that did not open, "video_or_file" when a video or a file."""
 
 
 @dataclass(frozen=True)

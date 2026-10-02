@@ -38,6 +38,18 @@ def test_customer_texts_are_exactly_the_approved_wording() -> None:
     assert TEXT.ask_for_text_other == (
         "Ainda não consigo ouvir áudios nem abrir vídeos ou arquivos. Pode escrever o problema em texto, por favor?"
     )
+    assert TEXT.ask_for_text_audio_too_long == (
+        "Seu áudio passou de 2 minutos e não consegui ouvir. Pode mandar um mais curto ou escrever o problema?"
+    )
+    assert (
+        TEXT.ask_for_text_audio_failed == "Não consegui ouvir seu áudio. Pode escrever o problema em texto, por favor?"
+    )
+    assert TEXT.ask_for_text_image_or_file == (
+        "Ainda não consigo abrir imagens ou arquivos. Pode escrever o problema em texto, por favor?"
+    )
+    assert TEXT.ask_for_text_video_or_file == (
+        "Ainda não consigo abrir vídeos ou arquivos. Pode escrever o problema em texto, por favor?"
+    )
 
 
 def test_the_fixed_handoff_texts_promise_no_speed() -> None:
@@ -51,3 +63,12 @@ def test_the_request_for_text_names_what_the_bot_could_not_read() -> None:
     assert TEXT.ask_for_text_for("media") == TEXT.ask_for_text
     assert TEXT.ask_for_text_for("image") == TEXT.ask_for_text_image
     assert TEXT.ask_for_text_for("other") == TEXT.ask_for_text_other
+    assert TEXT.ask_for_text_for("audio_too_long") == TEXT.ask_for_text_audio_too_long
+    assert TEXT.ask_for_text_for("audio_failed") == TEXT.ask_for_text_audio_failed
+    assert TEXT.ask_for_text_for("image_or_file") == TEXT.ask_for_text_image_or_file
+    assert TEXT.ask_for_text_for("video_or_file") == TEXT.ask_for_text_video_or_file
+
+
+def test_the_requests_for_text_used_with_transcription_on_never_say_the_bot_cannot_hear_audio() -> None:
+    for unread in ("image", "image_or_file", "video_or_file", "audio_too_long", "audio_failed"):
+        assert "ouvir áudios" not in TEXT.ask_for_text_for(unread)

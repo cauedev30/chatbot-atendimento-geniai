@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 
@@ -15,6 +15,7 @@ from geniai.domain.types import (
     ResolvedByBot,
     SendFaq,
     TriageState,
+    UnreadMedia,
 )
 
 
@@ -59,7 +60,7 @@ def test_asks_for_text_on_the_first_media_only_turn() -> None:
 
 
 def test_asks_for_text_naming_what_the_bot_could_not_read() -> None:
-    for unread in ("media", "image", "other"):
+    for unread in get_args(UnreadMedia):
         signals = PreLlmSignals(keyword_human_request=False, nothing_legible=True, unread=unread)
         assert pre_llm_decision(state(), signals, DEFAULT_RULES) == AskForText(unread)
 

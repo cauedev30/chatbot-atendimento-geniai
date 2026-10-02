@@ -200,6 +200,8 @@ def test_the_prompt_explains_every_attachment_label_and_forbids_asking_to_resend
         "[imagem — não foi possível abrir]",
         "[imagem — além do limite, não vista]",
         '[áudio transcrito: "',
+        "[áudio — não foi possível ouvir]",
+        "[áudio — passou de 2 minutos, não ouvido]",
         "[áudio — o bot não ouve]",
         "[vídeo — o bot não abre]",
         "[arquivo — o bot não abre]",
@@ -215,6 +217,19 @@ def test_the_prompt_takes_a_transcribed_audio_as_what_the_customer_said_with_pos
     assert "transcribed automatically" in rule
     assert "as if they had written it" in rule
     assert "mistakes" in rule
+
+
+def test_the_prompt_names_an_audio_not_heard_by_why_and_never_says_the_bot_cannot_hear_audios() -> None:
+    lines = SYSTEM_PROMPT.splitlines()
+    failed = next(line for line in lines if line.startswith('- "[áudio — não foi possível ouvir]"'))
+    too_long = next(line for line in lines if line.startswith('- "[áudio — passou de 2 minutos, não ouvido]"'))
+    assert "could not be heard" in failed
+    assert "longer than 2 minutes" in too_long
+    rule = next(line for line in lines if line.startswith("Every attachment reached the bot."))
+    assert "could not hear that audio" in rule
+    assert "longer than 2 minutes" in rule
+    assert "never say that the bot cannot hear audios" in rule
+    assert "the bot cannot open that attachment" in rule
 
 
 def test_a_text_turn_waits_5_s_for_the_llm_and_a_turn_with_images_8_s() -> None:

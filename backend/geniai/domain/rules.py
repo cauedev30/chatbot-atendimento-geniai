@@ -37,8 +37,8 @@ class TriageRules:
     """OWNER-UNCONFIRMED: time limit of one image download from Chatwoot."""
     max_audio_seconds: int
     """Longest audio the bot transcribes (owner, 2026-10-02); a longer one is treated as one it cannot hear.
-    "2 minutos" is fixed in texts.ask_for_text_audio_too_long and attachments.AUDIO_TOO_LONG: change them
-    with it."""
+    "2 minutos" is fixed in texts.ask_for_text_audio_too_long, attachments.AUDIO_TOO_LONG and the LLM prompt
+    (llm/prompt.py): change them with it."""
     max_audio_bytes: int
     """Largest audio the bot downloads, as for an image; a bigger one is treated as one it cannot hear."""
     max_untimed_audio_bytes: int

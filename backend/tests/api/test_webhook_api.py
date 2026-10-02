@@ -178,10 +178,11 @@ async def test_answers_at_once_while_a_turn_of_the_same_conversation_waits_on_th
     assert "aparece erro 500" in await stored_texts(api, 60)
 
     release.set()
-    assert await turn == "ask_clarification"
+    # The message that arrived during the turn drops its reply: the next turn answers both.
+    assert await turn is None
     assert "aparece erro 500" not in h.llm.requests[0].user
-    # The message that arrived during the turn was not answered by it: the next turn takes it.
     assert await process_turn(h.deps, 60) == "ask_clarification"
+    assert "o painel não abre" in h.llm.requests[1].user
     assert "aparece erro 500" in h.llm.requests[1].user
 
 

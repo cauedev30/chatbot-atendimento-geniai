@@ -12,7 +12,7 @@ from geniai.app.ports import LlmRequest
 from geniai.app.process_turn import TurnOutcome, pending_customer_messages, process_turn, run_turn
 from geniai.app.silence_sweeper import sweep_silent_tickets
 from geniai.app.tickets_repo import MessageRow, TicketRow, list_messages
-from geniai.app.turn_scheduler import RecordingScheduler
+from geniai.app.turn_scheduler import DebouncedScheduler, RecordingScheduler, TurnScheduler
 from geniai.chatwoot.webhook import IncomingMessage
 from geniai.db.fixtures import FICTITIOUS
 from geniai.db.schema import attendant, ticket
@@ -33,7 +33,9 @@ class Chat:
         self.h = h
         self.scheduler = RecordingScheduler()
 
-    async def receive(self, conversation_id: int, text: str, *attachments: Attachment) -> None:
+    async def receive(
+        self, conversation_id: int, text: str, *attachments: Attachment, scheduler: TurnScheduler | None = None
+    ) -> None:
         msg = IncomingMessage(
             message_id=next(_message_ids),
             conversation_id=conversation_id,
@@ -42,7 +44,7 @@ class Chat:
             conversation_status=None,
             attachments=attachments,
         )
-        await handle_inbound_message(self.h.deps, self.scheduler, msg)
+        await handle_inbound_message(self.h.deps, scheduler or self.scheduler, msg)
         await self.h.settle()
 
     async def customer(self, conversation_id: int, text: str, *attachments: Attachment) -> TurnOutcome | None:
@@ -349,9 +351,11 @@ class SlowLlm:
 
     def __init__(self, h: Harness) -> None:
         self.release = asyncio.Event()
+        self.called = asyncio.Event()
         complete = h.llm.complete
 
         async def slow(request: LlmRequest) -> str:
+            self.called.set()
             await self.release.wait()
             return await complete(request)
 
@@ -392,6 +396,8 @@ async def test_closes_the_ticket_and_opens_a_new_one_for_a_message_that_arrived_
         assert "ah, e a impressora também parou" not in [m.text for m in await list_messages(conn, closed)]
     assert chat.last_sent() == TEXT.resolved_thanks
     assert h.chatwoot.statuses[-2:] == [StatusSet(conversation_id, "resolved"), StatusSet(conversation_id, "pending")]
+    # Closing is never dropped for a message that arrived meanwhile: it may be another problem.
+    assert superseded_lines(h) == []
     # The new ticket's turn is due: it is greeted like any first message, after the burst window.
     assert (chat.scheduler.scheduled[-1], chat.scheduler.bot_replied[-1]) == (conversation_id, False)
     assert await process_turn(h.deps, conversation_id) == "greeting"
@@ -416,15 +422,67 @@ async def test_a_late_message_from_a_number_no_longer_registered_goes_to_a_perso
     assert h.chatwoot.statuses[-1] == StatusSet(conversation_id, "open")
 
 
-async def test_a_message_that_arrived_during_a_turn_reaches_the_llm_as_new_in_the_next_turn(
+def superseded_lines(h: Harness) -> list[dict[str, object]]:
+    return [e.obj for e in h.logger.infos if e.msg == "turn superseded"]
+
+
+async def test_a_message_while_the_bot_prepares_its_reply_drops_it_and_one_reply_answers_both(
     h: Harness, chat: Chat
 ) -> None:
     conversation_id = await chat.greeted()
+    queue = KeyedQueue()
+    errors: list[BaseException] = []
+
+    async def turn(cid: int) -> None:
+        await run_turn(queue, h.deps, cid, scheduler)
+
+    # A window long enough to fail the test: after the greeting, turns run at once.
+    scheduler = DebouncedScheduler(60_000, turn, lambda err, _: errors.append(err))
+    llm = SlowLlm(h)
+    login = h.seed.categories["login"]
+    h.llm.push(
+        turn_json(category_id=login, needs_clarification=True, reply="Aparece alguma mensagem?"),
+        turn_json(category_id=login, needs_clarification=True, reply="Desde quando aparece o erro 500?"),
+    )
+    await chat.receive(conversation_id, "o disparador não envia", scheduler=scheduler)
+    await asyncio.wait_for(llm.called.wait(), timeout=5)  # its turn ran at once and waits for the LLM
+    await chat.receive(conversation_id, "agora aparece erro 500", scheduler=scheduler)
+    llm.release.set()
+    await asyncio.wait_for(scheduler.wait_idle(), timeout=5)
+    await scheduler.stop()
+    await h.settle()
+
+    assert errors == []
+    assert texts(h.chatwoot.sent)[1:] == ["Desde quando aparece o erro 500?"]
+    assert len(h.llm.requests) == 2
+    assert "agora aparece erro 500" not in h.llm.requests[0].user
+    assert json.loads(h.llm.requests[1].user)["new_messages"] == ["o disparador não envia", "agora aparece erro 500"]
+    t = await chat.ticket_of(conversation_id)
+    assert superseded_lines(h) == [{"ticketId": t.id, "arrived": 1}]
+    assert t.clarifications_asked == 1
+
+
+async def test_a_reply_held_up_to_the_limit_is_dropped_and_one_held_longer_goes(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.greeted()
     await chat.receive(conversation_id, "demora, o painel ficou vago")
     llm = SlowLlm(h)
-    h.llm.push(turn_json(category_id=h.seed.categories["login"], needs_clarification=True, reply="O que demora?"))
+    login = h.seed.categories["login"]
+    h.llm.push(
+        turn_json(category_id=login, needs_clarification=True, reply="O painel abre?"),
+        turn_json(category_id=login, needs_clarification=True, reply="O que demora?"),
+    )
     turn = asyncio.create_task(process_turn(h.deps, conversation_id))
-    await asyncio.sleep(0.05)
+    await asyncio.wait_for(llm.called.wait(), timeout=5)
+    h.advance(h.deps.rules.max_reply_hold_ms)
+    await chat.receive(conversation_id, "ainda está vago")
+    llm.release.set()
+    assert await turn is None
+
+    llm.release.clear()
+    llm.called.clear()
+    turn = asyncio.create_task(process_turn(h.deps, conversation_id))
+    await asyncio.wait_for(llm.called.wait(), timeout=5)
+    h.advance(1)  # the oldest message without a reply waited longer than the limit
     await chat.receive(conversation_id, "e mais uma coisa: esqueci a senha")
     llm.release.set()
     assert await turn == "ask_clarification"
@@ -436,7 +494,12 @@ async def test_a_message_that_arrived_during_a_turn_reaches_the_llm_as_new_in_th
     payload = json.loads(h.llm.requests[-1].user)
     # Stored before the bot's question, but still what the customer is waiting an answer to.
     assert payload["new_messages"] == ["e mais uma coisa: esqueci a senha"]
-    assert [m["text"] for m in payload["conversation"]][-2:] == ["demora, o painel ficou vago", "O que demora?"]
+    assert [m["text"] for m in payload["conversation"]][-3:] == [
+        "demora, o painel ficou vago",
+        "ainda está vago",
+        "O que demora?",
+    ]
+    assert len(superseded_lines(h)) == 1
 
 
 async def test_a_turn_drops_its_answer_when_a_person_took_the_ticket_meanwhile(h: Harness, chat: Chat) -> None:

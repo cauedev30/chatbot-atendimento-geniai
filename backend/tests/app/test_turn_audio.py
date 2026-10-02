@@ -298,6 +298,22 @@ async def test_the_greeting_waits_for_the_note_of_a_first_audio(h: Harness, chat
     assert len(h.chatwoot.notes) == 1
 
 
+async def test_a_greeting_is_dropped_for_a_message_that_arrived_meanwhile_and_the_audio_is_not_heard_again(
+    h: Harness, chat: Chat
+) -> None:
+    conversation_id = 704
+    h.chatwoot.hold_notes = asyncio.Event()
+    await chat.receive(conversation_id, "", voice(h, "oi"))
+    turn = asyncio.create_task(process_turn(h.deps, conversation_id))
+    await until(lambda: h.transcriber.heard)
+    await chat.receive(conversation_id, "esqueci a senha do painel")
+    h.chatwoot.hold_notes.set()
+    assert await turn is None
+    assert await queued_messages(h, conversation_id) == []
+    assert await process_turn(h.deps, conversation_id) == "greeting"
+    assert (len(h.transcriber.heard), len(h.chatwoot.notes)) == (1, 1)
+
+
 async def test_a_note_that_fails_does_not_stop_the_turn(h: Harness, chat: Chat) -> None:
     conversation_id = await chat.greeted()
     h.chatwoot.fail_notes = True

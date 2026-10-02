@@ -1,6 +1,7 @@
 import asyncio
 import time
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -163,14 +164,33 @@ async def run_turn(
     return outcome
 
 
-async def _claim(conn: AsyncConnection, t: TicketRow, consumed_id: int) -> bool:
-    """Locks the ticket and checks the turn still applies, then marks its messages as read. It does not
-    when a person moved the ticket out of triage meanwhile: the turn then sends nothing."""
+async def _claim(
+    deps: Deps,
+    conn: AsyncConnection,
+    t: TicketRow,
+    messages: list[MessageRow],
+    consumed_id: int,
+    *,
+    closes: bool = False,
+) -> bool:
+    """Locks the ticket and checks the turn still applies, then marks its messages as read. It does not, and
+    the turn sends nothing, when a person moved the ticket out of triage meanwhile; nor when a customer
+    message arrived while the turn prepared its reply (owner, 2026-10-02): the turn that message scheduled
+    answers them all. Two exceptions send the reply anyway, the new messages then getting the next turn: a
+    turn that closes the ticket as resolved (they may be another problem, see _carry_late_messages), and a
+    turn whose oldest message waited longer than max_reply_hold_ms, so a customer who keeps writing still
+    gets an answer. Logs `turn superseded` with how many messages arrived, never their content."""
     current = await get_ticket(conn, t.id, lock=True)
     if current is None or current.column != "in_triage":
         return False
     if current.last_consumed_message_id != t.last_consumed_message_id:
         return False
+    if not closes:
+        arrived = pending_customer_messages(await list_messages(conn, t.id), consumed_id)
+        oldest = pending_customer_messages(messages, t.last_consumed_message_id)[0]
+        if arrived and deps.now() - oldest.at <= timedelta(milliseconds=deps.rules.max_reply_hold_ms):
+            deps.log.info({"ticketId": t.id, "arrived": len(arrived)}, "turn superseded")
+            return False
     await update_ticket(conn, t.id, {"last_consumed_message_id": consumed_id})
     return True
 
@@ -253,7 +273,7 @@ async def _decide(
     if greeting is not None:
         await notes.wait()
         async with deps.engine.begin() as conn:
-            if not await _claim(conn, t, consumed_id):
+            if not await _claim(deps, conn, t, messages, consumed_id):
                 return None
             await add_message(conn, NewMessage(ticket_id=t.id, author="bot", text=greeting, at=deps.now()))
             await enqueue_message(conn, t.chatwoot_conversation_id, greeting)
@@ -355,7 +375,7 @@ async def _apply(
     transcription notes, so none comes after the reply in Chatwoot."""
     await notes.wait()
     async with deps.engine.begin() as conn:
-        if not await _claim(conn, t, consumed_id):
+        if not await _claim(deps, conn, t, messages, consumed_id, closes=isinstance(decision, ResolvedByBot)):
             return None
         if turn is not None:
             read = {m.id: m for m in with_outcomes(messages, images, turn.image_descriptions)} if images else {}

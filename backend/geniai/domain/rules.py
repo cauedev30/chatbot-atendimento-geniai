@@ -11,6 +11,10 @@ class TriageRules:
     burst_window_ms: int
     """Silence that closes a burst of messages into one turn (spec §5.1 step 1), only until the bot's first
     reply in the ticket (owner, 2026-10-02; see app/turn_scheduler.py). 4 s is the minimum (owner, 2026-09-30)."""
+    max_reply_hold_ms: int
+    """A customer message that arrives while a turn prepares its reply drops that reply, and the next turn
+    answers them all; but not once the turn's oldest message waited longer than this: then the reply goes
+    (owner, 2026-10-02; see app/process_turn._claim)."""
     silence_timeout_ms: int
     """Silence that moves a ticket in triage to "No response" (spec §5.1 step 9)."""
     silence_applies_before_faq: bool
@@ -56,6 +60,7 @@ class TriageRules:
 
 DEFAULT_RULES = TriageRules(
     burst_window_ms=4_000,
+    max_reply_hold_ms=30_000,
     silence_timeout_ms=24 * 60 * 60 * 1000,
     silence_applies_before_faq=True,
     max_unclear_feedback_reasks=1,

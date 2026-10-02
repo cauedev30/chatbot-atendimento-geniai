@@ -26,7 +26,8 @@ each problem.
 - Greets the attendant by registered name and unit and asks for the problem; when the first message
   already describes it, only asks to confirm who they are and then uses that message.
 - Until its first reply in the ticket, groups a burst of short messages ("oi" / "bom dia") into one
-  turn (4 s of silence); after it, answers at once.
+  turn (4 s of silence); after it, answers at once. A message that arrives while the bot prepares a
+  reply drops that reply, and one reply answers both; a reply is held this way for at most 30 s.
 - Sends at most one FAQ entry, verbatim as the team wrote it; the LLM only writes the framing
   sentence. Then asks whether it solved the problem.
 - Answers up to three questions about the entry sent, only from that entry's knowledge base, and asks
@@ -170,9 +171,10 @@ Run **one process with one worker**: the order of each conversation's messages a
 burst timers, are kept in memory. The service logs each request as a JSON line with the webhook token
 masked; uvicorn's own access log is off because it would print the token. If you start uvicorn
 yourself (`uvicorn geniai.main:create_app --factory`), pass `--no-access-log` and no `--workers`.
-Tunable conversation rules (burst window, 4 s, silence timeout, re-ask counts, how many questions about
-the FAQ entry are answered (`max_faq_questions`, 3), whether "take" asks who, the card summary's
-30 s deadline, the audio limits: 2 min, 5 MB, 15 s to download and 15 s to transcribe) live in
+Tunable conversation rules (burst window, 4 s; how long a reply is held for new messages, 30 s;
+silence timeout, re-ask counts, how many questions about the FAQ entry are answered
+(`max_faq_questions`, 3), whether "take" asks who, the card summary's 30 s deadline, the audio
+limits: 2 min, 5 MB, 15 s to download and 15 s to transcribe) live in
 `backend/geniai/domain/rules.py`; the ones marked `OWNER-UNCONFIRMED` still await the owner's
 confirmation.
 

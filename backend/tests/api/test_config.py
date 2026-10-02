@@ -142,6 +142,10 @@ def test_the_burst_window_is_the_owner_s_four_seconds() -> None:
     assert DEFAULT_RULES.burst_window_ms == 4_000
 
 
+def test_a_reply_is_held_for_new_messages_at_most_the_owner_s_30_seconds() -> None:
+    assert DEFAULT_RULES.max_reply_hold_ms == 30_000
+
+
 def test_image_reading_limits_are_the_owner_unconfirmed_defaults() -> None:
     assert (DEFAULT_RULES.max_images_per_turn, DEFAULT_RULES.max_image_bytes) == (4, 5 * 1024 * 1024)
     assert DEFAULT_RULES.image_download_timeout_ms == 15_000

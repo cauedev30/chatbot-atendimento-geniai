@@ -81,6 +81,24 @@ class AudioFetcher(Protocol):
     async def fetch_audio(self, url: str) -> AudioData | FetchFailure: ...
 
 
+TranscribeFailureReason = Literal["timeout", "status", "error", "empty"]
+
+
+@dataclass(frozen=True)
+class TranscribeFailure:
+    """Why an audio was not transcribed, for the log: never the audio nor any text."""
+
+    reason: TranscribeFailureReason
+    status: int | None = None
+    """With reason "status": the HTTP status the provider answered."""
+
+
+class TranscriberPort(Protocol):
+    """Turns a customer's audio into text. Never raises: a failure, an empty text among them, is a result."""
+
+    async def transcribe(self, audio: AudioData) -> str | TranscribeFailure: ...
+
+
 class Logger(Protocol):
     def info(self, obj: dict[str, object], msg: str | None = None) -> None: ...
 

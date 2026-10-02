@@ -165,8 +165,23 @@ async def test_an_audio_not_heard_follows_the_media_rule_and_is_named_for_the_ll
     assert stored.outcome == "failed"
     h.llm.push(turn_json(category_id=h.seed.categories["other"], needs_clarification=True, reply="Qual?"))
     await chat.customer(conversation_id, "é sobre o painel")
-    assert history(h)[-2:] == ["[áudio — o bot não ouve]", TEXT.ask_for_text_audio_failed]
+    assert history(h)[-2:] == ["[áudio — não foi possível ouvir]", TEXT.ask_for_text_audio_failed]
     assert len(h.transcriber.heard) == (1 if opens else 0)
+
+
+async def test_an_audio_not_heard_next_to_text_reaches_the_llm_named_by_why(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.greeted()
+    await chat.receive(conversation_id, "", voice(h, "o painel caiu"))
+    await chat.receive(conversation_id, "", voice(h, TranscribeFailure("error")))
+    await chat.receive(conversation_id, "", voice(h, "x", seconds=180))
+    h.llm.push(turn_json(category_id=h.seed.categories["other"], needs_clarification=True, reply="Qual?"))
+    assert await chat.customer(conversation_id, "o sistema caiu") == "ask_clarification"
+    assert payload(h)["new_messages"] == [
+        heard("o painel caiu"),
+        "[áudio — não foi possível ouvir]",
+        "[áudio — passou de 2 minutos, não ouvido]",
+        "o sistema caiu",
+    ]
 
 
 async def test_an_audio_too_long_beside_one_not_transcribed_asks_for_a_shorter_one(h: Harness, chat: Chat) -> None:

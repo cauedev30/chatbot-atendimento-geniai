@@ -7,7 +7,8 @@ turns show the description instead of sending the image again. An image in a tur
 LLM (the greeting, a request for a person, a request for text) stays unread for the next LLM turn.
 
 An audio is transcribed before the turn decides anything (app/transcription.py): once transcribed, it
-counts as text everywhere here; otherwise it is an attachment the bot cannot open.
+counts as text everywhere here; otherwise it is an attachment the bot cannot open, named by why (failed,
+too long, or transcription off).
 """
 
 import asyncio
@@ -154,8 +155,11 @@ async def read_images(deps: Deps, ticket_id: int, messages: list[MessageRow]) ->
 def _label(m: MessageRow, i: int, a: Attachment, turn: TurnImages | None) -> str:
     match a.kind:
         case "audio":
-            said = _transcript(a)
-            return label.AUDIO if said is None else label.audio_transcribed(said)
+            if (said := _transcript(a)) is not None:
+                return label.audio_transcribed(said)
+            if a.outcome == "too_long":
+                return label.AUDIO_TOO_LONG
+            return label.AUDIO_FAILED if a.outcome == "failed" else label.AUDIO
         case "video":
             return label.VIDEO
         case "file":

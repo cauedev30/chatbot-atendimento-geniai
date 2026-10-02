@@ -23,7 +23,7 @@ from geniai.app.board import BoardError
 from geniai.app.keyed_queue import KeyedQueue
 from geniai.app.logging import ConsoleLogger
 from geniai.app.outbox import OutboxWorker
-from geniai.app.ports import Deps
+from geniai.app.ports import AudioTranscription, Deps
 from geniai.app.process_turn import run_turn
 from geniai.app.silence_sweeper import resume_pending_turns, start_sweeper
 from geniai.app.turn_scheduler import DebouncedScheduler, TurnScheduler
@@ -33,6 +33,7 @@ from geniai.config import AppConfig, load_config
 from geniai.db.engine import create_engine
 from geniai.db.migrate import migrate
 from geniai.llm.openai_compatible import create_openai_compatible_llm
+from geniai.transcription.openai_compatible import create_openai_compatible_transcriber
 
 SWEEP_INTERVAL_S = 5 * 60
 
@@ -71,6 +72,20 @@ def _lifespan(state: AppState) -> Callable[[FastAPI], AbstractAsyncContextManage
                     timeout_ms=config.rules.image_download_timeout_ms,
                 )
                 clients.push_async_callback(media.aclose)
+            transcription = None
+            if config.transcription is not None:
+                # Its own download limits, apart from the images'.
+                audio_media = create_chatwoot_media(
+                    config.chatwoot,
+                    max_bytes=config.rules.max_audio_bytes,
+                    timeout_ms=config.rules.audio_download_timeout_ms,
+                )
+                clients.push_async_callback(audio_media.aclose)
+                transcriber = create_openai_compatible_transcriber(
+                    config.transcription, timeout_ms=config.rules.transcribe_timeout_ms
+                )
+                clients.push_async_callback(transcriber.aclose)
+                transcription = AudioTranscription(audio_media, transcriber)
             deps = Deps(
                 engine=engine,
                 llm=llm,
@@ -80,6 +95,7 @@ def _lifespan(state: AppState) -> Callable[[FastAPI], AbstractAsyncContextManage
                 log=log,
                 bot_only_phones=config.bot_only_phones,
                 media=media,
+                transcription=transcription,
             )
             async with _running(state, deps):
                 yield

@@ -14,6 +14,8 @@ FILE: Final = "[arquivo — o bot não abre]"
 IMAGE_SEEN_FALLBACK: Final = "[imagem vista pelo bot]"
 """Stored as the description of an image the LLM saw but did not describe."""
 MAX_DESCRIPTION_LEN: Final = 300
+MAX_TRANSCRIPT_LEN: Final = 3000
+"""Longest transcription of an audio the bot keeps; a longer one is cut."""
 
 
 def image_sent(n: int) -> str:
@@ -24,3 +26,13 @@ def image_sent(n: int) -> str:
 def image_seen(description: str) -> str:
     """An image the LLM saw in an earlier turn, shown by its description instead of being sent again."""
     return description if description == IMAGE_SEEN_FALLBACK else f"[imagem: {description}]"
+
+
+def audio_transcribed(transcript: str) -> str:
+    """An audio the bot transcribed: what the customer said, for the LLM and the team."""
+    return f'[áudio transcrito: "{transcript}"]'
+
+
+def transcript_note(transcript: str) -> str:
+    """The private note the team reads in the Chatwoot conversation after each transcription."""
+    return f"Transcrição do áudio (bot): {transcript}"

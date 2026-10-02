@@ -101,6 +101,14 @@ class TranscriberPort(Protocol):
     async def transcribe(self, audio: AudioData) -> str | TranscribeFailure: ...
 
 
+@dataclass(frozen=True)
+class AudioTranscription:
+    """How the bot hears a customer's audio: downloaded from Chatwoot, then transcribed."""
+
+    media: AudioFetcher
+    transcriber: TranscriberPort
+
+
 class Logger(Protocol):
     def info(self, obj: dict[str, object], msg: str | None = None) -> None: ...
 
@@ -126,3 +134,5 @@ class Deps:
     """Test mode (BOT_ONLY_PHONES): when not empty, the only phones the bot serves; see domain/audience.py."""
     media: MediaFetcher | None = None
     """Downloads customer images for the LLM; None when image reading is off (LLM_READS_IMAGES=false)."""
+    transcription: AudioTranscription | None = None
+    """Downloads and transcribes customer audios; None when transcription is off (no TRANSCRIBE_*)."""

@@ -12,12 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from sqlalchemy.pool import NullPool
 
 from geniai.app.outbox import deliver_pending
-from geniai.app.ports import Deps
+from geniai.app.ports import AudioTranscription, Deps
 from geniai.db.engine import create_engine
 from geniai.db.fixtures import SeedResult, seed_fictitious
 from geniai.db.migrate import migrate
 from geniai.domain.rules import DEFAULT_RULES
-from tests.support.fakes import FakeChatwoot, FakeMedia, RecordingLogger, ScriptedLlm
+from tests.support.fakes import FakeChatwoot, FakeMedia, FakeTranscriber, RecordingLogger, ScriptedLlm
 
 RESET_SQL = (
     "TRUNCATE outbox, ticket_move, triage_message, ticket, faq_item, attendant, unit, team_member "
@@ -81,7 +81,9 @@ class Harness:
     llm: ScriptedLlm = field(default_factory=ScriptedLlm)
     logger: RecordingLogger = field(default_factory=RecordingLogger)
     media: FakeMedia = field(default_factory=FakeMedia)
-    """Chatwoot's images; the bot reads them only after reads_images() (LLM_READS_IMAGES is off by default)."""
+    """Chatwoot's images and audios; the bot reads images only after reads_images() (LLM_READS_IMAGES is off
+    by default) and audios only after transcribes() (TRANSCRIBE_* are unset by default)."""
+    transcriber: FakeTranscriber = field(default_factory=FakeTranscriber)
     deps: Deps = field(init=False)
 
     def __post_init__(self) -> None:
@@ -102,6 +104,9 @@ class Harness:
 
     def reads_images(self) -> None:
         self.deps.media = self.media
+
+    def transcribes(self) -> None:
+        self.deps.transcription = AudioTranscription(self.media, self.transcriber)
 
     def advance(self, ms: int) -> None:
         self.now = self.now + timedelta(milliseconds=ms)

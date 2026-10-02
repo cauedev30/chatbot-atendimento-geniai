@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from geniai.app.ports import ChatwootStatus, FetchFailure, ImageData, LlmRequest
+from geniai.app.ports import AudioData, ChatwootStatus, FetchFailure, ImageData, LlmRequest, TranscribeFailure
 
 
 @dataclass(frozen=True)
@@ -46,15 +46,33 @@ class FakeChatwoot:
 
 
 class FakeMedia:
-    """Serves the images put in `images` by link; any other link fails as Chatwoot would with a 404."""
+    """Serves the images put in `images` and the audios put in `audios` by link; any other link fails as
+    Chatwoot would with a 404."""
 
     def __init__(self) -> None:
         self.images: dict[str, ImageData | FetchFailure] = {}
+        self.audios: dict[str, AudioData | FetchFailure] = {}
         self.fetched: list[str] = []
 
     async def fetch_image(self, url: str) -> ImageData | FetchFailure:
         self.fetched.append(url)
         return self.images.get(url, FetchFailure("status"))
+
+    async def fetch_audio(self, url: str) -> AudioData | FetchFailure:
+        self.fetched.append(url)
+        return self.audios.get(url, FetchFailure("status"))
+
+
+class FakeTranscriber:
+    """Transcribes the audios put in `texts`, by their bytes; any other fails as the provider would with a 500."""
+
+    def __init__(self) -> None:
+        self.texts: dict[bytes, str | TranscribeFailure] = {}
+        self.heard: list[AudioData] = []
+
+    async def transcribe(self, audio: AudioData) -> str | TranscribeFailure:
+        self.heard.append(audio)
+        return self.texts.get(audio.data, TranscribeFailure("status", 500))
 
 
 class ScriptedLlm:

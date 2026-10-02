@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from geniai.app.attachments import (
     TurnImages,
+    customer_words,
+    has_unheard_media,
     is_legible,
     may_be_legible,
     message_text,
@@ -36,6 +38,7 @@ from geniai.app.tickets_repo import (
     set_message_attachments,
     update_ticket,
 )
+from geniai.app.transcription import transcribe_audios
 from geniai.app.turn_scheduler import TurnScheduler
 from geniai.domain.greeting import is_bare_greeting
 from geniai.domain.human_request import mentions_human_request
@@ -189,7 +192,8 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
     Reads, then decides (the LLM runs outside any open transaction), then writes the state with the
     bot message stored first, then sends (spec §10). Returns None when there was nothing to do or the
     decision no longer applied (see _claim). Images are downloaded outside any transaction too, and only
-    when the LLM may be called (see app/attachments.py).
+    when the LLM may be called (see app/attachments.py). Audios are transcribed first, outside any
+    transaction, so what the customer said counts as text for every decision (see app/transcription.py).
     """
     decision: Decision | None = None
     greeting: str | None = None
@@ -199,34 +203,35 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
         if t is None or t.column != "in_triage":
             return None
         messages = await list_messages(conn, t.id)
-        pending = pending_customer_messages(messages, t.last_consumed_message_id)
-        if not pending:
-            return None
-        consumed_id = pending[-1].id
-        timing.wait_ms = max(0, round((deps.now() - pending[-1].at).total_seconds() * 1000))
-
-        text = "\n".join(m.text for m in pending if not m.is_media)
-        keyword_human_request = mentions_human_request(text)
-
-        if not any(m.author == "bot" for m in messages):
-            if keyword_human_request:
-                decision = Handoff("human_requested")
-            else:
-                if t.attendant_id is None:
-                    raise ValueError(f"ticket {t.id} has no attendant")
-                who = await get_attendant_with_unit(conn, t.attendant_id)
-                # A first message that already says something is kept for the next turn: the greeting
-                # then only asks the customer to confirm who they are.
-                bare = is_bare_greeting(
-                    [m.text for m in pending if not m.is_media],
-                    has_media=any(m.is_media or m.attachments for m in pending),
-                )
-                greet = TEXT.greeting if bare else TEXT.greeting_with_content
-                greeting = greet(who.name, who.unit_name)
-        elif keyword_human_request:
-            # Before any download: a request for a person needs nothing from the images.
-            decision = pre_llm_decision(_state_of(t), PreLlmSignals(True, nothing_legible=False), deps.rules)
         await conn.rollback()
+    pending = pending_customer_messages(messages, t.last_consumed_message_id)
+    if not pending:
+        return None
+    consumed_id = pending[-1].id
+    timing.wait_ms = max(0, round((deps.now() - pending[-1].at).total_seconds() * 1000))
+
+    messages = await transcribe_audios(deps, t, messages)
+    pending = pending_customer_messages(messages, t.last_consumed_message_id)
+    words = customer_words(pending)
+    keyword_human_request = mentions_human_request("\n".join(words))
+
+    if not any(m.author == "bot" for m in messages):
+        if keyword_human_request:
+            decision = Handoff("human_requested")
+        else:
+            if t.attendant_id is None:
+                raise ValueError(f"ticket {t.id} has no attendant")
+            async with deps.engine.connect() as conn:
+                who = await get_attendant_with_unit(conn, t.attendant_id)
+                await conn.rollback()
+            # A first message that already says something is kept for the next turn: the greeting then
+            # only asks the customer to confirm who they are.
+            bare = is_bare_greeting(words, has_media=has_unheard_media(pending))
+            greet = TEXT.greeting if bare else TEXT.greeting_with_content
+            greeting = greet(who.name, who.unit_name)
+    elif keyword_human_request:
+        # Before any image download: a request for a person needs nothing from the images.
+        decision = pre_llm_decision(_state_of(t), PreLlmSignals(True, nothing_legible=False), deps.rules)
 
     if greeting is not None:
         async with deps.engine.begin() as conn:

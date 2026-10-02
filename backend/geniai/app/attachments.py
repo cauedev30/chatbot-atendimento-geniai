@@ -5,6 +5,9 @@ An image is read once. Until an LLM turn has read its message, its outcome is No
 it (the most recent max_images_per_turn of them), sends it and stores the LLM's description, and later
 turns show the description instead of sending the image again. An image in a turn decided before the
 LLM (the greeting, a request for a person, a request for text) stays unread for the next LLM turn.
+
+An audio is transcribed before the turn decides anything (app/transcription.py): once transcribed, it
+counts as text everywhere here; otherwise it is an attachment the bot cannot open.
 """
 
 import asyncio
@@ -48,6 +51,28 @@ def _is_legacy_media(m: MessageRow) -> bool:
     return m.is_media and not m.attachments
 
 
+def _transcript(a: Attachment) -> str | None:
+    """What an audio said, once transcribed; None for anything else."""
+    return a.transcript if a.kind == "audio" and a.outcome == "transcribed" and a.transcript else None
+
+
+def customer_words(pending: list[MessageRow]) -> list[str]:
+    """What the customer wrote or said in the turn's messages: what each transcribed audio said, then each
+    text or caption, in order."""
+    words: list[str] = []
+    for m in pending:
+        words += [said for a in m.attachments if (said := _transcript(a))]
+        if not m.is_media:
+            words.append(m.text)
+    return words
+
+
+def has_unheard_media(pending: list[MessageRow]) -> bool:
+    """Whether the turn's messages carry something besides words: a photo, a video, a file, or an audio that
+    was not transcribed."""
+    return any(_is_legacy_media(m) or any(_transcript(a) is None for a in m.attachments) for m in pending)
+
+
 def _unread_images(messages: list[MessageRow]) -> list[tuple[Slot, Attachment]]:
     return [
         ((m.id, i), a)
@@ -59,12 +84,13 @@ def _unread_images(messages: list[MessageRow]) -> list[tuple[Slot, Attachment]]:
 
 
 def may_be_legible(pending: list[MessageRow]) -> bool:
-    """Whether the turn can have anything the LLM reads, before any download: text, or an unread image."""
-    return any(not m.is_media for m in pending) or bool(_unread_images(pending))
+    """Whether the turn can have anything the LLM reads, before any image download: words (text or a
+    transcribed audio), or an unread image."""
+    return bool(customer_words(pending)) or bool(_unread_images(pending))
 
 
 def is_legible(pending: list[MessageRow], turn: TurnImages) -> bool:
-    return any(not m.is_media for m in pending) or any(
+    return bool(customer_words(pending)) or any(
         (m.id, i) in turn.sent for m in pending for i in range(len(m.attachments))
     )
 
@@ -119,7 +145,8 @@ async def read_images(deps: Deps, ticket_id: int, messages: list[MessageRow]) ->
 def _label(m: MessageRow, i: int, a: Attachment, turn: TurnImages | None) -> str:
     match a.kind:
         case "audio":
-            return label.AUDIO
+            said = _transcript(a)
+            return label.AUDIO if said is None else label.audio_transcribed(said)
         case "video":
             return label.VIDEO
         case "file":
@@ -139,7 +166,7 @@ def _label(m: MessageRow, i: int, a: Attachment, turn: TurnImages | None) -> str
 
 def message_text(m: MessageRow, turn: TurnImages | None = None) -> str:
     """A message as the LLM (with the turn's images) or the team (turn None) reads it: the labels of its
-    attachments, then its text or caption."""
+    attachments (a transcribed audio by what it said), then its text or caption."""
     labels = [_label(m, i, a, turn) for i, a in enumerate(m.attachments)]
     if _is_legacy_media(m):
         labels.append(label.FILE)

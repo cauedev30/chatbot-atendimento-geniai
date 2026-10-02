@@ -25,7 +25,8 @@ each problem.
   once, silently. A test mode (`BOT_ONLY_PHONES`) limits the bot to a list of phones.
 - Greets the attendant by registered name and unit and asks for the problem; when the first message
   already describes it, only asks to confirm who they are and then uses that message.
-- Groups a burst of short messages into one turn (about 5 s of silence).
+- Until its first reply in the ticket, groups a burst of short messages ("oi" / "bom dia") into one
+  turn (4 s of silence); after it, answers at once.
 - Sends at most one FAQ entry, verbatim as the team wrote it; the LLM only writes the framing
   sentence. Then asks whether it solved the problem.
 - Answers up to three questions about the entry sent, only from that entry's knowledge base, and asks
@@ -169,7 +170,7 @@ Run **one process with one worker**: the order of each conversation's messages a
 burst timers, are kept in memory. The service logs each request as a JSON line with the webhook token
 masked; uvicorn's own access log is off because it would print the token. If you start uvicorn
 yourself (`uvicorn geniai.main:create_app --factory`), pass `--no-access-log` and no `--workers`.
-Tunable conversation rules (burst window, silence timeout, re-ask counts, how many questions about
+Tunable conversation rules (burst window, 4 s, silence timeout, re-ask counts, how many questions about
 the FAQ entry are answered (`max_faq_questions`, 3), whether "take" asks who, the card summary's
 30 s deadline, the audio limits: 2 min, 5 MB, 15 s to download and 15 s to transcribe) live in
 `backend/geniai/domain/rules.py`; the ones marked `OWNER-UNCONFIRMED` still await the owner's
@@ -227,7 +228,7 @@ A test also checks that the committed `backend/openapi.json` matches the API.
 | `BOT_ONLY_PHONES` | Optional test mode: comma-separated phone numbers the bot serves; any other conversation is handed to the team at once. Empty serves everyone. Each entry must be a Brazilian phone number |
 | `LLM_READS_IMAGES` | `true` downloads the customer's images from Chatwoot and sends them to the LLM provider with the turn (the model must accept images); `false` (default) does not |
 | `TRANSCRIBE_BASE_URL`, `TRANSCRIBE_API_KEY`, `TRANSCRIBE_MODEL` | Optional: any OpenAI-compatible `/audio/transcriptions` endpoint, apart from the LLM's. With all three, the customer's audios (up to 2 min) are downloaded from Chatwoot and sent to it, in Portuguese; with none, the bot says it cannot hear audio. Only some of them is a configuration error |
-| `BURST_WINDOW_MS` | Optional: silence that closes a burst of messages into one turn |
+| `BURST_WINDOW_MS` | Optional: silence that closes a burst of messages into one turn, until the bot's first reply in the ticket; default 4000 |
 | `SILENCE_TIMEOUT_HOURS` | Optional: silence that moves a triage ticket to "No response" |
 | `EVAL_CANDIDATES` | JSON list of `{label, baseUrl, model, apiKeyEnv, extraBody?}` for the evaluation |
 

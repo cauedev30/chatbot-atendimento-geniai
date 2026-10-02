@@ -120,6 +120,22 @@ async def test_hands_a_group_conversation_to_the_team_and_ignores_the_same_deliv
     assert api.scheduler.scheduled == []
 
 
+async def test_the_bot_s_own_transcription_note_stores_nothing_and_starts_no_turn(api: Api) -> None:
+    assert (await incoming(api, 48, "oi")).json() == {"outcome": "triage_ticket"}
+    note = {
+        "event": "message_created",
+        "id": next(_message_ids),
+        "content": "Transcrição do áudio (bot): quero falar com um atendente",
+        "message_type": "outgoing",
+        "private": True,
+        "conversation": {"id": 48, "status": "pending"},
+        "sender": {"id": 2, "type": "user"},
+    }
+    assert (await api.client.post(URL, json=note)).json() == {"ignored": "not incoming"}
+    assert await stored_texts(api, 48) == ["oi"]
+    assert api.scheduler.scheduled == [48]
+
+
 async def test_the_webhook_needs_no_session_and_is_not_under_api(api: Api) -> None:
     assert (await api.client.post(f"/api/webhooks/chatwoot/{WEBHOOK_TOKEN}", json={})).status_code == 404
 

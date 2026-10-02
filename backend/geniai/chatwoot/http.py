@@ -71,6 +71,11 @@ class ChatwootHttp:
         body: dict[str, object] = {"content": text, "message_type": "outgoing", "private": False}
         await self._post(f"{self._conversation_path(conversation_id)}/messages", body)
 
+    async def send_private_note(self, conversation_id: int, text: str) -> None:
+        """A note for the team in the conversation; the customer never sees it."""
+        body: dict[str, object] = {"content": text, "message_type": "outgoing", "private": True}
+        await self._post(f"{self._conversation_path(conversation_id)}/messages", body)
+
     async def set_status(self, conversation_id: int, status: ChatwootStatus) -> None:
         await self._post(f"{self._conversation_path(conversation_id)}/toggle_status", {"status": status})
 

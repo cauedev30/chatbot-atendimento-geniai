@@ -22,12 +22,19 @@ class FakeChatwoot:
     def __init__(self) -> None:
         self.sent: list[Sent] = []
         self.statuses: list[StatusSet] = []
+        self.notes: list[Sent] = []
         self.fail_sends = False
+        self.fail_notes = False
 
     async def send_message(self, conversation_id: int, text: str) -> None:
         if self.fail_sends:
             raise RuntimeError("chatwoot unavailable")
         self.sent.append(Sent(conversation_id, text))
+
+    async def send_private_note(self, conversation_id: int, text: str) -> None:
+        if self.fail_sends or self.fail_notes:
+            raise RuntimeError("chatwoot unavailable")
+        self.notes.append(Sent(conversation_id, text))
 
     async def set_status(self, conversation_id: int, status: ChatwootStatus) -> None:
         if self.fail_sends:

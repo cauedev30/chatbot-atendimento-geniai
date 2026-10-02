@@ -120,6 +120,19 @@ def test_ignores_outgoing_messages_and_private_notes() -> None:
     assert parse_chatwoot_event(INCOMING | {"private": True}) == Ignored("private note")
 
 
+BOT_NOTE: dict[str, Any] = INCOMING | {
+    "content": "Transcrição do áudio (bot): quero falar com um atendente",
+    "message_type": "outgoing",
+    "private": True,
+    "sender": {"id": 2, "name": "Suporte", "type": "user"},
+}
+
+
+def test_ignores_the_private_note_the_bot_posts_with_a_transcription() -> None:
+    assert parse_chatwoot_event(BOT_NOTE) == Ignored("not incoming")
+    assert parse_chatwoot_event(BOT_NOTE | {"message_type": 1}) == Ignored("not incoming")
+
+
 def test_reads_a_resolved_status_change_from_either_event_name() -> None:
     changed = {"event": "conversation_status_changed", "id": 45, "status": "resolved"}
     assert parse_chatwoot_event(changed) == ConversationResolved(conversation_id=45)

@@ -36,6 +36,23 @@ async def test_sends_an_outgoing_message() -> None:
     assert json.loads(calls[0].content) == {"content": "olá", "message_type": "outgoing", "private": False}
 
 
+async def test_posts_a_private_note_the_customer_does_not_see() -> None:
+    transport, calls = recording_transport([200])
+    await create_chatwoot_http(cfg(transport)).send_private_note(45, "Transcrição do áudio (bot): oi")
+    assert str(calls[0].url) == "https://chatwoot.example/api/v1/accounts/3/conversations/45/messages"
+    assert json.loads(calls[0].content) == {
+        "content": "Transcrição do áudio (bot): oi",
+        "message_type": "outgoing",
+        "private": True,
+    }
+
+
+async def test_retries_a_private_note_like_any_message() -> None:
+    transport, calls = scripted_transport([503, 200])
+    await create_chatwoot_http(cfg(transport)).send_private_note(45, "nota")
+    assert len(calls) == 2
+
+
 async def test_toggles_the_conversation_status() -> None:
     transport, calls = recording_transport([200])
     await create_chatwoot_http(cfg(transport)).set_status(45, "open")

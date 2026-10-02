@@ -4,6 +4,7 @@ import pytest
 
 from geniai.config import ConfigError, load_config
 from geniai.domain.rules import DEFAULT_RULES
+from geniai.transcription.openai_compatible import TranscriberConfig
 
 VALID = {
     "DATABASE_URL": "postgresql://user:pass@127.0.0.1:5432/geniai_test",
@@ -31,6 +32,31 @@ def test_loads_a_valid_environment_with_defaults() -> None:
     assert config.trusted_proxies == (ip_network("127.0.0.1/32"), ip_network("::1/128"))
     assert config.bot_only_phones == frozenset()
     assert config.llm_reads_images is False
+    assert config.transcription is None
+
+
+TRANSCRIBE = {
+    "TRANSCRIBE_BASE_URL": "https://stt.example/v1",
+    "TRANSCRIBE_API_KEY": "stt-key",
+    "TRANSCRIBE_MODEL": "stt-model",
+}
+
+
+def test_reads_the_transcription_settings_apart_from_the_llm() -> None:
+    config = load_config(VALID | TRANSCRIBE)
+    assert config.transcription == TranscriberConfig(
+        base_url="https://stt.example/v1", api_key="stt-key", model="stt-model"
+    )
+    assert config.llm.base_url == VALID["LLM_BASE_URL"]
+
+
+@pytest.mark.parametrize("missing", list(TRANSCRIBE))
+def test_a_partial_transcription_setting_names_what_is_missing_and_never_a_value(missing: str) -> None:
+    given = {k: v for k, v in TRANSCRIBE.items() if k != missing}
+    with pytest.raises(ConfigError) as err:
+        load_config(VALID | given | {missing: ""})
+    assert missing in str(err.value)
+    assert all(value not in str(err.value) for value in given.values())
 
 
 def test_reads_the_test_mode_phones_normalized_like_the_contact_phone() -> None:
@@ -102,11 +128,12 @@ def test_rejects_a_short_cookie_secret() -> None:
         ("TRUSTED_PROXY_IPS", "10.0.0.300"),
         ("TRUSTED_PROXY_IPS", "proxy.local"),
         ("LLM_READS_IMAGES", "yes"),
+        ("TRANSCRIBE_BASE_URL", "not a url"),
     ],
 )
 def test_names_an_invalid_variable_and_never_its_value(name: str, value: str) -> None:
     with pytest.raises(ConfigError) as err:
-        load_config(VALID | {name: value})
+        load_config(VALID | TRANSCRIBE | {name: value})
     assert name in str(err.value)
     assert value not in str(err.value)
 

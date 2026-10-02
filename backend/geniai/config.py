@@ -14,6 +14,7 @@ from geniai.chatwoot.http import ChatwootHttpConfig
 from geniai.domain.phone import normalize_br_phone
 from geniai.domain.rules import DEFAULT_RULES, TriageRules
 from geniai.llm.openai_compatible import OpenAiCompatibleConfig
+from geniai.transcription.openai_compatible import TranscriberConfig
 
 
 class ConfigError(Exception):
@@ -53,6 +54,9 @@ class _Env(BaseModel):
     TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
     BOT_ONLY_PHONES: str | None = None
     LLM_READS_IMAGES: Literal["true", "false"] = "false"
+    TRANSCRIBE_BASE_URL: Url | None = None
+    TRANSCRIBE_API_KEY: NonEmpty | None = None
+    TRANSCRIBE_MODEL: NonEmpty | None = None
 
 
 @dataclass(frozen=True)
@@ -73,6 +77,8 @@ class AppConfig:
     """Test mode: when not empty, the bot serves only these phones (E.164); see domain/audience.py."""
     llm_reads_images: bool = False
     """Customer images are downloaded from Chatwoot and sent to the LLM with the turn. Off by default."""
+    transcription: TranscriberConfig | None = None
+    """Customer audios are downloaded from Chatwoot and transcribed; None (off) without TRANSCRIBE_*."""
 
 
 def _reject_non_finite(constant: str) -> object:
@@ -98,6 +104,18 @@ def _phone_list(raw: str | None) -> frozenset[str]:
     return frozenset(phones)
 
 
+def _transcription(e: _Env) -> TranscriberConfig | None:
+    """All three TRANSCRIBE_* variables turn transcription on, none leaves it off; only some of them is a
+    configuration error that names the missing ones."""
+    url, key, model = e.TRANSCRIBE_BASE_URL, e.TRANSCRIBE_API_KEY, e.TRANSCRIBE_MODEL
+    if url is None and key is None and model is None:
+        return None
+    if url is None or key is None or model is None:
+        names = ("TRANSCRIBE_BASE_URL", "TRANSCRIBE_API_KEY", "TRANSCRIBE_MODEL")
+        raise _invalid([name for name, value in zip(names, (url, key, model), strict=True) if value is None])
+    return TranscriberConfig(base_url=url, api_key=key, model=model)
+
+
 def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
     """Reads configuration from the environment. Errors name the variables, never their values."""
     source = os.environ if env is None else env
@@ -121,6 +139,7 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
     except ValueError:
         raise _invalid(["TRUSTED_PROXY_IPS"]) from None
     bot_only_phones = _phone_list(e.BOT_ONLY_PHONES)
+    transcription = _transcription(e)
     rules = DEFAULT_RULES
     if e.BURST_WINDOW_MS is not None:
         rules = replace(rules, burst_window_ms=e.BURST_WINDOW_MS)
@@ -148,4 +167,5 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
         trusted_proxies=trusted_proxies,
         bot_only_phones=bot_only_phones,
         llm_reads_images=e.LLM_READS_IMAGES == "true",
+        transcription=transcription,
     )

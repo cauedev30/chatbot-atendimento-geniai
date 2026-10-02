@@ -13,7 +13,7 @@ flowchart LR
     subgraph BE["Backend · FastAPI (backend/geniai)"]
         WH["api/webhook.py"] --> Q["KeyedQueue<br/>(webhook lane per conversation)"]
         Q --> IN["app/handle_inbound.py"]
-        IN --> SCH["DebouncedScheduler<br/>(burst window)"]
+        IN --> SCH["DebouncedScheduler<br/>(burst window until the first reply)"]
         SCH --> Q2["KeyedQueue<br/>(turn lane per conversation)"] --> TURN["app/process_turn.py"]
         TURN --> DOM["domain/<br/>triage · transitions · silence"]
         TURN --> LLMA["llm/<br/>interpret · openai_compatible"]
@@ -72,9 +72,9 @@ sequenceDiagram
     C->>CW: message
     CW->>B: POST /webhooks/chatwoot/<token>
     B->>B: dedupe by message id, find the open ticket or identify the phone
-    B->>B: store the message, (re)start the burst window
+    B->>B: store the message, (re)start the burst window until the bot's first reply
     B-->>CW: 200 at once (Chatwoot calls follow in the background)
-    Note over B: ~5 s without new messages
+    Note over B: 4 s without new messages before the first reply, none after it
     B->>B: read the ticket and its pending messages
     opt transcription on, the ticket has audios not tried yet
         B->>CW: download each audio (up to 2 min)
@@ -91,7 +91,7 @@ sequenceDiagram
         B->>L: one call: context in, JSON out (validated, one retry)
         B->>B: apply the precedence rules
     end
-    B->>B: write the decision and the bot's reply (one transaction)
+    B->>B: write the decision and the bot's reply (one transaction),<br/>unless a new message arrived meanwhile
     B->>CW: send the reply, update the conversation status
 ```
 
@@ -116,8 +116,11 @@ sequenceDiagram
    Every Chatwoot call is written as a row of the `outbox` table in the same transaction as the ticket
    change that causes it (see "Outbox" below). The webhook never waits for a turn or for Chatwoot, and
    downloads nothing.
-2. **Burst window** (`turn_scheduler.py`): each message restarts a timer per conversation; when it
-   fires, the turn runs under the conversation's turn lane, one turn at a time.
+2. **Burst window** (`turn_scheduler.py`): until the bot's first reply in the ticket, each message
+   restarts a timer per conversation (`burst_window_ms`, 4 s), so "oi" / "bom dia" get one reply; once
+   the ticket has a bot message, a message schedules its turn at once. Every scheduler follows this one
+   rule: the inbound message, the new ticket a close opened, and the restart. The turn runs under the
+   conversation's turn lane, one turn at a time.
 3. **Turn** (`process_turn.py`). The pending customer messages (those after the last one a turn has
    read, `ticket.last_consumed_message_id`) form one turn. A message stored while a turn is running
    stays pending for the next turn. Before any decision, the ticket's audios are transcribed (see
@@ -134,15 +137,23 @@ sequenceDiagram
    runs outside any database transaction; the decision, the summary and category, and the bot's
    reply are written in one transaction, then sent. That
    transaction locks the ticket and drops the decision if a person moved the ticket out of triage
-   meanwhile. When the decision closes the ticket (Resolved by bot) and customer messages arrived during
-   the turn, the ticket still closes, and those messages move to a new ticket, identified like any first
-   message, whose turn is scheduled next. A webhook that waited for the ticket's lock during that close
-   looks for the open ticket again, so it attaches to the new one.
+   meanwhile. It also drops it, a **superseded turn**, when a customer message arrived while the turn
+   prepared its reply: nothing is sent nor marked as read, and the turn that message scheduled answers
+   all the pending messages in one reply (log `turn superseded`). What the dropped turn transcribed stays
+   stored and its notes were already posted, so nothing is done again; what the LLM saw in its images is
+   not stored, and the next turn reads them again. A reply is not dropped once the turn's oldest pending
+   message waited longer than `max_reply_hold_ms` (30 s): a customer who keeps writing still gets an
+   answer, and the new messages get the next turn. A message that arrives after the reply was written
+   gets its own turn, which reads the whole conversation. When the decision closes the ticket (Resolved
+   by bot) and customer messages arrived during the turn, it is never dropped: the ticket still closes,
+   and those messages move to a new ticket, identified like any first message, whose turn is scheduled
+   next, after the burst window. A webhook that waited for the ticket's lock during that close looks for
+   the open ticket again, so it attaches to the new one.
 4. **Silence** (`silence_sweeper.py`): every 5 minutes, triage tickets silent for 24 h move to
    *Sem resposta* and the conversation is resolved.
 5. **Restart**: timers live in memory, so on start the backend reschedules every triage conversation
-   that has unanswered customer messages. Chatwoot calls left pending in the outbox go out when the
-   worker starts.
+   that has unanswered customer messages, with the burst window only if the bot has not replied yet.
+   Chatwoot calls left pending in the outbox go out when the worker starts.
 
 ### Attachments
 
@@ -338,8 +349,9 @@ by default.
   neither the conversation's turn lane nor a place among the running turns, and stopping the app
   cancels it. It calls the LLM only when the LLM is free, which the burst scheduler knows: no
   conversation in its burst window and no turn running (`DebouncedScheduler.wait_idle`); summaries go
-  one at a time. A customer's turn never waits for a summary, and the burst window (4 to 5 s) lets a
-  summary that started just before a message (1.5 to 3 s) finish first. The whole summary, wait
+  one at a time. A customer's turn never waits for a summary. The burst window of a conversation's first
+  messages (4 s) lets a summary that started just before them (1.5 to 3 s) finish first; a later message
+  runs its turn at once, alongside the summary. The whole summary, wait
   included, has 30 s (`summary_deadline_ms`); past it, or when the LLM fails (and at once after
   `llm_failure`), the card gets the customer's words (up to 280 characters) in the `other` category.
 - **Chatwoot:** the ticket and the bot's message are stored before any send. A call is repeated (twice,
@@ -362,6 +374,8 @@ by default.
 - **Logs:** one JSON line per event on stdout; errors keep their message and stack. Each turn whose
   reply reaches the outbox logs `turn timing`: the wait from the last customer message to the turn,
   the image downloads, each LLM attempt with how it ended, and the time until the reply was queued.
+  A turn dropped for a message that arrived meanwhile logs `turn superseded` instead, with the ticket id
+  and how many messages arrived (`arrived`).
   Each Chatwoot call logs its own time (`Chatwoot call sent`, with the conversation id). Each card
   summary logs `card summary`: the ticket id, the wait for the LLM to be free (`waitedMs`), each LLM
   attempt with how it ended (`llmMs`, `llmOutcomes`) and whether the customer's words went instead

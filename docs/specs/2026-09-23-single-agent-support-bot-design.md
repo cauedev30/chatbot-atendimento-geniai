@@ -98,8 +98,10 @@ flowchart LR
 ### 5.1 Steps
 
 1. **A message arrives** through the Chatwoot Agent Bot webhook. Duplicate deliveries are ignored by
-   message id. The bot waits for **~5 s of silence** and processes a burst of short messages
-   ("oi", "tudo bem?", "meu número caiu") as one turn.
+   message id. Until its first reply in the ticket, the bot waits for **4 s of silence** and processes a
+   burst of short messages ("oi", "tudo bem?", "meu número caiu") as one turn; after it, it answers at
+   once. A message that arrives while the bot prepares a reply drops that reply, so one reply answers
+   both, unless the reply closes the ticket or the oldest message it answers waited more than 30 s.
 2. **Identification (code, before anything else).** The sender's phone is normalized to E.164,
    including the Brazilian 9th mobile digit, and looked up in the `attendant` table.
    - **Unknown number:** a ticket is created directly in **Awaiting human** with category
@@ -321,7 +323,7 @@ One page, filtered by period and unit. Everything is computed from the tables in
   answer); never after a read timeout or another answer, so the customer never gets a message twice.
   A call that still fails is marked failed in the outbox and logged; it is not tried again.
 - **Duplicate webhooks:** ignored by Chatwoot message id.
-- **Message bursts:** grouped by the ~5 s silence window (§5.1).
+- **Message bursts:** grouped by the 4 s silence window before the bot's first reply (§5.1).
 - **Media:** handled as in §5.1, step 10.
 
 ## 11. Testing

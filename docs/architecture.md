@@ -189,12 +189,16 @@ A customer message may carry files: a photo, an audio, a video, a document. Thei
 5. **LLM** (`llm/prompt.py`, `llm/openai_compatible.py`): each message reaches the LLM as the labels of
    its attachments followed by its caption: `[imagem 1]` (sent with this call, in order),
    `[imagem: <description>]` (seen in an earlier turn), `[imagem — não foi possível abrir]`,
-   `[imagem — além do limite, não vista]`, `[áudio transcrito: "<text>"]`, `[áudio — o bot não ouve]`
-   (too long, not transcribed, or transcription off), `[vídeo — o bot não abre]`,
-   `[arquivo — o bot não abre]`. The prompt explains them, counts what an image shows and what a
-   transcribed audio says as what the customer wrote (allowing for transcription mistakes), and forbids
-   saying an attachment did not arrive or asking for it again. The team's card summary reads the same
-   labels. With
+   `[imagem — além do limite, não vista]`, `[áudio transcrito: "<text>"]`,
+   `[áudio — não foi possível ouvir]` (transcription on, the audio was not downloaded or not
+   transcribed), `[áudio — passou de 2 minutos, não ouvido]` (transcription on, longer than
+   `max_audio_seconds`; the "2 minutos" is fixed in the text), `[áudio — o bot não ouve]` (transcription
+   off), `[vídeo — o bot não abre]`, `[arquivo — o bot não abre]`. The prompt explains them, counts what
+   an image shows and what a transcribed audio says as what the customer wrote (allowing for
+   transcription mistakes), and forbids saying an attachment did not arrive or asking for it again. When
+   what it can read is not enough, the reply asks for the problem in text: for an audio not heard or
+   longer than 2 minutes it says so, never that the bot cannot hear audios. The team's card summary reads
+   the same labels. With
    images, the user message goes in parts: the text, then each image as a base64 data URI; without,
    the request is plain text, as for a text-only model.
 6. **Description**: the LLM returns `image_descriptions`, one short description per image sent. The

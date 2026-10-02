@@ -40,8 +40,8 @@ class TriageRules:
     max_audio_bytes: int
     """Largest audio the bot downloads, as for an image; a bigger one is treated as one it cannot hear."""
     max_untimed_audio_bytes: int
-    """OWNER-UNCONFIRMED: stands for max_audio_seconds when the duration is not read from the file (any
-    format but Ogg Opus): about 2 min of a 128 kbps MP3 or M4A. A larger audio counts as too long."""
+    """Stands for max_audio_seconds when the duration is not read from the file (any format but Ogg Opus):
+    about 2 min of a 128 kbps MP3 or M4A (owner, 2026-10-02). A larger audio counts as too long."""
     audio_download_timeout_ms: int
     """Time limit of one audio download from Chatwoot, as for an image."""
     transcribe_timeout_ms: int

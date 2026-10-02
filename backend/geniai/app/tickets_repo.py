@@ -10,10 +10,12 @@ from geniai.db.schema import attendant, category, faq_item, ticket, ticket_move,
 from geniai.domain.transitions import TicketTimes, can_move, times_after_move
 from geniai.domain.types import (
     ATTACHMENT_KINDS,
+    AUDIO_OUTCOMES,
     IMAGE_OUTCOMES,
     Actor,
     Attachment,
     AttachmentKind,
+    AudioOutcome,
     Column,
     HandoffReason,
     ImageOutcome,
@@ -216,12 +218,19 @@ class NewMessage:
 
 
 def _attachment_json(a: Attachment) -> dict[str, str]:
-    fields = {"kind": a.kind, "url": a.url, "outcome": a.outcome, "description": a.description}
+    fields = {
+        "kind": a.kind,
+        "url": a.url,
+        "outcome": a.outcome,
+        "description": a.description,
+        "transcript": a.transcript,
+    }
     return {k: v for k, v in fields.items() if v is not None}
 
 
 def _attachments_from_json(raw: object) -> tuple[Attachment, ...]:
-    """Reads the stored list leniently: an unknown kind is a file, an odd field is dropped."""
+    """Reads the stored list leniently: an unknown kind is a file, an odd field (an outcome of another kind
+    among them) is dropped."""
     if not isinstance(raw, list):
         return ()
     found: list[Attachment] = []
@@ -229,14 +238,18 @@ def _attachments_from_json(raw: object) -> tuple[Attachment, ...]:
         if not isinstance(item, dict):
             continue
         kind: AttachmentKind = next((k for k in ATTACHMENT_KINDS if k == item.get("kind")), "file")
-        outcome: ImageOutcome | None = next((o for o in IMAGE_OUTCOMES if o == item.get("outcome")), None)
-        url, description = item.get("url"), item.get("description")
+        outcomes: tuple[ImageOutcome | AudioOutcome, ...] = {"image": IMAGE_OUTCOMES, "audio": AUDIO_OUTCOMES}.get(
+            kind, ()
+        )
+        outcome = next((o for o in outcomes if o == item.get("outcome")), None)
+        url, description, transcript = item.get("url"), item.get("description"), item.get("transcript")
         found.append(
             Attachment(
                 kind,
                 url if isinstance(url, str) else None,
                 outcome,
                 description if isinstance(description, str) else None,
+                transcript if kind == "audio" and isinstance(transcript, str) else None,
             )
         )
     return tuple(found)

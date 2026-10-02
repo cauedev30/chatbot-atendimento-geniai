@@ -120,6 +120,28 @@ async def test_reads_a_message_without_attachments_and_tolerates_odd_stored_ones
     assert stored.attachments == (Attachment("file"), Attachment("image"))
 
 
+async def test_records_an_audio_s_transcription_and_reads_each_outcome_only_for_its_kind(h: Harness) -> None:
+    t = await new_triage_ticket(h)
+    async with h.begin() as conn:
+        await add_message(conn, NewMessage(ticket_id=t.id, author="customer", text="[mídia]", at=h.now))
+        [stored] = await list_messages(conn, t.id)
+        heard = (
+            Attachment("audio", PHOTO, "transcribed", transcript="o painel não abre"),
+            Attachment("audio", None, "too_long"),
+            Attachment("audio", None, "failed"),
+        )
+        await set_message_attachments(conn, stored.id, heard)
+        [stored] = await list_messages(conn, t.id)
+        assert stored.attachments == heard
+        odd = [
+            {"kind": "audio", "outcome": "seen", "transcript": 5},
+            {"kind": "image", "outcome": "transcribed", "transcript": "x"},
+        ]
+        await conn.execute(triage_message.update().where(triage_message.c.id == stored.id).values(attachments=odd))
+        [stored] = await list_messages(conn, t.id)
+    assert stored.attachments == (Attachment("audio"), Attachment("image"))
+
+
 async def test_finds_only_open_tickets_of_a_conversation(h: Harness) -> None:
     t = await new_triage_ticket(h, 12)
     async with h.begin() as conn:

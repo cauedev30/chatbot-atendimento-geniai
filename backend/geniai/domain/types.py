@@ -53,6 +53,12 @@ ImageOutcome = Literal["seen", "failed", "over_limit"]
 past the per-turn limit. None until then."""
 IMAGE_OUTCOMES: Final[tuple[ImageOutcome, ...]] = get_args(ImageOutcome)
 
+AudioOutcome = Literal["transcribed", "too_long", "failed"]
+"""What became of an audio once a turn tried to transcribe it: transcribed, longer than the limit, or not
+transcribed (not downloaded, or the transcription failed or came back empty). None until then, and while
+transcription is off."""
+AUDIO_OUTCOMES: Final[tuple[AudioOutcome, ...]] = get_args(AudioOutcome)
+
 
 @dataclass(frozen=True)
 class Attachment:
@@ -60,9 +66,12 @@ class Attachment:
 
     kind: AttachmentKind
     url: str | None = None
-    outcome: ImageOutcome | None = None
+    outcome: ImageOutcome | AudioOutcome | None = None
+    """An ImageOutcome for an image, an AudioOutcome for an audio."""
     description: str | None = None
     """With outcome "seen": the LLM's short description of the image, shown in later turns instead of it."""
+    transcript: str | None = None
+    """With outcome "transcribed": what the customer said in the audio, shown in every turn instead of it."""
 
 
 @dataclass(frozen=True)

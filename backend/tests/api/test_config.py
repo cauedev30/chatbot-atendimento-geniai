@@ -145,3 +145,10 @@ def test_image_reading_limits_are_the_owner_unconfirmed_defaults() -> None:
 
 def test_the_card_summary_deadline_is_the_owner_unconfirmed_default() -> None:
     assert DEFAULT_RULES.summary_deadline_ms == 30_000
+
+
+def test_audio_limits_are_the_owner_s_two_minutes_and_the_image_s_size_and_time() -> None:
+    assert DEFAULT_RULES.max_audio_seconds == 120
+    assert (DEFAULT_RULES.max_audio_bytes, DEFAULT_RULES.audio_download_timeout_ms) == (5 * 1024 * 1024, 15_000)
+    assert DEFAULT_RULES.max_untimed_audio_bytes == 2 * 1024 * 1024
+    assert DEFAULT_RULES.transcribe_timeout_ms == 15_000

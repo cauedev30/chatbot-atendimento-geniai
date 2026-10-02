@@ -35,6 +35,17 @@ class TriageRules:
     """OWNER-UNCONFIRMED: largest image the bot downloads; a bigger one is treated as one that did not open."""
     image_download_timeout_ms: int
     """OWNER-UNCONFIRMED: time limit of one image download from Chatwoot."""
+    max_audio_seconds: int
+    """Longest audio the bot transcribes (owner, 2026-10-02); a longer one is treated as one it cannot hear."""
+    max_audio_bytes: int
+    """Largest audio the bot downloads, as for an image; a bigger one is treated as one it cannot hear."""
+    max_untimed_audio_bytes: int
+    """OWNER-UNCONFIRMED: stands for max_audio_seconds when the duration is not read from the file (any
+    format but Ogg Opus): about 2 min of a 128 kbps MP3 or M4A. A larger audio counts as too long."""
+    audio_download_timeout_ms: int
+    """Time limit of one audio download from Chatwoot, as for an image."""
+    transcribe_timeout_ms: int
+    """Time limit of one audio transcription."""
     summary_deadline_ms: int
     """OWNER-UNCONFIRMED: time limit of the card summary after a handoff before the LLM, counting its wait
     for the LLM to be free and its calls; past it, the card gets the customer's own words."""
@@ -55,5 +66,10 @@ DEFAULT_RULES = TriageRules(
     max_images_per_turn=4,
     max_image_bytes=5 * 1024 * 1024,
     image_download_timeout_ms=15_000,
+    max_audio_seconds=120,
+    max_audio_bytes=5 * 1024 * 1024,
+    max_untimed_audio_bytes=2 * 1024 * 1024,
+    audio_download_timeout_ms=15_000,
+    transcribe_timeout_ms=15_000,
     summary_deadline_ms=30_000,
 )

@@ -1,12 +1,14 @@
-"""Downloads a customer's image from Chatwoot for the turn (see app/process_turn.py)."""
+"""Downloads a customer's image or audio from Chatwoot for the turn (see app/process_turn.py)."""
 
 import asyncio
+from collections.abc import Collection
 from typing import Final
 from urllib.parse import urljoin, urlsplit
 
 import httpx
 
-from geniai.app.ports import FetchFailure, ImageData
+from geniai.app.ports import AudioData, FetchFailure, ImageData
+from geniai.audio import AUDIO_FORMATS, audio_seconds
 from geniai.chatwoot.http import ChatwootHttpConfig
 from geniai.http_client import pooled_client
 
@@ -54,35 +56,48 @@ class ChatwootMedia:
         await self._client.aclose()
 
     async def fetch_image(self, url: str) -> ImageData | FetchFailure:
+        got = await self._fetch(url, ACCEPTED_IMAGE_TYPES)
+        return got if isinstance(got, FetchFailure) else ImageData(*got)
+
+    async def fetch_audio(self, url: str) -> AudioData | FetchFailure:
+        """Accepts the formats the transcription API takes (geniai.audio.AUDIO_FORMATS) and reads how long
+        an Ogg Opus audio lasts."""
+        got = await self._fetch(url, AUDIO_FORMATS.keys())
+        if isinstance(got, FetchFailure):
+            return got
+        data, content_type = got
+        return AudioData(data, content_type, audio_seconds(data, content_type))
+
+    async def _fetch(self, url: str, accepted: Collection[str]) -> tuple[bytes, str] | FetchFailure:
         if self._chatwoot is None or _origin(url) != self._chatwoot:
             return FetchFailure("host")
         try:
             async with asyncio.timeout(self._timeout_s):
-                return await self._follow(url)
+                return await self._follow(url, accepted)
         except (TimeoutError, httpx.TimeoutException):
             return FetchFailure("timeout")
         except Exception:
             return FetchFailure("error")
 
-    async def _follow(self, url: str) -> ImageData | FetchFailure:
+    async def _follow(self, url: str, accepted: Collection[str]) -> tuple[bytes, str] | FetchFailure:
         for _ in range(MAX_REDIRECTS + 1):
             origin = _origin(url)
             headers = {"api_access_token": self._cfg.api_token} if origin == self._chatwoot else {}
             async with self._client.stream("GET", url, headers=headers) as res:
                 if not res.is_redirect:
-                    return await self._read(res)
+                    return await self._read(res, accepted)
                 url = urljoin(url, res.headers["location"])
                 target = _origin(url)
                 if target is None or (origin is not None and origin[0] == "https" and target[0] != "https"):
                     return FetchFailure("host")
         return FetchFailure("redirects")
 
-    async def _read(self, res: httpx.Response) -> ImageData | FetchFailure:
+    async def _read(self, res: httpx.Response, accepted: Collection[str]) -> tuple[bytes, str] | FetchFailure:
         if not res.is_success:
             return FetchFailure("status")
         content_type = res.headers.get("content-type", "").split(";")[0].strip().lower()
         declared = _declared_size(res)
-        if content_type not in ACCEPTED_IMAGE_TYPES:
+        if content_type not in accepted:
             return FetchFailure("type", content_type or None, declared)
         if declared is not None and declared > self._max_bytes:
             return FetchFailure("size", content_type, declared)
@@ -93,7 +108,7 @@ class ChatwootMedia:
                 return FetchFailure("size", content_type)
         if not data:
             return FetchFailure("empty", content_type, 0)
-        return ImageData(bytes(data), content_type)
+        return bytes(data), content_type
 
 
 def create_chatwoot_media(cfg: ChatwootHttpConfig, *, max_bytes: int, timeout_ms: int) -> ChatwootMedia:

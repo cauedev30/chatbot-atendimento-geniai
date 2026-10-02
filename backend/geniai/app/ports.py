@@ -20,6 +20,17 @@ class ImageData:
 
 
 @dataclass(frozen=True)
+class AudioData:
+    """An audio in memory, never written to disk or to the database."""
+
+    data: bytes
+    content_type: str
+    """One of geniai.audio.AUDIO_FORMATS."""
+    seconds: float | None
+    """How long it lasts, read from the file (Ogg Opus); None when the format's duration is not read."""
+
+
+@dataclass(frozen=True)
 class LlmRequest:
     system: str
     user: str
@@ -50,7 +61,7 @@ FetchFailureReason = Literal["host", "redirects", "status", "type", "size", "emp
 
 @dataclass(frozen=True)
 class FetchFailure:
-    """Why an image was not downloaded, for the log: never the link nor the bytes."""
+    """Why an image or an audio was not downloaded, for the log: never the link nor the bytes."""
 
     reason: FetchFailureReason
     content_type: str | None = None
@@ -62,6 +73,12 @@ class MediaFetcher(Protocol):
     """Downloads a customer's image from Chatwoot for the turn. Never raises: a failure is a result."""
 
     async def fetch_image(self, url: str) -> ImageData | FetchFailure: ...
+
+
+class AudioFetcher(Protocol):
+    """Downloads a customer's audio from Chatwoot for the turn. Never raises: a failure is a result."""
+
+    async def fetch_audio(self, url: str) -> AudioData | FetchFailure: ...
 
 
 class Logger(Protocol):

@@ -4,14 +4,16 @@ from collections.abc import AsyncIterator, Callable
 import httpx
 import pytest
 
-from geniai.app.ports import FetchFailure, ImageData, MediaFetcher
+from geniai.app.ports import AudioData, FetchFailure, ImageData, MediaFetcher
 from geniai.chatwoot.http import ChatwootHttpConfig
 from geniai.chatwoot.media import create_chatwoot_media
 from tests.support.http import TrackedTransport
+from tests.support.ogg import ogg_opus
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 PHOTO = "https://chatwoot.example/rails/active_storage/blobs/redirect/abc123/foto.png"
 STORAGE = "https://storage.example/bucket/abc123?signature=xyz"
+VOICE = "https://chatwoot.example/rails/active_storage/blobs/redirect/def456/audio.oga"
 
 
 def fetcher(
@@ -177,3 +179,50 @@ async def test_reuses_one_client_without_carrying_the_token_or_cookies_to_the_st
     assert transport.closed == 0
     await media.aclose()
     assert transport.closed == 1
+
+
+def audio(content: bytes, content_type: str = "audio/ogg") -> httpx.Response:
+    return httpx.Response(200, content=content, headers={"content-type": content_type})
+
+
+async def fetch_audio(
+    handler: Callable[[httpx.Request], httpx.Response], url: str = VOICE, **kw: int
+) -> tuple[AudioData | FetchFailure, list[httpx.Request]]:
+    media, calls = fetcher(handler, **kw)
+    return await media.fetch_audio(url), calls
+
+
+async def test_downloads_a_voice_message_with_the_token_and_reads_how_long_it_is() -> None:
+    voice = ogg_opus(42)
+    result, calls = await fetch_audio(lambda _: audio(voice, "audio/ogg; codecs=opus"), max_bytes=10_000)
+    assert result == AudioData(voice, "audio/ogg", pytest.approx(42))
+    assert calls[0].headers["api_access_token"] == "tok"
+
+
+@pytest.mark.parametrize(
+    "content_type",
+    ["audio/mpeg", "audio/mp3", "audio/mp4", "audio/x-m4a", "audio/wav", "audio/x-wav", "audio/webm", "audio/flac"],
+)
+async def test_accepts_the_other_formats_the_transcription_api_takes_without_a_duration(content_type: str) -> None:
+    result, _ = await fetch_audio(lambda _: audio(b"RIFF" + bytes(60), content_type))
+    assert result == AudioData(b"RIFF" + bytes(60), content_type, None)
+
+
+@pytest.mark.parametrize("content_type", ["image/png", "audio/aac", "video/mp4", "application/octet-stream", ""])
+async def test_refuses_an_audio_format_the_transcription_api_does_not_take(content_type: str) -> None:
+    result, _ = await fetch_audio(lambda _: audio(b"x" * 10, content_type))
+    assert result == FetchFailure("type", content_type or None, 10)
+
+
+async def test_refuses_an_audio_as_an_image() -> None:
+    result, _ = await fetch(lambda _: audio(b"x" * 10))
+    assert result == FetchFailure("type", "audio/ogg", 10)
+
+
+async def test_downloads_an_audio_with_the_same_guards_as_an_image() -> None:
+    outside, calls = await fetch_audio(lambda _: audio(b"x"), url="https://other.example/audio.oga")
+    assert (outside, calls) == (FetchFailure("host"), [])
+    too_big, _ = await fetch_audio(lambda _: audio(b"x" * 2000), max_bytes=1024)
+    assert too_big == FetchFailure("size", "audio/ogg", 2000)
+    https_to_http, _ = await fetch_audio(lambda _: redirect("http://storage.example/abc"))
+    assert https_to_http == FetchFailure("host")

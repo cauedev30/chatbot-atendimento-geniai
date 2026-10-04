@@ -275,7 +275,7 @@ def rule_of(field: str) -> str:
 
 def test_the_prompt_says_what_the_bot_does_not_know_goes_to_the_support_team() -> None:
     opening = SYSTEM_PROMPT.split("\n\n")[0]
-    assert "The bot knows only the FAQ entries in \"faq_items\"" in opening
+    assert 'The bot knows only the FAQ entries in "faq_items"' in opening
     assert "never guess and never answer from general knowledge" in opening
 
 
@@ -294,4 +294,3 @@ def test_the_prompt_reads_thats_not_it_as_not_resolved() -> None:
     rule = rule_of("faq_feedback")
     assert "não é isso" in rule
     assert "não tem nada a ver" in rule
-

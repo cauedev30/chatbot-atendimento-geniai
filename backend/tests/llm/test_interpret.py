@@ -267,3 +267,31 @@ def test_the_prompt_takes_the_problem_from_the_message_before_the_greeting_when_
     for field in ("faq_item_id", "category_id", "summary"):
         assert field in rule
     assert "never ask for the problem again" in rule
+
+
+def rule_of(field: str) -> str:
+    return next(line for line in SYSTEM_PROMPT.splitlines() if line.startswith(f"- {field}:"))
+
+
+def test_the_prompt_says_what_the_bot_does_not_know_goes_to_the_support_team() -> None:
+    opening = SYSTEM_PROMPT.split("\n\n")[0]
+    assert "The bot knows only the FAQ entries in \"faq_items\"" in opening
+    assert "never guess and never answer from general knowledge" in opening
+
+
+def test_the_prompt_asks_a_question_only_when_the_request_is_not_yet_said() -> None:
+    rule = rule_of("needs_clarification")
+    assert "true only when the customer has not yet said what the problem or the request is" in rule
+    assert "false when the request is clear" in rule
+    assert "Never ask a question to collect details" in rule
+
+
+def test_the_prompt_hands_over_instead_of_an_faq_entry_in_doubt() -> None:
+    assert "When in doubt" in rule_of("faq_item_id")
+
+
+def test_the_prompt_reads_thats_not_it_as_not_resolved() -> None:
+    rule = rule_of("faq_feedback")
+    assert "não é isso" in rule
+    assert "não tem nada a ver" in rule
+

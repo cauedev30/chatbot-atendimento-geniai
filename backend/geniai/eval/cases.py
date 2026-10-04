@@ -7,7 +7,7 @@ from geniai.db.fixtures import FICTITIOUS
 from geniai.domain import attachments as label
 from geniai.domain.rules import DEFAULT_RULES
 from geniai.domain.texts import TEXT, category_label
-from geniai.domain.types import TriageState
+from geniai.domain.types import FaqFeedback, TriageState
 from geniai.llm.prompt import PromptCategory, PromptFaqItem, PromptMessage, PromptSentFaq, TurnContext
 
 
@@ -50,6 +50,9 @@ class Expected:
     human_requested: bool
     category: str
     faq: str | None
+    clarifies: bool = False
+    """The bot asks a question: no FAQ entry and needs_clarification true (owner, 2026-10-04: only while the
+    customer has not yet said what the problem is)."""
 
 
 @dataclass(frozen=True)
@@ -70,8 +73,10 @@ BLANK_REPORT = FICTITIOUS["faq"]["report"]["title"]
 RECONNECT = FICTITIOUS["faq"]["reconnect"]["title"]
 
 
-def _case(id: str, text: str, human_requested: bool, category: str, faq: str | None) -> EvalCase:
-    return EvalCase(id=id, customer=[text], expected=Expected(human_requested, category, faq))
+def _case(
+    id: str, text: str, human_requested: bool, category: str, faq: str | None, clarifies: bool = False
+) -> EvalCase:
+    return EvalCase(id=id, customer=[text], expected=Expected(human_requested, category, faq, clarifies))
 
 
 CASES: Final[list[EvalCase]] = [
@@ -105,8 +110,14 @@ CASES: Final[list[EvalCase]] = [
     _case("28", "sou eu. como faço para pagar o boleto?", False, OTHER, None),
     _case("29", "sim, a pessoa do caixa não consegue entrar no painel", False, LOGIN, PASSWORD),
     _case("30", "isso. o whatsapp não recebe mensagens desde cedo", False, WA_MESSAGES, None),
+    _case("31", "sim. preciso do relatório financeiro do mês passado", False, OTHER, None),
+    _case("32", "sou eu. me manda o link da reunião de ontem", False, OTHER, None),
+    _case("33", "sim. preciso de ajuda", False, OTHER, None, clarifies=True),
+    _case("34", "sou eu. tá dando erro aqui", False, OTHER, None, clarifies=True),
 ]
-"""30 invented conversations. 10 ask for a human; case 29 is a keyword trap ("a pessoa do caixa")."""
+"""34 invented conversations. 10 ask for a human; case 29 is a keyword trap ("a pessoa do caixa"). A clear
+request no FAQ entry covers goes to the support team with no question (case 31 is a trap for the blank
+report entry); only the vague messages 33 and 34 expect one."""
 
 _ATTENDANT = FICTITIOUS["attendants"]["ana"]
 _UNIT = FICTITIOUS["units"]["centro"]
@@ -157,8 +168,9 @@ FAQ_QUESTION_CASES: Final[list[FaqQuestionCase]] = [
 which must go to a person (one of them about an entry whose knowledge base is empty)."""
 
 
-def question_context_for(c: FaqQuestionCase, catalog: EvalCatalog) -> TurnContext:
-    entry = FICTITIOUS["faq"][c.faq]
+def _after_faq_context(faq: str, customer: str, catalog: EvalCatalog) -> TurnContext:
+    """The FAQ entry `faq` was just sent, and the customer answers with `customer`."""
+    entry = FICTITIOUS["faq"][faq]
     faq_id = next(f.id for f in catalog.faq_items if f.title == entry["title"])
     sent = "\n\n".join(["Isso costuma resolver:", entry["answer_text"], TEXT.faq_follow_up])
     return TurnContext(
@@ -171,7 +183,7 @@ def question_context_for(c: FaqQuestionCase, catalog: EvalCatalog) -> TurnContex
             PromptMessage(author="customer", text=f"sim. {entry['applies_when']}"),
             PromptMessage(author="bot", text=sent),
         ],
-        new_messages=[PromptMessage(author="customer", text=c.question)],
+        new_messages=[PromptMessage(author="customer", text=customer)],
         state=TriageState(
             faq_attempted=True,
             clarifications_asked=0,
@@ -185,6 +197,34 @@ def question_context_for(c: FaqQuestionCase, catalog: EvalCatalog) -> TurnContex
         ),
         max_faq_questions=DEFAULT_RULES.max_faq_questions,
     )
+
+
+def question_context_for(c: FaqQuestionCase, catalog: EvalCatalog) -> TurnContext:
+    return _after_faq_context(c.faq, c.question, catalog)
+
+
+@dataclass(frozen=True)
+class FaqFeedbackCase:
+    """The customer's answer to the FAQ entry just sent, and the faq_feedback it must get."""
+
+    id: str
+    faq: str
+    answer: str
+    feedback: FaqFeedback
+
+
+FAQ_FEEDBACK_CASES: Final[list[FaqFeedbackCase]] = [
+    FaqFeedbackCase("f1", "password", "não é isso, minha senha tá certa, o problema é outro", "not_resolved"),
+    FaqFeedbackCase("f2", "report", "não tem nada a ver, eu perguntei de outra coisa", "not_resolved"),
+    FaqFeedbackCase("f3", "reconnect", "não era isso que eu precisava", "not_resolved"),
+    FaqFeedbackCase("f4", "password", "deu certo, consegui entrar", "resolved"),
+]
+"""Answers after the FAQ entry was sent: "that's not it" is not resolved, and goes to a person with no
+second question (owner, 2026-10-04); f4 is the control."""
+
+
+def feedback_context_for(c: FaqFeedbackCase, catalog: EvalCatalog) -> TurnContext:
+    return _after_faq_context(c.faq, c.answer, catalog)
 
 
 IMAGES_DIR: Final = Path(__file__).parent / "images"

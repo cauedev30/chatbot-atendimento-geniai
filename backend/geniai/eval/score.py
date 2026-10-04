@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from geniai.domain.human_request import mentions_human_request
 from geniai.domain.types import InterpretedTurn
-from geniai.eval.cases import EvalCase, EvalCatalog, FaqQuestionCase, ImageCase
+from geniai.eval.cases import EvalCase, EvalCatalog, FaqFeedbackCase, FaqQuestionCase, ImageCase
 
 
 @dataclass(frozen=True)
@@ -35,10 +35,15 @@ class ModelReport:
     """Spec §11: human-request detection must be 100%. Judged on the model alone, the stricter reading."""
     category_accuracy: float
     faq_accuracy: float
+    clarification_accuracy: float
+    """Among the cases with no human request, the share where the bot asked a question (no FAQ entry and
+    needs_clarification) exactly when expected.clarifies. A failed run counts as wrong."""
     latency_p50_ms: int | None
     latency_p95_ms: int | None
     faq_question_accuracy: float | None = None
     """Share of FAQ_QUESTION_CASES read right (see score_faq_questions); None when not run."""
+    faq_feedback_accuracy: float | None = None
+    """Share of FAQ_FEEDBACK_CASES with the expected faq_feedback (see score_faq_feedback); None when not run."""
     image_accuracy: float | None = None
     """Share of IMAGE_CASES read right (see score_images); None when the model does not read images."""
 
@@ -73,6 +78,18 @@ def score_faq_questions(cases: list[FaqQuestionCase], runs: list[CaseRun]) -> fl
     return _rate(hits, len(cases))
 
 
+def score_faq_feedback(cases: list[FaqFeedbackCase], runs: list[CaseRun]) -> float:
+    """An answer to the FAQ entry sent is read right when faq_feedback is the expected one. A failed run
+    counts as wrong."""
+    turns = {r.case_id: r.turn for r in reversed(runs)}
+    hits = 0
+    for c in cases:
+        turn = turns.get(c.id)
+        if turn is not None and turn.faq_feedback == c.feedback:
+            hits += 1
+    return _rate(hits, len(cases))
+
+
 def score_images(cases: list[ImageCase], runs: list[CaseRun], catalog: EvalCatalog) -> float:
     """An image is read right when the category and the FAQ entry match and the model described it. A
     failed run counts as wrong."""
@@ -95,7 +112,7 @@ def score_runs(label: str, cases: list[EvalCase], runs: list[CaseRun], catalog: 
     faq_ids = {f.title: f.id for f in catalog.faq_items}
     turns = {r.case_id: r.turn for r in reversed(runs)}  # first run of a case wins, like Array.find
     expected = by_model_hits = with_keywords_hits = fp_model = fp_keywords = 0
-    category_hits = faq_cases = faq_hits = failures = 0
+    category_hits = faq_cases = faq_hits = clarification_hits = failures = 0
 
     for c in cases:
         turn = turns.get(c.id)
@@ -114,6 +131,9 @@ def score_runs(label: str, cases: list[EvalCase], runs: list[CaseRun], catalog: 
             expected_faq = None if c.expected.faq is None else faq_ids.get(c.expected.faq, _MISSING)
             if turn is not None and turn.faq_item_id == expected_faq:
                 faq_hits += 1
+            asked = turn is not None and turn.faq_item_id is None and turn.needs_clarification
+            if turn is not None and asked == c.expected.clarifies:
+                clarification_hits += 1
         if turn is not None and turn.category_id == category_ids.get(c.expected.category, _MISSING):
             category_hits += 1
 
@@ -134,6 +154,7 @@ def score_runs(label: str, cases: list[EvalCase], runs: list[CaseRun], catalog: 
         passes_human_request_gate=by_model_hits == expected,
         category_accuracy=_rate(category_hits, len(cases)),
         faq_accuracy=_rate(faq_hits, faq_cases),
+        clarification_accuracy=_rate(clarification_hits, faq_cases),
         latency_p50_ms=percentile(latencies, 50),
         latency_p95_ms=percentile(latencies, 95),
     )

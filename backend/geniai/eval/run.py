@@ -19,14 +19,23 @@ from pydantic import AnyHttpUrl, BaseModel, Field, TypeAdapter, ValidationError
 from geniai.domain.rules import DEFAULT_RULES
 from geniai.eval.cases import (
     CASES,
+    FAQ_FEEDBACK_CASES,
     FAQ_QUESTION_CASES,
     IMAGE_CASES,
     build_catalog,
     context_for,
+    feedback_context_for,
     image_context_for,
     question_context_for,
 )
-from geniai.eval.score import CaseRun, ModelReport, score_faq_questions, score_images, score_runs
+from geniai.eval.score import (
+    CaseRun,
+    ModelReport,
+    score_faq_feedback,
+    score_faq_questions,
+    score_images,
+    score_runs,
+)
 from geniai.llm.interpret import interpret_turn
 from geniai.llm.openai_compatible import OpenAiCompatibleConfig, create_openai_compatible_llm
 
@@ -75,6 +84,7 @@ async def run_candidate(candidate: Candidate, api_key: str) -> list[CaseRun]:
     print(f"{candidate.label} ", end="", flush=True)
     contexts = [(c.id, context_for(c, catalog)) for c in CASES]
     contexts += [(c.id, question_context_for(c, catalog)) for c in FAQ_QUESTION_CASES]
+    contexts += [(c.id, feedback_context_for(c, catalog)) for c in FAQ_FEEDBACK_CASES]
     if candidate.readsImages:
         contexts += [(c.id, image_context_for(c, catalog)) for c in IMAGE_CASES]
     try:
@@ -96,7 +106,7 @@ def _pct(n: float) -> str:
 
 def print_table(reports: list[ModelReport]) -> None:
     header = ["model", "human (model)", "human (model+keywords)", "gate", "false positives", "category", "faq"]
-    header += ["faq questions", "images"]
+    header += ["clarify", "faq questions", "faq feedback", "images"]
     header += ["p50 ms", "p95 ms", "failures"]
     rows = [
         [
@@ -107,7 +117,9 @@ def print_table(reports: list[ModelReport]) -> None:
             str(r.human_request.false_positives_model),
             _pct(r.category_accuracy),
             _pct(r.faq_accuracy),
+            _pct(r.clarification_accuracy),
             "-" if r.faq_question_accuracy is None else _pct(r.faq_question_accuracy),
+            "-" if r.faq_feedback_accuracy is None else _pct(r.faq_feedback_accuracy),
             "-" if r.image_accuracy is None else _pct(r.image_accuracy),
             str(r.latency_p50_ms),
             str(r.latency_p95_ms),
@@ -130,16 +142,25 @@ async def evaluate(
         runs = await run_candidate(candidate, keys[candidate.apiKeyEnv])
         all_runs[candidate.label] = runs
         questions = {c.id for c in FAQ_QUESTION_CASES}
+        feedback = {c.id for c in FAQ_FEEDBACK_CASES}
         images = {c.id for c in IMAGE_CASES}
-        conversations = [r for r in runs if r.case_id not in questions | images]
+        conversations = [r for r in runs if r.case_id not in questions | feedback | images]
         report = score_runs(candidate.label, CASES, conversations, catalog)
         accuracy = score_faq_questions(FAQ_QUESTION_CASES, [r for r in runs if r.case_id in questions])
+        feedback_accuracy = score_faq_feedback(FAQ_FEEDBACK_CASES, [r for r in runs if r.case_id in feedback])
         image_accuracy = (
             score_images(IMAGE_CASES, [r for r in runs if r.case_id in images], catalog)
             if candidate.readsImages
             else None
         )
-        reports.append(replace(report, faq_question_accuracy=accuracy, image_accuracy=image_accuracy))
+        reports.append(
+            replace(
+                report,
+                faq_question_accuracy=accuracy,
+                faq_feedback_accuracy=feedback_accuracy,
+                image_accuracy=image_accuracy,
+            )
+        )
     return reports, all_runs
 
 

@@ -3,8 +3,15 @@ from typing import Any
 import pytest
 
 from geniai.domain.types import InterpretedTurn
-from geniai.eval.cases import EvalCase, Expected, FaqQuestionCase, ImageCase, build_catalog
-from geniai.eval.score import CaseRun, percentile, score_faq_questions, score_images, score_runs
+from geniai.eval.cases import EvalCase, Expected, FaqFeedbackCase, FaqQuestionCase, ImageCase, build_catalog
+from geniai.eval.score import (
+    CaseRun,
+    percentile,
+    score_faq_feedback,
+    score_faq_questions,
+    score_images,
+    score_runs,
+)
 
 CATALOG = build_catalog()
 
@@ -121,3 +128,47 @@ def test_scores_images_on_the_category_the_faq_entry_and_a_description() -> None
     ]
     assert score_images(cases, runs, CATALOG) == pytest.approx(1 / 4)
     assert score_images([], [], CATALOG) == 1
+
+
+def test_scores_clarification_on_cases_without_a_human_request_counting_failures_as_wrong() -> None:
+    other = "Geral / Outros"
+    cases = [
+        EvalCase("v1", ["preciso de ajuda"], Expected(False, other, None, clarifies=True)),
+        EvalCase("v2", ["tá dando erro"], Expected(False, other, None, clarifies=True)),
+        EvalCase("r1", ["relatório financeiro"], Expected(False, other, None)),
+        EvalCase("r2", ["link da reunião"], Expected(False, other, None)),
+        EvalCase("r3", ["cancelar"], Expected(False, other, None)),
+        EvalCase("h", ["quero um atendente"], Expected(True, other, None)),
+    ]
+    runs = [
+        CaseRun("v1", 1, turn(needs_clarification=True)),
+        CaseRun("v2", 1, turn(needs_clarification=True, faq_item_id=faq_of("Redefinir senha do painel"))),
+        CaseRun("r1", 1, turn()),
+        CaseRun("r2", 1, turn(needs_clarification=True)),
+        CaseRun("r3", 1, None, "timeout"),
+        CaseRun("h", 1, turn(human_requested=True, needs_clarification=True)),
+    ]
+    report = score_runs("m", cases, runs, CATALOG)
+    # v1 and r1 are right; v2 sent an entry instead of asking, r2 asked, r3 failed; h is not counted.
+    assert report.clarification_accuracy == pytest.approx(2 / 5)
+
+
+def test_scores_faq_feedback_on_the_feedback_counting_failures_as_wrong() -> None:
+    cases = [
+        FaqFeedbackCase("f1", "password", "não é isso", "not_resolved"),
+        FaqFeedbackCase("f2", "report", "não tem nada a ver", "not_resolved"),
+        FaqFeedbackCase("f3", "reconnect", "não era isso", "not_resolved"),
+        FaqFeedbackCase("f4", "password", "deu certo", "resolved"),
+    ]
+    runs = [
+        CaseRun("f1", 1, turn(faq_feedback="not_resolved")),
+        CaseRun("f2", 1, turn(faq_feedback="unclear")),
+        CaseRun("f3", 1, None, "timeout"),
+        CaseRun("f4", 1, turn(faq_feedback="resolved")),
+    ]
+    assert score_faq_feedback(cases, runs) == pytest.approx(2 / 4)
+    assert score_faq_feedback([], []) == 1
+
+
+def test_a_report_has_no_faq_feedback_accuracy_until_it_runs() -> None:
+    assert REPORT.faq_feedback_accuracy is None

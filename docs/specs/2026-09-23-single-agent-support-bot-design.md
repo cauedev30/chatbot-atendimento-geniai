@@ -83,7 +83,7 @@ flowchart LR
 ```
 
 - **Domain** holds the ticket state machine, the counters (one FAQ attempt, at most three questions
-  answered about it, at most two clarifying questions) and the precedence rules of §5.3. It has no
+  answered about it, at most one clarifying question) and the precedence rules of §5.3. It has no
   I/O and is unit-tested.
 - **LLM port** hides the provider. Swapping models means writing one adapter.
 - **Chatwoot port** sends messages, toggles conversation status and builds conversation links.
@@ -119,7 +119,7 @@ flowchart LR
 5. **FAQ match:** the bot sends the FAQ entry's **verbatim text**. The LLM writes only the framing
    sentence, never the procedure. Then the bot asks whether it solved the problem.
    - Resolved → **Resolved by bot**.
-   - Not resolved → **Awaiting human** (`faq_not_resolved`).
+   - Not resolved, including "that's not it" → **Awaiting human** (`faq_not_resolved`).
    - A question about the instructions → the LLM answers it **only from that entry's text and
      knowledge base** and the conversation, never from general knowledge or other entries; the bot
      sends the answer and asks again whether it solved the problem. It answers **at most three**
@@ -127,8 +127,9 @@ flowchart LR
      fourth one → **Awaiting human** (`faq_not_resolved`), with the question in the ticket summary.
    - Unclear answer → the bot asks once more; a second unclear answer → **Awaiting human**. A question
      does not count as an unclear answer.
-6. **No FAQ match:** the LLM may ask **at most two clarifying questions** so the summary is useful,
-   then the ticket goes to **Awaiting human** (`no_faq_match`).
+6. **No FAQ match:** the LLM may ask **at most one clarifying question**, and only when the customer has
+   not yet said what the problem is; then the ticket goes to **Awaiting human** (`no_faq_match`). A clear
+   request that no FAQ entry covers goes to **Awaiting human** at once, with no question.
 7. **Handoff:** the bot tells the customer the team will take over, sets the ticket to
    **Awaiting human**, switches the Chatwoot conversation from bot-handled to open, and **stays
    silent** in that conversation while the ticket is open.
@@ -183,7 +184,8 @@ For each customer turn, the first rule that applies wins:
    knowledge base, with a non-empty reply, and fewer than three questions answered → answer it; any
    other question → handoff (`faq_not_resolved`); unclear or no feedback → ask once more, then handoff.
 5. **FAQ match**, and the FAQ attempt not yet used → send the FAQ entry.
-6. **Clarification needed**, and fewer than two questions asked → ask.
+6. **Clarification needed** (the customer has not yet said what the problem is), and no question asked
+   yet → ask.
 7. Otherwise → handoff (`no_faq_match`).
 
 ## 6. LLM contract

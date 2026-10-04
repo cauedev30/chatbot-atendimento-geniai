@@ -266,7 +266,8 @@ For each turn the first rule that applies wins (`domain/triage.py`):
    or the fourth (handoff `faq_not_resolved`, the question added to the summary); unclear (asked once
    more, then handoff);
 5. an FAQ entry matches and the one FAQ attempt is unused → send it, verbatim;
-6. the problem is still vague and fewer than two questions were asked → ask;
+6. the customer has not yet said what the problem is and no question was asked yet → ask (one question
+   at most); a clear request no FAQ entry covers goes to rule 7 with no question;
 7. otherwise → handoff (`no_faq_match`).
 
 Before the LLM: a keyword request for a person hands over; a turn with nothing legible (only
@@ -281,7 +282,7 @@ left to clarify), the LLM writes it in `handoff_reply`: one or two short sentenc
 and say the support team carries on in this chat, with no promise of speed (`domain/triage.py`,
 `handoff_text`). Otherwise the fixed text of `texts.py` goes: a handoff before
 the LLM (keyword, media, unidentified, LLM failure), a limit only the code knows (the fourth question,
-the third clarification) or an empty sentence.
+the second clarification) or an empty sentence.
 
 ## Data model
 
@@ -427,7 +428,9 @@ by default.
 - **End to end** (`frontend/e2e`, Playwright): both services on a database of their own
   (`geniai_e2e`, or `E2E_DATABASE_URL`), created when missing; login, the board,
   a real drag between columns that survives a reload, and the indicators.
-- **Evaluation set** (`backend/geniai/eval`): 30 fictitious conversations, plus 8 questions about an
-  FAQ entry already sent (half answered by its knowledge base, half not), and, for models that read
+- **Evaluation set** (`backend/geniai/eval`): 34 fictitious conversations (only the 2 vague ones expect a
+  question; a clear request no FAQ entry covers expects none), plus 8 questions about an FAQ entry
+  already sent (half answered by its knowledge base, half not), 4 answers to it ("that's not it" three
+  times, read as not resolved, and one that solved it), and, for models that read
   images, 4 invented screenshots, run against real models to choose one; human-request detection
   must be 100%.

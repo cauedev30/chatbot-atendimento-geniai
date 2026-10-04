@@ -33,7 +33,8 @@ each problem.
 - Answers up to three questions about the entry sent, only from that entry's knowledge base, and asks
   again whether it solved the problem. A question the knowledge base does not answer, or a fourth one,
   goes to a person with the question in the ticket summary.
-- Asks at most two clarifying questions, then summarizes and hands over.
+- Asks at most one clarifying question, and only when the customer has not yet said what the problem
+  is, then summarizes and hands over. A clear request that no FAQ entry covers goes straight to a person.
 - Hands over immediately on any request for a person, detected by keywords in code even if the LLM
   is down, and by the LLM.
 - Reads the customer's images when `LLM_READS_IMAGES=true`: a photo or screenshot, alone or with a
@@ -285,12 +286,13 @@ at once, with no reply and no ticket:
 
 ## Choosing the model
 
-`python -m geniai.eval.run` runs 30 fictitious conversations, plus 8 questions about an FAQ entry
-already sent, against every candidate in `EVAL_CANDIDATES`; a candidate with `"readsImages": true`
+`python -m geniai.eval.run` runs 34 fictitious conversations, plus 8 questions and 4 answers ("that's not
+it" or "it worked") about an FAQ entry already sent, against every candidate in `EVAL_CANDIDATES`; a candidate with `"readsImages": true`
 also gets 4 invented screenshots sent alone (`backend/geniai/eval/images/`, drawn by
 `backend/scripts/make_eval_images.py`). It reports, per model: human-request detection (must be
-100%), category and FAQ accuracy, how many questions it read right (answered only when the entry's
-knowledge base has the answer), how many screenshots it read right (category and FAQ entry from the
+100%), category and FAQ accuracy, whether it asked a question exactly when the message was vague, how
+many questions it read right (answered only when the entry's knowledge base has the answer), how many
+answers to the entry it read right, how many screenshots it read right (category and FAQ entry from the
 image, with a description), and p50/p95 latency, and saves the full result under
 `backend/eval-results/`. Each candidate names the environment variable that holds its API key, so keys
 never appear in files. Run it from a machine in Brazil so the latency matches production.

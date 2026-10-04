@@ -26,7 +26,8 @@ class TriageRules:
     take_asks_who_takes: bool
     """OWNER-UNCONFIRMED: "take" on the board requires choosing who takes the ticket."""
     max_clarifications: int
-    """Spec §5.1 step 6: at most two clarifying questions."""
+    """Spec §5.1 step 6: at most one clarifying question, and only while the customer has not yet said what the
+    problem is (owner, 2026-10-04); a clear request no FAQ entry covers goes to the support team at once."""
     max_faq_questions: int
     """Spec §5.1 step 5: questions about the FAQ entry sent that the bot answers; the next one hands over."""
     llm_timeout_ms: int
@@ -66,7 +67,7 @@ DEFAULT_RULES = TriageRules(
     max_unclear_feedback_reasks=1,
     max_media_prompts=1,
     take_asks_who_takes=True,
-    max_clarifications=2,
+    max_clarifications=1,
     max_faq_questions=3,
     llm_timeout_ms=5_000,
     llm_image_timeout_ms=8_000,

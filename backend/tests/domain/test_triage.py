@@ -190,13 +190,15 @@ def test_5_faq_match_sends_the_entry() -> None:
     assert decide_turn(state(), turn(faq_item_id=3, needs_clarification=True), DEFAULT_RULES) == SendFaq(3)
 
 
-def test_6_asks_for_clarification_while_under_the_limit() -> None:
-    result = decide_turn(state(clarifications_asked=1), turn(needs_clarification=True), DEFAULT_RULES)
+def test_6_asks_the_one_clarifying_question() -> None:
+    result = decide_turn(state(clarifications_asked=0), turn(needs_clarification=True), DEFAULT_RULES)
     assert result == AskClarification()
 
 
-def test_7_hands_over_when_the_clarification_limit_is_reached() -> None:
-    result = decide_turn(state(clarifications_asked=2), turn(needs_clarification=True), DEFAULT_RULES)
+def test_7_hands_over_instead_of_a_second_clarifying_question() -> None:
+    # Owner, 2026-10-04: one question at most, then the support team.
+    assert DEFAULT_RULES.max_clarifications == 1
+    result = decide_turn(state(clarifications_asked=1), turn(needs_clarification=True), DEFAULT_RULES)
     assert result == Handoff("no_faq_match")
 
 

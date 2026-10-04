@@ -222,9 +222,9 @@ async def test_asks_again_once_on_an_unclear_answer_then_hands_over(h: Harness, 
     assert (t.handoff_reason, t.unclear_feedback_reasks) == ("faq_not_resolved", 1)
 
 
-async def test_asks_at_most_two_clarifying_questions_then_hands_over(h: Harness, chat: Chat) -> None:
+async def test_asks_at_most_one_clarifying_question_then_hands_over(h: Harness, chat: Chat) -> None:
     conversation_id = await chat.greeted()
-    for _ in range(3):
+    for _ in range(2):
         h.llm.push(
             turn_json(
                 category_id=h.seed.categories["other"],
@@ -235,12 +235,11 @@ async def test_asks_at_most_two_clarifying_questions_then_hands_over(h: Harness,
         )
     assert await chat.customer(conversation_id, "deu problema") == "ask_clarification"
     assert chat.last_sent() == "Em qual sistema?"
-    assert await chat.customer(conversation_id, "no sistema") == "ask_clarification"
     assert await chat.customer(conversation_id, "aquele lá") == "handoff"
     # A limit only the code knows: the LLM's reading asked for a clarification, so the fixed text goes.
     assert chat.last_sent() == TEXT.handoff
     t = await chat.ticket_of(conversation_id)
-    assert (t.handoff_reason, t.clarifications_asked) == ("no_faq_match", 2)
+    assert (t.handoff_reason, t.clarifications_asked) == ("no_faq_match", 1)
 
 
 async def test_honors_a_human_request_keyword_without_letting_the_llm_decide(h: Harness, chat: Chat) -> None:

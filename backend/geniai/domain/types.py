@@ -37,6 +37,7 @@ HandoffReason = Literal[
     "off_topic",
     "media",
     "llm_failure",
+    "team_replied",
 ]
 HANDOFF_REASONS: Final[tuple[HandoffReason, ...]] = get_args(HandoffReason)
 

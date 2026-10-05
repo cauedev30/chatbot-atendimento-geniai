@@ -698,7 +698,8 @@
               "registration_mismatch",
               "off_topic",
               "media",
-              "llm_failure"
+              "llm_failure",
+              "team_replied"
             ],
             "title": "Reason",
             "type": "string"

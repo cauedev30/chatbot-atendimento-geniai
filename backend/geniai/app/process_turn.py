@@ -21,6 +21,7 @@ from geniai.app.handle_inbound import acknowledge_unidentified, open_ticket_for
 from geniai.app.keyed_queue import KeyedQueue, turn_key
 from geniai.app.notify import enqueue_message, enqueue_status, enqueue_status_after_move
 from geniai.app.ports import Deps
+from geniai.app.team_presence import team_wrote_since
 from geniai.app.tickets_repo import (
     MessageRow,
     NewMessage,
@@ -234,6 +235,8 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
         return None
     consumed_id = pending[-1].id
     timing.wait_ms = max(0, round((deps.now() - pending[-1].at).total_seconds() * 1000))
+    if await team_wrote_since(deps, conversation_id, t.opened_at):
+        return await _step_aside(deps, t, messages, consumed_id)
 
     messages, notes = await transcribe_audios(deps, t, messages)
     try:
@@ -241,6 +244,23 @@ async def process_turn(deps: Deps, conversation_id: int) -> TurnOutcome | None:
     finally:
         # Waited already when the turn answered; this only covers a turn that failed.
         await notes.wait()
+
+
+async def _step_aside(deps: Deps, t: TicketRow, messages: list[MessageRow], consumed_id: int) -> TurnOutcome | None:
+    """The team wrote in the conversation since the ticket opened (owner, 2026-10-05): the ticket goes to the
+    team with no reply from the bot, whatever arrived meanwhile. The card summary comes afterwards, as with
+    any handoff before the LLM."""
+    async with deps.engine.begin() as conn:
+        # closes=True: the bot answers nothing, so messages that arrived meanwhile change nothing.
+        if not await _claim(deps, conn, t, messages, consumed_id, closes=True):
+            return None
+        moved = await move_ticket(conn, t.id, "awaiting_human", "bot", deps.now(), {"handoff_reason": "team_replied"})
+        await enqueue_status_after_move(conn, t.chatwoot_conversation_id, moved.from_, "awaiting_human")
+    deps.outbox.wake()
+    deps.log.info({"conversationId": t.chatwoot_conversation_id, "ticketId": t.id}, "team is talking")
+    if t.summary == "":
+        deps.summaries.start(_fill_missing_summary(deps, t, messages, "team_replied"))
+    return "handoff"
 
 
 async def _decide(

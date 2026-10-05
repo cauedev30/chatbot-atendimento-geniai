@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from geniai.app.notify import enqueue_message, enqueue_status
 from geniai.app.outbox import outbox_row_for_message, status_pending
 from geniai.app.ports import Deps
+from geniai.app.team_presence import team_wrote_since
 from geniai.app.tickets_repo import (
     NewMessage,
     NewTicket,
@@ -16,6 +17,7 @@ from geniai.app.tickets_repo import (
     find_open_ticket,
     get_category_id_by_key,
     has_bot_message,
+    last_closed_at,
     message_exists,
     update_ticket,
 )
@@ -32,6 +34,7 @@ InboundOutcome = Literal[
     "attached_to_triage",
     "attached_to_human",
     "not_served",
+    "team_talking",
 ]
 
 
@@ -92,7 +95,9 @@ async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: Inco
     outbox worker sends them afterwards, in the background (spec §10).
     A message with no open ticket in its conversation is first checked against domain/audience.py: a
     conversation the bot does not serve (a group, no usable phone, or a phone outside the test mode list)
-    is opened for the team, with no reply, no ticket and no turn. An open ticket keeps its flow.
+    is opened for the team, with no reply, no ticket and no turn. So is one where the team wrote since it
+    was last closed (app/team_presence.py), which is asked of Chatwoot before the transaction. An open ticket
+    keeps its flow.
     """
     now = deps.now()
     # A caption is the message's text; a message with attachments and no text keeps the "[mídia]" text.
@@ -109,6 +114,18 @@ async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: Inco
             at=now,
             attachments=msg.attachments,
         )
+
+    reason = not_served_reason(msg.phone, msg.contact_identifier, deps.bot_only_phones)
+    team_talking = False
+    if reason is None:
+        async with deps.engine.connect() as conn:
+            check = not await message_exists(conn, msg.message_id) and not await outbox_row_for_message(
+                conn, msg.message_id
+            )
+            check = check and await find_open_ticket(conn, msg.conversation_id) is None
+            since = await last_closed_at(conn, msg.conversation_id) if check else None
+            await conn.rollback()
+        team_talking = check and await team_wrote_since(deps, msg.conversation_id, since)
 
     outcome: InboundOutcome
     handed_to_team: NotServedReason | None = None
@@ -129,13 +146,13 @@ async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: Inco
             outcome = "attached_to_triage" if open_ticket.column == "in_triage" else "attached_to_human"
             if outcome == "attached_to_triage":
                 bot_replied = await has_bot_message(conn, open_ticket.id)
-        elif (reason := not_served_reason(msg.phone, msg.contact_identifier, deps.bot_only_phones)) is not None:
+        elif reason is not None or team_talking:
             # Not the bot's: straight to the team, silently. With an Agent Bot on the inbox Chatwoot keeps a
             # new conversation "pending", out of the team's view, until it is opened.
             if msg.conversation_status != "open" and not await status_pending(conn, msg.conversation_id, "open"):
                 await enqueue_status(conn, msg.conversation_id, "open", chatwoot_message_id=msg.message_id)
                 handed_to_team = reason
-            outcome = "not_served"
+            outcome = "not_served" if reason is not None else "team_talking"
         else:
             phone = None if msg.phone is None else normalize_br_phone(msg.phone)
             opened = await open_ticket_for(conn, msg.conversation_id, phone, text, now)
@@ -150,6 +167,8 @@ async def handle_inbound_message(deps: Deps, scheduler: TurnScheduler, msg: Inco
                 await acknowledge_unidentified(conn, msg.conversation_id, opened.ticket_id, now)
                 outcome = "unidentified_ticket"
 
+    if outcome == "team_talking":
+        deps.log.info({"conversationId": msg.conversation_id}, "team is talking")
     if handed_to_team is not None:
         deps.log.info(
             {"conversationId": msg.conversation_id, "reason": handed_to_team}, "conversation handed to the team"

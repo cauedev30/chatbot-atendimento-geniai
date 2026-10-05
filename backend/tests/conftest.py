@@ -20,7 +20,8 @@ from geniai.domain.rules import DEFAULT_RULES
 from tests.support.fakes import FakeChatwoot, FakeMedia, FakeTranscriber, RecordingLogger, ScriptedLlm
 
 RESET_SQL = (
-    "TRUNCATE outbox, ticket_move, triage_message, ticket, faq_item, attendant, unit, team_member "
+    "TRUNCATE outbox, conversation_resolution, ticket_move, triage_message, ticket, faq_item, attendant, unit, "
+    "team_member "
     "RESTART IDENTITY CASCADE"
 )
 

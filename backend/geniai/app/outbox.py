@@ -46,7 +46,7 @@ async def enqueue_status(
     conn: AsyncConnection, conversation_id: int, status: "ChatwootStatus", *, chatwoot_message_id: int | None = None
 ) -> None:
     """`chatwoot_message_id`: the customer message that caused the row, when no ticket keeps it (see
-    outbox_row_for_message)."""
+    outbox_row_for_message). A message row keeps there instead the id of the message sent, once sent."""
     await conn.execute(
         insert(outbox).values(
             conversation_id=conversation_id, kind="status", payload=status, chatwoot_message_id=chatwoot_message_id
@@ -74,11 +74,30 @@ async def status_pending(conn: AsyncConnection, conversation_id: int, status: "C
     return (await conn.execute(query)).first() is not None
 
 
-async def _finish(deps: "Deps", row_id: int, state: Literal["sent", "failed"], error: str | None = None) -> None:
+async def sent_message_ids(conn: AsyncConnection, conversation_id: int) -> set[int]:
+    """The Chatwoot ids of the messages the bot sent in the conversation: Chatwoot shows them like the team's."""
+    query = select(outbox.c.chatwoot_message_id).where(
+        outbox.c.conversation_id == conversation_id,
+        outbox.c.kind == "message",
+        outbox.c.chatwoot_message_id.is_not(None),
+    )
+    return set((await conn.execute(query)).scalars())
+
+
+async def _finish(
+    deps: "Deps",
+    row_id: int,
+    state: Literal["sent", "failed"],
+    error: str | None = None,
+    *,
+    sent_message_id: int | None = None,
+) -> None:
+    """`sent_message_id`: the id Chatwoot gave the message of a message row (see sent_message_ids)."""
+    values: dict[str, object] = {"state": state, "done_at": func.now(), "error": error}
+    if sent_message_id is not None:
+        values["chatwoot_message_id"] = sent_message_id
     async with deps.engine.begin() as conn:
-        await conn.execute(
-            update(outbox).where(outbox.c.id == row_id).values(state=state, done_at=func.now(), error=error)
-        )
+        await conn.execute(update(outbox).where(outbox.c.id == row_id).values(values))
 
 
 async def _deliver_conversation(deps: "Deps", rows: list[tuple[int, str, str, int]]) -> None:
@@ -86,9 +105,10 @@ async def _deliver_conversation(deps: "Deps", rows: list[tuple[int, str, str, in
     for row_id, kind, payload, conversation_id in rows:
         started = time.perf_counter()
         line: dict[str, object] = {"outboxId": row_id, "conversationId": conversation_id, "kind": kind}
+        sent_message_id: int | None = None
         try:
             if kind == "message":
-                await deps.chatwoot.send_message(conversation_id, payload)
+                sent_message_id = await deps.chatwoot.send_message(conversation_id, payload)
             else:
                 await deps.chatwoot.set_status(conversation_id, payload)  # type: ignore[arg-type]
         except Exception as err:
@@ -99,7 +119,7 @@ async def _deliver_conversation(deps: "Deps", rows: list[tuple[int, str, str, in
             continue
         line["ms"] = round((time.perf_counter() - started) * 1000)
         deps.log.info(line, "Chatwoot call sent")
-        await _finish(deps, row_id, "sent")
+        await _finish(deps, row_id, "sent", sent_message_id=sent_message_id)
 
 
 async def deliver_pending(deps: "Deps") -> int:

@@ -2,7 +2,7 @@ import asyncio
 
 from sqlalchemy import select
 
-from geniai.app.outbox import OutboxWorker, deliver_pending, enqueue_message, enqueue_status
+from geniai.app.outbox import OutboxWorker, deliver_pending, enqueue_message, enqueue_status, sent_message_ids
 from geniai.app.ports import ChatwootStatus
 from geniai.db.schema import outbox
 from tests.conftest import Harness
@@ -43,6 +43,22 @@ async def test_sends_after_the_commit_and_marks_the_row_sent(h: Harness) -> None
     assert await states(h) == [("sent", None), ("sent", None)]
     assert await deliver_pending(h.deps) == 0
     assert len(h.chatwoot.sent) == 1
+
+
+async def test_keeps_the_id_chatwoot_gave_each_message_the_bot_sent(h: Harness) -> None:
+    async with h.begin() as conn:
+        await enqueue_message(conn, 1, "olá")
+        await enqueue_status(conn, 1, "open")
+        await enqueue_message(conn, 1, "tudo bem?")
+        await enqueue_message(conn, 2, "outra conversa")
+    await deliver_pending(h.deps)
+    by_conversation = {s.conversation_id: [] for s in h.chatwoot.sent}
+    for s, sent_id in zip(h.chatwoot.sent, h.chatwoot.sent_ids, strict=True):
+        by_conversation[s.conversation_id].append(sent_id)
+    async with h.begin() as conn:
+        assert await sent_message_ids(conn, 1) == set(by_conversation[1])
+        assert await sent_message_ids(conn, 2) == set(by_conversation[2])
+    assert len(by_conversation[1]) == 2
 
 
 async def test_a_new_worker_sends_what_a_stopped_process_left_pending(h: Harness) -> None:

@@ -14,6 +14,7 @@ from geniai.app.tickets_repo import (
     find_open_ticket,
     get_ticket,
     move_ticket,
+    record_resolution,
     update_ticket,
 )
 from geniai.db.schema import category, team_member, ticket, unit
@@ -198,8 +199,10 @@ async def recategorize(deps: Deps, ticket_id: int, category_id: int) -> None:
 
 
 async def on_conversation_resolved(deps: Deps, conversation_id: int) -> bool:
-    """Resolving the conversation in Chatwoot closes the card (spec §8); no call back to Chatwoot."""
+    """Resolving the conversation in Chatwoot closes the card (spec §8); no call back to Chatwoot. The time is
+    kept with or without a ticket: the bot stays out of a conversation the team wrote in since then."""
     async with deps.engine.begin() as conn:
+        await record_resolution(conn, conversation_id, deps.now())
         open_ticket = await find_open_ticket(conn, conversation_id)
         if open_ticket is None:
             return False

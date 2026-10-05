@@ -88,6 +88,7 @@ async def test_applies_pending_migrations_once_and_seeds_system_categories(scrat
         "0004_faq_knowledge_base.sql",
         "0005_outbox_source_message.sql",
         "0006_message_attachments.sql",
+        "0007_team_replies.sql",
     ]
     assert await migrate(scratch_engine) == []
     async with scratch_engine.connect() as conn:
@@ -131,6 +132,7 @@ async def test_marks_what_existing_tickets_already_answered(scratch_engine: Asyn
         "0004_faq_knowledge_base.sql",
         "0005_outbox_source_message.sql",
         "0006_message_attachments.sql",
+        "0007_team_replies.sql",
     ]
     async with scratch_engine.connect() as conn:
         rows = (await conn.exec_driver_sql("SELECT id, last_consumed_message_id FROM ticket ORDER BY id")).all()

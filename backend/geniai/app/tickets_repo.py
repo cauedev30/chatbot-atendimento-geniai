@@ -2,11 +2,20 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Final, Literal
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from geniai.db.schema import attendant, category, faq_item, ticket, ticket_move, triage_message, unit
+from geniai.db.schema import (
+    attendant,
+    category,
+    conversation_resolution,
+    faq_item,
+    ticket,
+    ticket_move,
+    triage_message,
+    unit,
+)
 from geniai.domain.transitions import TicketTimes, can_move, times_after_move
 from geniai.domain.types import (
     ATTACHMENT_KINDS,
@@ -375,3 +384,25 @@ async def get_faq_item(conn: AsyncConnection, faq_item_id: int) -> FaqItemRow | 
 async def list_tickets_in_column(conn: AsyncConnection, column: Column) -> list[TicketRow]:
     query = select(ticket).where(ticket.c.column == column).order_by(ticket.c.id)
     return [_ticket(row) for row in await conn.execute(query)]
+
+
+async def record_resolution(conn: AsyncConnection, conversation_id: int, at: datetime) -> None:
+    """The conversation was resolved in Chatwoot, with or without a ticket open."""
+    statement = pg_insert(conversation_resolution).values(conversation_id=conversation_id, resolved_at=at)
+    await conn.execute(
+        statement.on_conflict_do_update(
+            index_elements=[conversation_resolution.c.conversation_id], set_={"resolved_at": at}
+        )
+    )
+
+
+async def last_closed_at(conn: AsyncConnection, conversation_id: int) -> datetime | None:
+    """The latest close of the conversation: a ticket closed, or the conversation resolved in Chatwoot.
+    None when it was never closed."""
+    closed = select(func.max(ticket.c.closed_at)).where(ticket.c.chatwoot_conversation_id == conversation_id)
+    resolved = select(conversation_resolution.c.resolved_at).where(
+        conversation_resolution.c.conversation_id == conversation_id
+    )
+    times = [(await conn.execute(closed)).scalar_one_or_none(), (await conn.execute(resolved)).scalar_one_or_none()]
+    known = [t for t in times if t is not None]
+    return max(known) if known else None

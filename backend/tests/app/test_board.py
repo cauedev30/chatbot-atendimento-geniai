@@ -12,7 +12,15 @@ from geniai.app.board import (
     release_card,
     take_card,
 )
-from geniai.app.tickets_repo import NewTicket, TicketRow, create_ticket, get_ticket, move_ticket, update_ticket
+from geniai.app.tickets_repo import (
+    NewTicket,
+    TicketRow,
+    create_ticket,
+    get_ticket,
+    last_closed_at,
+    move_ticket,
+    update_ticket,
+)
 from geniai.db.schema import ticket_move
 from tests.conftest import Harness
 from tests.support.fakes import StatusSet
@@ -256,6 +264,32 @@ async def test_moves_the_open_ticket_to_resolved_by_human_without_calling_chatwo
     assert await on_conversation_resolved(h.deps, t.chatwoot_conversation_id) is True
     assert (await fetch(h, ticket_id)).column == "resolved_by_human"
     assert h.chatwoot.statuses == []
+
+
+async def test_keeps_when_a_conversation_was_resolved_even_with_no_ticket(h: Harness) -> None:
+    async with h.begin() as conn:
+        assert await last_closed_at(conn, 515151) is None
+    assert await on_conversation_resolved(h.deps, 515151) is False
+    async with h.begin() as conn:
+        assert await last_closed_at(conn, 515151) == h.now
+    h.advance(60_000)
+    await on_conversation_resolved(h.deps, 515151)
+    async with h.begin() as conn:
+        assert await last_closed_at(conn, 515151) == h.now
+
+
+async def test_the_last_close_is_the_latest_of_the_tickets_and_the_resolutions(h: Harness) -> None:
+    ticket_id = await awaiting(h)
+    conversation_id = (await fetch(h, ticket_id)).chatwoot_conversation_id
+    resolved_at = h.now
+    await on_conversation_resolved(h.deps, conversation_id)
+    async with h.begin() as conn:
+        assert await last_closed_at(conn, conversation_id) == resolved_at
+    h.advance(60_000)
+    other = await triage(h, conversation_id)
+    async with h.begin() as conn:
+        await move_ticket(conn, other, "resolved_by_bot", "bot", h.now)
+        assert await last_closed_at(conn, conversation_id) == h.now
 
 
 async def test_returns_false_when_the_conversation_has_no_open_ticket(h: Harness) -> None:

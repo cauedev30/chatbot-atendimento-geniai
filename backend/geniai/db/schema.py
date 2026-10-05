@@ -126,6 +126,13 @@ triage_message = sa.Table(
     sa.Column("attachments", JSONB, nullable=False, server_default=sa.text("'[]'::jsonb")),
 )
 
+conversation_resolution = sa.Table(
+    "conversation_resolution",
+    metadata,
+    sa.Column("conversation_id", sa.Integer, primary_key=True),
+    sa.Column("resolved_at", _tz(), nullable=False),
+)
+
 outbox_kind_enum = sa.Enum("message", "status", name="outbox_kind", create_type=False)
 outbox_state_enum = sa.Enum("pending", "sent", "failed", name="outbox_state", create_type=False)
 

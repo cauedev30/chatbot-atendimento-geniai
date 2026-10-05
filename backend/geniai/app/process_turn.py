@@ -334,9 +334,8 @@ async def _write_decision(
             if faq is None:
                 return await _write_decision(deps, conn, t, Handoff("no_faq_match"), turn)
             await update_ticket(conn, t.id, {"faq_attempted": True, "faq_item_id": faq.id})
-            # The procedure is always the team's verbatim text; the LLM only frames it.
-            parts = [turn.reply if turn else "", faq.answer_text, TEXT.faq_follow_up]
-            reply = "\n\n".join(p.strip() for p in parts if p.strip())
+            # Only the team's verbatim text, with no sentence of the LLM before it (owner, 2026-10-05).
+            reply = "\n\n".join(p.strip() for p in (faq.answer_text, TEXT.faq_follow_up) if p.strip())
             return _Written("send_faq", reply, None, None)
         case AskClarification():
             await update_ticket(conn, t.id, {"clarifications_asked": t.clarifications_asked + 1})

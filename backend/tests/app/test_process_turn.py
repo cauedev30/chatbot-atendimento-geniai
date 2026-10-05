@@ -164,22 +164,18 @@ async def test_hands_over_on_a_human_request_even_when_the_llm_is_down(h: Harnes
     assert chat.last_sent() == TEXT.handoff
 
 
-async def test_sends_the_faq_entry_verbatim_with_the_llm_framing_and_asks_if_it_worked(h: Harness, chat: Chat) -> None:
+async def test_sends_only_the_faq_entry_verbatim_and_asks_if_it_worked(h: Harness, chat: Chat) -> None:
     conversation_id = await chat.greeted()
     h.llm.push(
         turn_json(
             category_id=h.seed.categories["login"],
             faq_item_id=h.seed.faq["password"],
-            reply="Isso costuma resolver:",
+            reply="Encontrei orientações sobre a senha para você.",
         )
     )
     assert await chat.customer(conversation_id, "sim, esqueci a senha do painel") == "send_faq"
-    assert "Isso costuma resolver:" in chat.last_sent()
-    assert FICTITIOUS["faq"]["password"]["answer_text"] in chat.last_sent()
-    assert TEXT.faq_follow_up in chat.last_sent()
-    assert chat.last_sent() == "\n\n".join(
-        ["Isso costuma resolver:", FICTITIOUS["faq"]["password"]["answer_text"], TEXT.faq_follow_up]
-    )
+    # No sentence before the entry, even when the LLM wrote one (owner, 2026-10-05).
+    assert chat.last_sent() == "\n\n".join([FICTITIOUS["faq"]["password"]["answer_text"], TEXT.faq_follow_up])
     t = await chat.ticket_of(conversation_id)
     assert t.faq_attempted is True
     assert t.faq_item_id == h.seed.faq["password"]

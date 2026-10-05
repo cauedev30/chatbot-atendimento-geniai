@@ -172,7 +172,7 @@ def _after_faq_context(faq: str, customer: str, catalog: EvalCatalog) -> TurnCon
     """The FAQ entry `faq` was just sent, and the customer answers with `customer`."""
     entry = FICTITIOUS["faq"][faq]
     faq_id = next(f.id for f in catalog.faq_items if f.title == entry["title"])
-    sent = "\n\n".join(["Isso costuma resolver:", entry["answer_text"], TEXT.faq_follow_up])
+    sent = "\n\n".join([entry["answer_text"], TEXT.faq_follow_up])
     return TurnContext(
         attendant_name=_ATTENDANT["name"],
         unit_name=_UNIT,

@@ -290,6 +290,12 @@ def test_the_prompt_hands_over_instead_of_an_faq_entry_in_doubt() -> None:
     assert "When in doubt" in rule_of("faq_item_id")
 
 
+def test_the_prompt_leaves_the_reply_empty_when_an_faq_entry_is_chosen() -> None:
+    rule = rule_of("reply")
+    assert "If faq_item_id is not null, reply is empty: the bot sends the entry's text itself" in rule
+    assert "introducing" not in rule
+
+
 def test_the_prompt_reads_thats_not_it_as_not_resolved() -> None:
     rule = rule_of("faq_feedback")
     assert "não é isso" in rule

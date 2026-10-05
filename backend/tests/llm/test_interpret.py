@@ -296,6 +296,15 @@ def test_the_prompt_leaves_the_reply_empty_when_an_faq_entry_is_chosen() -> None
     assert "introducing" not in rule
 
 
+def test_the_prompt_reads_another_problem_after_the_faq_entry_as_a_new_problem() -> None:
+    assert '"new_problem"' in rule_of("faq_feedback")
+    assert "sim, mas e o login?" in rule_of("faq_feedback")
+    faq_rule = rule_of("faq_item_id")
+    assert 'With faq_feedback "new_problem"' in faq_rule
+    assert "never the one already sent" in faq_rule
+    assert 'faq_feedback is "new_problem" and faq_item_id is null' in rule_of("handoff_reply")
+
+
 def test_the_prompt_reads_thats_not_it_as_not_resolved() -> None:
     rule = rule_of("faq_feedback")
     assert "não é isso" in rule

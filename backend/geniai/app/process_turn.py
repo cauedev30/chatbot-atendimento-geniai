@@ -108,6 +108,7 @@ def _state_of(t: TicketRow) -> TriageState:
         unclear_feedback_reasks=t.unclear_feedback_reasks,
         media_prompts=t.media_prompts,
         faq_questions_answered=t.faq_questions_answered,
+        sent_faq_item_id=t.faq_item_id if t.faq_attempted else None,
     )
 
 
@@ -333,7 +334,9 @@ async def _write_decision(
             faq = await get_faq_item(conn, faq_item_id)
             if faq is None:
                 return await _write_decision(deps, conn, t, Handoff("no_faq_match"), turn)
-            await update_ticket(conn, t.id, {"faq_attempted": True, "faq_item_id": faq.id})
+            # The questions and the unclear answers count per entry: a second entry starts them again.
+            reset: dict[str, object] = {"faq_questions_answered": 0, "unclear_feedback_reasks": 0}
+            await update_ticket(conn, t.id, {"faq_attempted": True, "faq_item_id": faq.id, **reset})
             # Only the team's verbatim text, with no sentence of the LLM before it (owner, 2026-10-05).
             reply = "\n\n".join(p.strip() for p in (faq.answer_text, TEXT.faq_follow_up) if p.strip())
             return _Written("send_faq", reply, None, None)

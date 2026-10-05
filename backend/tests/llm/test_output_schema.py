@@ -39,6 +39,10 @@ def test_maps_a_valid_output_to_code_naming() -> None:
     )
 
 
+def test_reads_a_new_problem_after_the_faq_entry() -> None:
+    assert parse(VALID | {"faq_feedback": "new_problem"}).faq_feedback == "new_problem"
+
+
 def test_reads_a_question_about_the_faq_entry_and_whether_its_answer_was_found() -> None:
     parsed = parse(VALID | {"faq_feedback": "question", "faq_answer_found": True, "reply": "Vale por 1 hora."})
     assert (parsed.faq_feedback, parsed.faq_answer_found, parsed.reply) == ("question", True, "Vale por 1 hora.")

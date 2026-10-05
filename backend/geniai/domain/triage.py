@@ -45,6 +45,11 @@ def decide_turn(state: TriageState, turn: InterpretedTurn, rules: TriageRules) -
     if turn.off_topic:
         return Handoff("off_topic")
     if state.faq_attempted:
+        if turn.faq_feedback == "new_problem":
+            # Another problem than the entry sent: its own entry, when there is one (owner, 2026-10-05).
+            if turn.faq_item_id is not None and turn.faq_item_id != state.sent_faq_item_id:
+                return SendFaq(turn.faq_item_id)
+            return Handoff("no_faq_match")
         if turn.faq_feedback == "resolved":
             return ResolvedByBot()
         if turn.faq_feedback == "not_resolved":
@@ -77,6 +82,7 @@ def handoff_text(turn: InterpretedTurn | None, fallback: str) -> str:
         or turn.off_topic
         or turn.faq_feedback in ("not_resolved", "unclear")
         or (turn.faq_feedback == "question" and not turn.faq_answer_found)
+        or (turn.faq_feedback == "new_problem" and turn.faq_item_id is None)
         or (turn.faq_feedback is None and turn.faq_item_id is None and not turn.needs_clarification)
     )
     return (turn.handoff_reply.strip() if reads_as_handoff else "") or fallback

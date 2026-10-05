@@ -129,6 +129,24 @@ def test_4_never_sends_a_second_faq_entry() -> None:
     assert decide_turn(AWAITING, t, DEFAULT_RULES) == Handoff("faq_not_resolved")
 
 
+SENT = state(faq_attempted=True, sent_faq_item_id=3)
+
+
+def test_4_a_new_problem_with_its_own_faq_entry_gets_that_entry() -> None:
+    t = turn(faq_feedback="new_problem", faq_item_id=4)
+    assert decide_turn(SENT, t, DEFAULT_RULES) == SendFaq(4)
+
+
+def test_4_a_new_problem_with_no_faq_entry_hands_over() -> None:
+    t = turn(faq_feedback="new_problem", faq_item_id=None)
+    assert decide_turn(SENT, t, DEFAULT_RULES) == Handoff("no_faq_match")
+
+
+def test_4_a_new_problem_matched_to_the_entry_already_sent_hands_over() -> None:
+    t = turn(faq_feedback="new_problem", faq_item_id=3)
+    assert decide_turn(SENT, t, DEFAULT_RULES) == Handoff("no_faq_match")
+
+
 def test_4_follows_max_unclear_feedback_reasks() -> None:
     rules = replace(DEFAULT_RULES, max_unclear_feedback_reasks=0)
     assert decide_turn(AWAITING, turn(faq_feedback="unclear"), rules) == Handoff("faq_not_resolved")
@@ -239,6 +257,7 @@ def test_decision_kinds_are_stable_names() -> None:
         {"faq_feedback": "not_resolved"},
         {"faq_feedback": "unclear"},
         {"faq_feedback": "question", "faq_answer_found": False},
+        {"faq_feedback": "new_problem"},
         {},
     ],
 )
@@ -254,6 +273,7 @@ def test_a_handoff_the_llm_read_as_one_uses_its_sentence(reading: dict[str, Any]
         {"faq_feedback": "question", "faq_answer_found": True, "reply": "Resposta."},
         {"faq_item_id": 10},
         {"faq_feedback": "resolved"},
+        {"faq_feedback": "new_problem", "faq_item_id": 3},
     ],
 )
 def test_a_handoff_only_the_code_decided_keeps_the_fixed_text(reading: dict[str, Any]) -> None:

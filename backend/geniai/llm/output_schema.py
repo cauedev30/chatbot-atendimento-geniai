@@ -3,12 +3,12 @@ an unknown category is rejected, an unknown FAQ id becomes None. There is no act
 """
 
 from collections.abc import Collection
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 
 from geniai.domain.attachments import MAX_DESCRIPTION_LEN
-from geniai.domain.types import InterpretedTurn
+from geniai.domain.types import FaqFeedback, InterpretedTurn
 from geniai.json_types import JsonInt
 
 MAX_HANDOFF_REPLY_LEN = 300
@@ -23,7 +23,7 @@ class _TurnOutput(BaseModel):
     off_topic: StrictBool
     category_id: JsonInt
     faq_item_id: JsonInt | None
-    faq_feedback: Literal["resolved", "not_resolved", "question", "unclear"] | None
+    faq_feedback: FaqFeedback | None
     needs_clarification: StrictBool
     summary: Annotated[StrictStr, Field(min_length=1, max_length=1000)]
     reply: Annotated[StrictStr, Field(max_length=1000)]

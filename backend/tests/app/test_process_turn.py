@@ -527,6 +527,41 @@ async def test_answers_a_question_about_the_faq_entry_and_asks_again_if_it_worke
     assert (await chat.ticket_of(conversation_id)).column == "resolved_by_bot"
 
 
+async def test_a_new_problem_after_the_faq_entry_gets_its_own_entry_with_the_counters_reset(
+    h: Harness, chat: Chat
+) -> None:
+    conversation_id = await chat.faq_sent()
+    assert await chat.asks(conversation_id, "o link vale por quanto tempo?", reply="Vale por 1 hora.") == (
+        "answer_faq_question"
+    )
+    h.llm.push(turn_json(category_id=h.seed.categories["login"], faq_feedback="unclear"))
+    assert await chat.customer(conversation_id, "vou ver") == "reask_feedback"
+
+    h.llm.push(
+        turn_json(category_id=h.seed.categories["report"], faq_feedback="new_problem", faq_item_id=h.seed.faq["report"])
+    )
+    assert await chat.customer(conversation_id, "e sobre o relatório?") == "send_faq"
+    assert chat.last_sent() == "\n\n".join([FICTITIOUS["faq"]["report"]["answer_text"], TEXT.faq_follow_up])
+    t = await chat.ticket_of(conversation_id)
+    assert (t.column, t.faq_attempted, t.faq_item_id) == ("in_triage", True, h.seed.faq["report"])
+    assert (t.faq_questions_answered, t.unclear_feedback_reasks) == (0, 0)
+    assert t.category_id == h.seed.categories["report"]
+
+    # The feedback that follows is about the new entry.
+    h.llm.push(turn_json(category_id=h.seed.categories["report"], faq_feedback="resolved"))
+    assert await chat.customer(conversation_id, "deu certo") == "resolved_by_bot"
+    assert json.loads(h.llm.requests[-1].user)["sent_faq"]["id"] == h.seed.faq["report"]
+
+
+async def test_a_new_problem_with_no_faq_entry_hands_over_with_the_llms_sentence(h: Harness, chat: Chat) -> None:
+    conversation_id = await chat.faq_sent()
+    h.llm.push(turn_json(category_id=h.seed.categories["other"], faq_feedback="new_problem", handoff_reply=PHRASE))
+    assert await chat.customer(conversation_id, "e o boleto?") == "handoff"
+    t = await chat.ticket_of(conversation_id)
+    assert (t.column, t.handoff_reason) == ("awaiting_human", "no_faq_match")
+    assert chat.last_sent() == PHRASE
+
+
 async def test_answers_three_questions_and_hands_the_fourth_over(h: Harness, chat: Chat) -> None:
     conversation_id = await chat.faq_sent()
     for n in range(3):

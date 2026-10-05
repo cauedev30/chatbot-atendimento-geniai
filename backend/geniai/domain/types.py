@@ -42,7 +42,7 @@ HANDOFF_REASONS: Final[tuple[HandoffReason, ...]] = get_args(HandoffReason)
 
 Actor = Literal["bot", "human"]
 MessageAuthor = Literal["customer", "bot"]
-FaqFeedback = Literal["resolved", "not_resolved", "question", "unclear"]
+FaqFeedback = Literal["resolved", "not_resolved", "question", "unclear", "new_problem"]
 
 
 AttachmentKind = Literal["image", "audio", "video", "file"]
@@ -106,6 +106,8 @@ class TriageState:
     unclear_feedback_reasks: int
     media_prompts: int
     faq_questions_answered: int
+    sent_faq_item_id: int | None = None
+    """With faq_attempted: the FAQ entry last sent, whose feedback the bot awaits."""
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,15 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from geniai.app.ports import AudioData, ChatwootStatus, FetchFailure, ImageData, LlmRequest, TranscribeFailure
+from geniai.app.ports import (
+    AudioData,
+    ChatwootMessage,
+    ChatwootStatus,
+    FetchFailure,
+    ImageData,
+    LlmRequest,
+    TranscribeFailure,
+)
 
 
 @dataclass(frozen=True)
@@ -28,11 +36,25 @@ class FakeChatwoot:
         self.fail_notes = False
         self.hold_notes: asyncio.Event | None = None
         """When set, each private note waits for this event before it is posted."""
+        self.sent_ids: list[int] = []
+        """The id Chatwoot gave each message in `sent`, in order."""
+        self.messages: dict[int, list[ChatwootMessage]] = {}
+        """What list_messages answers, by conversation; [] for any other."""
+        self.fail_lists = False
+        self.listed: list[int] = []
 
-    async def send_message(self, conversation_id: int, text: str) -> None:
+    async def send_message(self, conversation_id: int, text: str) -> int | None:
         if self.fail_sends:
             raise RuntimeError("chatwoot unavailable")
         self.sent.append(Sent(conversation_id, text))
+        self.sent_ids.append(90_000 + len(self.sent))
+        return self.sent_ids[-1]
+
+    async def list_messages(self, conversation_id: int) -> list[ChatwootMessage]:
+        self.listed.append(conversation_id)
+        if self.fail_lists:
+            raise RuntimeError("chatwoot unavailable")
+        return list(self.messages.get(conversation_id, []))
 
     async def send_private_note(self, conversation_id: int, text: str) -> None:
         if self.hold_notes is not None:

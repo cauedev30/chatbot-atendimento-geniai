@@ -48,8 +48,28 @@ class LlmPort(Protocol):
 ChatwootStatus = Literal["open", "resolved", "pending"]
 
 
+@dataclass(frozen=True)
+class ChatwootMessage:
+    """A message of a conversation as read from Chatwoot's API: only what tells who wrote it."""
+
+    id: int
+    at: datetime
+    outgoing: bool
+    """Sent from Chatwoot (message_type 1): by a person of the team, by the bot or by the connector."""
+    private: bool
+    """A private note, which the customer never sees."""
+    echo: bool
+    """The WhatsApp connector's copy of a message sent (content_attributes.external_echo)."""
+
+
 class ChatwootPort(Protocol):
-    async def send_message(self, conversation_id: int, text: str) -> None: ...
+    async def send_message(self, conversation_id: int, text: str) -> int | None:
+        """Returns the id Chatwoot gave the message, when its answer has one."""
+        ...
+
+    async def list_messages(self, conversation_id: int) -> list[ChatwootMessage]:
+        """The most recent page of the conversation's messages. Raises when Chatwoot does not answer them."""
+        ...
 
     async def send_private_note(self, conversation_id: int, text: str) -> None: ...
 

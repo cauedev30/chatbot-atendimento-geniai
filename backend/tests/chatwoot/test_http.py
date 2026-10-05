@@ -139,3 +139,39 @@ async def test_reuses_one_client_across_calls_and_closes_it_on_aclose() -> None:
     assert all(c.headers["api_access_token"] == "tok" for c in calls)
     await chatwoot.aclose()
     assert transport.closed == 1
+
+
+def answering(body: object, status: int = 200) -> tuple[httpx.MockTransport, list[httpx.Request]]:
+    calls: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(status, json=body)
+
+    return httpx.MockTransport(handle), calls
+
+
+async def test_returns_the_id_chatwoot_gave_the_message_sent() -> None:
+    transport, _ = answering({"id": 9001, "content": "olá", "message_type": 1})
+    assert await create_chatwoot_http(cfg(transport)).send_message(45, "olá") == 9001
+
+
+async def test_a_message_sent_without_an_id_in_the_answer_returns_none() -> None:
+    transport, _ = answering({})
+    assert await create_chatwoot_http(cfg(transport)).send_message(45, "olá") is None
+
+
+async def test_lists_the_messages_of_a_conversation() -> None:
+    transport, calls = answering({"meta": {}, "payload": [{"id": 7, "message_type": 1, "created_at": 1700000000}]})
+    messages = await create_chatwoot_http(cfg(transport)).list_messages(45)
+    assert calls[0].method == "GET"
+    assert str(calls[0].url) == "https://chatwoot.example/api/v1/accounts/3/conversations/45/messages"
+    assert calls[0].headers["api_access_token"] == "tok"
+    assert [m.id for m in messages] == [7]
+
+
+async def test_listing_the_messages_fails_on_an_error_answer_without_repeating() -> None:
+    transport, calls = answering({}, status=503)
+    with pytest.raises(RuntimeError, match="503"):
+        await create_chatwoot_http(cfg(transport)).list_messages(45)
+    assert len(calls) == 1

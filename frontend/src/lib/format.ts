@@ -26,6 +26,7 @@ export const HANDOFF_REASON_LABELS: Record<HandoffReason, string> = {
   off_topic: "Fora do assunto",
   media: "Mídia",
   llm_failure: "Falha da IA",
+  team_replied: "A equipe respondeu",
 };
 
 /** "12 min", "3 h", "3 d": the time since a card last moved. */

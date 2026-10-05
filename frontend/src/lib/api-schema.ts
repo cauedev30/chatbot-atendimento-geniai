@@ -424,7 +424,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "human_requested" | "faq_not_resolved" | "no_faq_match" | "unidentified" | "registration_mismatch" | "off_topic" | "media" | "llm_failure";
+            reason: "human_requested" | "faq_not_resolved" | "no_faq_match" | "unidentified" | "registration_mismatch" | "off_topic" | "media" | "llm_failure" | "team_replied";
         };
         /** TakeIn */
         TakeIn: {

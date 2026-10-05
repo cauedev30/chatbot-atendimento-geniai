@@ -47,6 +47,7 @@ describe("labels", () => {
     ]);
     expect(HANDOFF_REASON_LABELS.no_faq_match).toBe("Sem item no FAQ");
     expect(HANDOFF_REASON_LABELS.llm_failure).toBe("Falha da IA");
+    expect(HANDOFF_REASON_LABELS.team_replied).toBe("A equipe respondeu");
   });
 
   it("says conversa in the singular and conversas otherwise", () => {

@@ -28,11 +28,17 @@ each problem.
 - Until its first reply in the ticket, groups a burst of short messages ("oi" / "bom dia") into one
   turn (4 s of silence); after it, answers at once. A message that arrives while the bot prepares a
   reply drops that reply, and one reply answers both; a reply is held this way for at most 30 s.
-- Sends at most one FAQ entry, verbatim as the team wrote it; the LLM only writes the framing
-  sentence. Then asks whether it solved the problem.
-- Answers up to three questions about the entry sent, only from that entry's knowledge base, and asks
-  again whether it solved the problem. A question the knowledge base does not answer, or a fourth one,
-  goes to a person with the question in the ticket summary.
+- Sends an FAQ entry verbatim as the team wrote it, with no sentence before it, and asks whether it
+  solved the problem ("Responda sim ou não"). When the customer then raises another problem ("e sobre o
+  login?"), sends that problem's entry the same way, or hands over when no entry covers it.
+- Answers up to three questions about the entry sent, only from that entry's knowledge base, with the
+  answer alone: the next message tells whether it solved the problem. A question the knowledge base does
+  not answer, or a fourth one, goes to a person with the question in the ticket summary.
+- Reads a short thanks or confirmation after the entry or an answer ("ok", "entendi", "valeu") as
+  solved. An unclear answer ("vou testar mais tarde") is asked about once more, then goes to a person.
+- Stays out of a conversation where the team wrote in Chatwoot since it was last closed (a card
+  closed, or the conversation resolved in Chatwoot): no ticket and no reply, and a ticket still with the
+  bot goes to the team. Once the team closes it, the next message is served from the start.
 - Asks at most one clarifying question, and only when the customer has not yet said what the problem
   is, then summarizes and hands over. A clear request that no FAQ entry covers goes straight to a person.
 - Hands over immediately on any request for a person, detected by keywords in code even if the LLM
@@ -283,6 +289,11 @@ at once, with no reply and no ticket:
 - **Test mode:** to try the bot on a real inbox without taking over every customer, set
   `BOT_ONLY_PHONES` to the test phones. Every other conversation goes to the team as above; a ticket
   already open keeps its flow. Leave it empty to serve everyone.
+- **The team is talking:** the webhook brings only the customer's messages, so before opening a ticket
+  (and before each turn of a ticket with the bot) the backend reads the conversation's latest messages
+  through the API. A message the team sent in Chatwoot since the last close keeps the bot out. The
+  bot's own messages, the WhatsApp connector's echoes and private notes do not count; when Chatwoot does
+  not answer, the bot carries on.
 
 ## Choosing the model
 

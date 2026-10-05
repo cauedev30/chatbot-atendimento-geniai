@@ -107,6 +107,15 @@ sequenceDiagram
    waits, not again for a repeated delivery of the message), with one log line (conversation id and
    reason, never the phone), and nothing else: no ticket, no card, no message stored or sent. The
    webhook answers `not_served`. An open ticket keeps its flow even if its phone left the list.
+   A conversation it serves is also handed to the team the same way when **the team is talking** in it
+   (`team_presence.py`): before the transaction, the backend reads the conversation's latest page of
+   messages from Chatwoot's API, and a message of the team written after the last close (the latest of
+   the conversation's tickets' `closed_at` and of its last resolution in Chatwoot,
+   `conversation_resolution`; any time if it was never closed) keeps the bot out. A team message is one
+   sent from Chatwoot (`message_type` 1), not private, not the WhatsApp connector's echo
+   (`content_attributes.external_echo`), and not the bot's own, which Chatwoot shows alike and which the
+   ids kept in the outbox tell apart. The webhook answers `team_talking`, with the log line
+   `team is talking`. When Chatwoot does not answer, a warning is logged and the bot carries on.
    Otherwise the phone is normalized and looked up among active attendants:
    - **unknown** → a ticket straight in *Aguardando humano* (reason `unidentified`), a fixed
      acknowledgement, the conversation opened for the team;
@@ -123,7 +132,10 @@ sequenceDiagram
    conversation's turn lane, one turn at a time.
 3. **Turn** (`process_turn.py`). The pending customer messages (those after the last one a turn has
    read, `ticket.last_consumed_message_id`) form one turn. A message stored while a turn is running
-   stays pending for the next turn. Before any decision, the ticket's audios are transcribed (see
+   stays pending for the next turn. First the same check runs since the ticket opened: if the team
+   wrote in the conversation, the ticket goes to *Aguardando humano* (`team_replied`) with no reply and
+   no LLM call, and its summary comes afterwards (log `team is talking`). Before any decision, the
+   ticket's audios are transcribed (see
    "Attachments" below), so what the customer said in one counts as text for everything that follows:
    an audio asking for a person hands over, and a first audio that describes the problem gets the
    greeting that only asks to confirm. The first turn gets the greeting, written by code, unless it already asks for a
@@ -133,7 +145,8 @@ sequenceDiagram
    legible), then by the LLM through the precedence rules; images and other attachments are
    described below. Once the FAQ entry was sent, the LLM also gets that entry's text
    and knowledge base (`sent_faq`); a question about it is answered from them, up to
-   `max_faq_questions` (3) times, each answer followed by the "did it help?" question again. The LLM
+   `max_faq_questions` (3) times, each answer sent alone (the "did it help?" question goes only with an
+   entry). The FAQ entry itself goes with no sentence of the LLM before it. The LLM
    runs outside any database transaction; the decision, the summary and category, and the bot's
    reply are written in one transaction, then sent. That
    transaction locks the ticket and drops the decision if a person moved the ticket out of triage
@@ -233,7 +246,8 @@ then `audio transcribed` (seconds, time taken) or `audio not transcribed` (reaso
 
 `app/outbox.py` is a transactional outbox. A message or a status change for a conversation is a row
 (`kind` `message` or `status`, `state` `pending`; `chatwoot_message_id` for the hand-over of a
-conversation the bot does not serve, which has no ticket to remember the message), inserted in the transaction that changes the
+conversation the bot does not serve, which has no ticket to remember the message; for a message row, the
+id Chatwoot gave the message once sent, which tells the bot's messages from the team's), inserted in the transaction that changes the
 ticket, so nothing is sent before the commit and nothing is lost if the process stops. After the
 commit the use case wakes the worker (`OutboxWorker`, started and stopped with the app). The worker
 also looks for pending rows at start and every 5 s. It sends them in id order within each
@@ -254,18 +268,22 @@ Columns: `in_triage` (shown as a counter, not a column), `resolved_by_bot`, `awa
 - Every move is recorded in `ticket_move` with the actor. The first handoff and the first take are
   stamped once (for the time indicators); closing stamps `closed_at`, reopening clears it.
 - Chatwoot sync: leaving triage opens the conversation for the team, closing resolves it, reopening
-  opens it again. A conversation resolved in Chatwoot moves its open ticket to `resolved_by_human`.
+  opens it again. A conversation resolved in Chatwoot moves its open ticket to `resolved_by_human`,
+  and its time is kept in `conversation_resolution`, with or without a ticket.
 
 For each turn the first rule that applies wins (`domain/triage.py`):
 
 1. human requested (keyword in code, or the LLM) → handoff;
 2. registration mismatch → handoff;
 3. off-topic or suspicious → handoff;
-4. awaiting FAQ feedback → resolved; not resolved (handoff); a question answered from the entry's
+4. awaiting FAQ feedback → another problem than the entry's (`new_problem`): its own entry, when one
+   matches and it is not the entry sent (sent the same way, the question and unclear-answer counters
+   starting again), otherwise handoff `no_faq_match`; resolved (a short thanks or confirmation such as
+   "ok" or "valeu" counts); not resolved (handoff); a question answered from the entry's
    knowledge base while fewer than three were answered (answer it, stay in triage); any other question,
    or the fourth (handoff `faq_not_resolved`, the question added to the summary); unclear (asked once
    more, then handoff);
-5. an FAQ entry matches and the one FAQ attempt is unused → send it, verbatim;
+5. an FAQ entry matches and no entry was sent yet → send it, verbatim, with no sentence before it;
 6. the customer has not yet said what the problem is and no question was asked yet → ask (one question
    at most); a clear request no FAQ entry covers goes to rule 7 with no question;
 7. otherwise → handoff (`no_faq_match`).
@@ -277,7 +295,8 @@ customer was answered, or from the customer's own words (see "Card summary" unde
 
 The code decides every handoff; the sentence the customer gets depends on who read the turn. When the
 LLM's own reading points to a handoff (a request for a person, a registration mismatch, off-topic, FAQ
-feedback "not resolved" or unclear, a question it found no answer for, or no entry fits and nothing is
+feedback "not resolved" or unclear, a question it found no answer for, another problem with no entry,
+or no entry fits and nothing is
 left to clarify), the LLM writes it in `handoff_reply`: one or two short sentences that name the customer's subject
 and say the support team carries on in this chat, with no promise of speed (`domain/triage.py`,
 `handoff_text`). Otherwise the fixed text of `texts.py` goes: a handoff before
@@ -298,6 +317,7 @@ One PostgreSQL database; the DDL is `backend/geniai/db/migrations/0001_init.sql`
 | `ticket` | The ticket (below) |
 | `ticket_move` | Column history: `from_column`, `to_column`, `at`, `actor` (`bot` / `human`) |
 | `triage_message` | The conversation while in triage: `author`, `text` (a caption, for a message with attachments), `is_media` (attachments and no text), `chatwoot_message_id` (unique, for dedupe), `attachments` (JSONB list: kind, link and, for an image an LLM turn read, its outcome and description) |
+| `conversation_resolution` | When each conversation was last resolved in Chatwoot (`conversation_id`, `resolved_at`), with or without a ticket |
 | `schema_migration` | Applied migration files |
 
 `ticket` keeps the attendant and a snapshot of the unit, the phone, the column, the current

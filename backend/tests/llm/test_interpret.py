@@ -305,6 +305,19 @@ def test_the_prompt_reads_another_problem_after_the_faq_entry_as_a_new_problem()
     assert 'faq_feedback is "new_problem" and faq_item_id is null' in rule_of("handoff_reply")
 
 
+def test_the_prompt_reads_a_short_thanks_after_the_faq_entry_or_an_answer_as_resolved() -> None:
+    rule = rule_of("faq_feedback")
+    for word in ('"ok"', '"entendi"', '"valeu"', '"beleza"', '"obrigado"'):
+        assert word in rule
+    assert '"vou testar mais tarde" is "unclear"' in rule
+
+
+def test_the_answer_to_a_question_does_not_ask_whether_it_solved_the_problem() -> None:
+    rule = rule_of("reply")
+    assert "do not ask whether it solved the problem." in rule
+    assert "the bot asks that" not in rule
+
+
 def test_the_prompt_reads_thats_not_it_as_not_resolved() -> None:
     rule = rule_of("faq_feedback")
     assert "não é isso" in rule

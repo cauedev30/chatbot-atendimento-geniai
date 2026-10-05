@@ -211,7 +211,7 @@ async def test_asks_again_once_on_an_unclear_answer_then_hands_over(h: Harness, 
         turn_json(category_id=h.seed.categories["login"], faq_feedback="unclear", handoff_reply=PHRASE),
     )
     assert await chat.customer(conversation_id, "hmm") == "reask_feedback"
-    assert chat.last_sent() == TEXT.reask_feedback
+    assert chat.last_sent() == TEXT.reask_feedback == "Só pra eu confirmar: as instruções resolveram o problema?"
     assert await chat.customer(conversation_id, "sei lá") == "handoff"
     assert chat.last_sent() == PHRASE
     t = await chat.ticket_of(conversation_id)
@@ -515,11 +515,12 @@ async def test_a_turn_drops_its_answer_when_a_person_took_the_ticket_meanwhile(h
 # Questions about the FAQ entry sent (spec §5.1 step 5)
 
 
-async def test_answers_a_question_about_the_faq_entry_and_asks_again_if_it_worked(h: Harness, chat: Chat) -> None:
+async def test_answers_a_question_about_the_faq_entry_without_asking_if_it_worked(h: Harness, chat: Chat) -> None:
     conversation_id = await chat.faq_sent()
     outcome = await chat.asks(conversation_id, "o link vale por quanto tempo?", reply="O link vale por 1 hora.")
     assert outcome == "answer_faq_question"
-    assert chat.last_sent() == "\n\n".join(["O link vale por 1 hora.", TEXT.faq_follow_up])
+    # Only the answer: "Responda sim ou não" goes with an FAQ entry only (owner, 2026-10-05).
+    assert chat.last_sent() == "O link vale por 1 hora."
     t = await chat.ticket_of(conversation_id)
     assert (t.column, t.faq_questions_answered, t.unclear_feedback_reasks) == ("in_triage", 1, 0)
     h.llm.push(turn_json(category_id=h.seed.categories["login"], faq_feedback="resolved"))

@@ -355,9 +355,8 @@ async def _write_decision(
             return _Written("resolved_by_bot", TEXT.resolved_thanks, (moved.from_, "resolved_by_bot"), None)
         case AnswerFaqQuestion():
             await update_ticket(conn, t.id, {"faq_questions_answered": t.faq_questions_answered + 1})
-            # The ticket stays in triage, awaiting the feedback on the FAQ entry.
-            parts = [turn.reply if turn else "", TEXT.faq_follow_up]
-            reply = "\n\n".join(p.strip() for p in parts if p.strip())
+            # Only the answer (owner, 2026-10-05); the ticket stays in triage, awaiting the feedback.
+            reply = turn.reply.strip() if turn else ""
             return _Written("answer_faq_question", reply, None, None)
 
 

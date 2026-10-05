@@ -28,7 +28,7 @@ def test_customer_texts_are_exactly_the_approved_wording() -> None:
     assert TEXT.unidentified_ack == "Recebemos sua mensagem! A equipe de suporte vai te responder por aqui."
     assert TEXT.handoff == "Certo! Passei sua conversa para a nossa equipe, que vai te responder por aqui."
     assert TEXT.faq_follow_up == "Isso resolveu o seu problema? Responda sim ou não."
-    assert TEXT.reask_feedback == "Só pra eu confirmar: as instruções resolveram o problema? Responda sim ou não."
+    assert TEXT.reask_feedback == "Só pra eu confirmar: as instruções resolveram o problema?"
     assert TEXT.resolved_thanks == "Que bom que resolveu! Se precisar, é só chamar."
     assert TEXT.ask_for_text == (
         "Ainda não consigo ouvir áudios nem abrir imagens ou arquivos. Pode escrever o problema em texto, por favor?"

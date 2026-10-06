@@ -1,0 +1,83 @@
+# The whole system on one host: database, backend, board and two Cloudflare quick tunnels.
+# Run from the repository root:
+#   docker compose -p geniai-atendimento -f deploy/compose.yaml up -d --build
+# Settings come from deploy/.env (copy deploy/.env.example). See docs/deploy.md.
+#
+# Sharing the host with other projects: no container_name (compose prefixes every container, network and
+# volume with the project name), no external network or volume, and only two ports published, both on
+# 127.0.0.1 and both configurable. The database publishes none; the tunnels only connect out.
+
+name: geniai-atendimento
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in deploy/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in deploy/.env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 512m
+
+  backend:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      # Overrides any DATABASE_URL in .env: the database is the db service. The password goes into a URL,
+      # so keep it to letters and digits.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      HOST: 0.0.0.0
+      PORT: "8000"
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-8010}:8000"
+    mem_limit: 512m
+
+  board:
+    build:
+      context: ../frontend
+      args:
+        BACKEND_URL: http://backend:8000
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      BACKEND_URL: http://backend:8000
+      PORT: "3000"
+      TRUST_UPSTREAM_PROXY: ${TRUST_UPSTREAM_PROXY:-true}
+    ports:
+      - "127.0.0.1:${BOARD_HOST_PORT:-3110}:3000"
+    mem_limit: 512m
+
+  # Quick tunnels: a new random https://<words>.trycloudflare.com address on every start, printed in the
+  # log. tunnel-bot serves the backend (the Chatwoot webhook); tunnel-board serves the board.
+  tunnel-bot:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--url", "http://backend:8000"]
+    depends_on:
+      - backend
+    mem_limit: 128m
+
+  tunnel-board:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--url", "http://board:3000"]
+    depends_on:
+      - board
+    mem_limit: 128m
+
+volumes:
+  db-data:

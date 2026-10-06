@@ -14,7 +14,8 @@ ENV BACKEND_URL=$BACKEND_URL \
     NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build && npm prune --omit=dev --no-audit --no-fund
+# public/ may be absent from a clone (git keeps no empty folder); next start serves it when present.
+RUN mkdir -p public && npm run build && npm prune --omit=dev --no-audit --no-fund
 
 FROM node:24-slim
 WORKDIR /app
